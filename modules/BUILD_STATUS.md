@@ -15,3 +15,5 @@ Spec: MODULE_FORMAT_PROPOSAL.md v1.0.0 · template: notes/module-template.md v1.
 | (partial, in b7b326a) T050 + T076–T079 fixtures/tests | — | 5 | landed via glob sweep; module .md files pending from their writers |
 
 | R001–R025 (regimes) | writer 8b811b51 | 25 | DONE 2026-09-10 · 25 md + 50 csv + 25 test · 225/225 tests pass · no THIN · 6 prose↔fixture mismatches fixed in audit |
+
+| S077–S088 (signals) | writer 615e2fa8 | 12 | DONE 2026-09-10 · 12 md + 24 csv + 12 test · 72/72 tests pass · note: S083–S085 §S11 mermaid diagrams render single-char (fix queued); S089–S100 re-dispatched |
