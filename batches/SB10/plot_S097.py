@@ -41,8 +41,8 @@ posts = np.array([128, 141, 122, 139, 131, 410, 980, 720, 390, 185]) + base
 posts[5:8] = [410, 980, 720]                          # attention spike days 6-8
 authors = np.array([101, 104, 90, 105, 97, 152, 210, 268, 203, 141])
 raw_sent = np.array([0.05, -0.02, 0.08, 0.03, -0.05, 0.25, 0.45, 0.18, -0.10, -0.02])
-wtd_sent = np.array([0.04, -0.02, 0.07, 0.02, -0.04, 0.12, 0.064, 0.10, -0.06, -0.02])
-hhi = np.array([0.021, 0.023, 0.022, 0.020, 0.024, 0.090, 0.317, 0.180, 0.075, 0.030])
+wtd_sent = np.array([0.04, -0.02, 0.07, 0.02, -0.04, 0.12, 0.0637, 0.10, -0.06, -0.02])
+hhi = np.array([0.021, 0.023, 0.022, 0.020, 0.024, 0.090, 0.3168, 0.180, 0.075, 0.030])
 
 # ---- Message-volume z-score: trailing 5-day window, sample sd (ddof=1) ----
 z = np.full(10, np.nan)
@@ -54,7 +54,7 @@ print("day | posts | authors | raw_sent | wtd_sent | hhi   | vol_z (5d, sample s
 for d in range(10):
     zs = f"{z[d]:7.2f}" if not np.isnan(z[d]) else "    n/a"
     print(f" {d+1:2d} | {posts[d]:5d} | {authors[d]:7d} | {raw_sent[d]:8.3f} | "
-          f"{wtd_sent[d]:8.3f} | {hhi[d]:.3f} | {zs}")
+          f"{wtd_sent[d]:8.4f} | {hhi[d]:.4f} | {zs}")
 # hand-check values printed for chapter:
 w6 = posts[0:5]
 print(f"\nday-6 window mean={w6.mean():.2f} sd={w6.std(ddof=1):.4f} "
@@ -106,7 +106,7 @@ ax2b.plot(days, raw_sent, color=PALETTE["price"], lw=1, ls="--", alpha=0.6,
 ax2b.set_ylabel("sentiment (-1..+1)")
 ax2b.set_ylim(-0.6, 0.7)
 ax2.set_xlabel("day")
-ax2.annotate("day 7: HHI 0.317 — bot-dominated\nraw +0.45 collapses to weighted +0.06",
+ax2.annotate("day 7: HHI 0.3168 — bot-dominated\nraw +0.45 collapses to weighted +0.0637",
              xy=(7, hhi[6]), xytext=(3.2, 0.30), fontsize=9, color=PALETTE["zero"],
              arrowprops=dict(arrowstyle="->", color=PALETTE["zero"]),
              bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#7f8c8d", alpha=0.95))
