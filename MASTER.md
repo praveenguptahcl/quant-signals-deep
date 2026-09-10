@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 70/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 80/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -79,6 +79,16 @@
 - Stage 61/200 — S061 merged 2026-09-10 · reviewer: c3e38a22 · plot verified (seed 61)
 - Stage 62/200 — S062 merged 2026-09-10 · reviewer: c3e38a22 · plot verified (seed 62)
 - Stage 90/200 — S090 merged 2026-09-10 · reviewer: c3e38a22 · plot verified (seed n/a)
+- Stage 64/200 — S064 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 64)
+- Stage 65/200 — S065 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 65)
+- Stage 67/200 — S067 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 67)
+- Stage 68/200 — S068 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 68)
+- Stage 69/200 — S069 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 69)
+- Stage 70/200 — S070 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 70)
+- Stage 71/200 — S071 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 71)
+- Stage 72/200 — S072 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 72)
+- Stage 73/200 — S073 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 73)
+- Stage 74/200 — S074 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 74)
 
 
 ## Table of contents
@@ -175,6 +185,19 @@
 - [x] Stage 61/200 — [S061 — ADR / dual-listed premium](#stage-61200--s061-adr--dual-listed-premium)
 - [x] Stage 62/200 — [S062 — Sector momentum](#stage-62200--s062-sector-momentum)
 - [x] Stage 90/200 — [S090 — Variance-ratio / Hurst regime toggle](#stage-90200--s090-variance-ratio--hurst-regime-toggle)
+
+**Batch SB8** — Volatility & options-informed family.
+
+- [x] Stage 64/200 — [S064 — Jump-robust realized variance (RV / bipower / Lee–Mykland)](#stage-64200--s064-jump-robust-realized-variance-rv--bipower--leemykland)
+- [x] Stage 65/200 — [S065 — GARCH(1,1) intraday volatility](#stage-65200--s065-garch11-intraday-volatility)
+- [x] Stage 67/200 — [S067 — Intraday vol seasonality / diurnal deseasonalization](#stage-67200--s067-intraday-vol-seasonality--diurnal-deseasonalization)
+- [x] Stage 68/200 — [S068 — VIX term structure](#stage-68200--s068-vix-term-structure)
+- [x] Stage 69/200 — [S069 — Implied-vs-realized spread / variance risk premium](#stage-69200--s069-implied-vs-realized-spread--variance-risk-premium)
+- [x] Stage 70/200 — [S070 — Straddle-implied move vs realized](#stage-70200--s070-straddle-implied-move-vs-realized)
+- [x] Stage 71/200 — [S071 — 25-delta risk reversal / skew change](#stage-71200--s071-25-delta-risk-reversal--skew-change)
+- [x] Stage 72/200 — [S072 — Put/call ratio](#stage-72200--s072-putcall-ratio)
+- [x] Stage 73/200 — [S073 — Unusual options activity](#stage-73200--s073-unusual-options-activity)
+- [x] Stage 74/200 — [S074 — Gamma exposure (GEX) & dealer positioning](#stage-74200--s074-gamma-exposure-gex--dealer-positioning)
 
 ### Strategy chapters
 
@@ -14142,6 +14165,2271 @@ flowchart LR
   weakness list) — chatbot literature summaries, no checkable citations. Source log:
   "Duck.ai answered Q-SB7-1–Q-SB7-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)"
   (see `batches/SB7/question-log.md`).
+
+---
+## Stage 64/200 — S064: Jump-robust realized variance (RV / bipower / Lee–Mykland)
+
+*Batch SB8 · Signal 64/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Splits daily realized variance into a smooth (continuous) part — via **bipower variation** (BV) — and a jump part, plus a per-bar Lee–Mykland jump test. |
+| **When it works** | As a measurement and gating layer: jump-filtered vol series are cleaner inputs to every forecast, and jump flags veto trades that would walk into news bursts. |
+| **When it dies** | As a standalone alpha: it measures volatility, it does not predict direction. On raw 1-minute returns without deseasonalizing, microstructure noise (ultra-high-frequency frictions such as bid–ask bounce) corrupts the split. |
+| **Build-or-buy in one line** | Build — ~30 lines of numpy on 5-minute returns; the only thing you can buy is cleaner input data. |
+
+Provenance **[D]**: bipower variation (Barndorff-Nielsen & Shephard 2004) and the Lee–Mykland
+jump test (Lee & Mykland 2008) are documented, peer-reviewed methods. The *trading* uses of the
+jump series (gating, momentum-ignition flags — where "ignition" is a sharp price burst that may
+start a trend) are practitioner reconstructions.
+
+### S2. How it works — plain human explanation
+
+At 14:02 on a Fed-day (Federal Reserve FOMC rate-announcement day) afternoon, SPY prints a +0.9% bar in five minutes, then drifts back. A
+naive **realized variance** (RV) — the sum of squared intraday returns — treats that bar the same
+as eighteen +0.2% bars. Your volatility forecast spikes, your position sizer cuts risk, your
+"vol spike" strategy fires. But the two situations are economically different: one was a single
+discontinuous repricing on news, the other was genuinely elevated diffusive (smooth, continuous, non-jump) trading.
+
+**Jump-robust realized variance** answers a simple question: *how much of today's variance came
+from smooth continuous wiggling, and how much from jumps?* The trick, from Barndorff-Nielsen &
+Shephard (2004), is that jumps are rare and isolated. A squared return `r²` is contaminated by a
+jump — the square of the jump lands in full. But the product of two *adjacent* absolute returns
+`|r_{i−1}|·|r_i|` is not: if a jump sits in bar *i*, it can only poison the two products that
+touch bar *i*, while all other products measure the background diffusion. With enough bars, the
+jump contamination washes out.
+
+That gives **bipower variation** (BV): an estimator of the same integrated variance that RV
+targets, but robust to isolated jumps. The difference `RV − BV` is then — up to estimation
+error — the jump component of the day's quadratic variation. Lee & Mykland (2008) take the idea
+one step further and test *each individual bar*: is this bar's return too large relative to a
+local bipower-based vol estimate to be a draw from a diffusion? If yes, flag a jump arrival and
+measure its size.
+
+Why should jumps matter economically? Informed/news bursts arrive discontinuously — earnings,
+macro prints (scheduled economic-data releases), block repricings (abrupt moves triggered by large block trades) — and the literature finds individual-stock jumps cluster on
+prescheduled announcements (Lee & Mykland 2008). Jumps are "highly prevalent and distinctly
+less persistent than the continuous sample path variation" (Andersen, Bollerslev & Diebold 2007 — "ABD"), so a forecast that
+mixes the two regimes forecasts worse.
+
+Mental model:
+- **BV is the calm-weather vol; RV − BV is the storm ledger** — one diffuses, the other jumps.
+- **Products of neighbors kill jumps; squares of singles don't** — that asymmetry is the whole trick.
+- **Lee–Mykland names the guilty bar** — daily decomposition tells you *how much* jumped; LM tells you *when*.
+
+### S3. The math — exact formula
+
+Let `r_{t,i}` be the log return of day *t* over intraday interval *i* = 1…*M* (evenly spaced grid,
+5-minute sampling is the standard starting point).
+
+**Realized variance (RV)** — the sum of squared returns:
+```
+RV_t = Σ_{i=1..M} r_{t,i}²            (dimensionless variance units)
+```
+RV is a consistent estimator of the day's total **quadratic variation** = integrated variance
+∫σ²ds plus the sum of squared jumps Σξ² (Andersen et al. 2003).
+
+**Bipower variation (BV)** — products of adjacent absolute returns, scaled:
+```
+BV_t = (π/2) · Σ_{i=2..M} |r_{t,i−1}| · |r_{t,i}|
+```
+The scaling: for a standard normal Z, E|Z| = μ₁ = √(2/π), so 1/μ₁² = π/2 makes BV consistent for
+∫σ²ds alone (Barndorff-Nielsen & Shephard 2004). BV is "somewhat robust to rare jumps" because
+adjacent-return products are less affected than squared returns (mandatory framing).
+
+**Jump component:**
+```
+J_t  = max(RV_t − BV_t, 0)
+RJ_t = (RV_t − BV_t) / RV_t
+```
+(truncation is a practical fix; negative finite-sample estimates are clamped at zero —
+Barndorff-Nielsen & Shephard 2004)
+
+**Lee–Mykland (2008) per-bar jump test.** Local instantaneous-vol estimate from the K−2
+preceding intervals:
+```
+σ̂²_{t,i} = (1/(K−2)) · Σ_{j=i−K+2..i−1} |r_{t,j−1}| · |r_{t,j}|
+L_{t,i}   = |r_{t,i}| / σ̂_{t,i}
+```
+Reject "no jump in interval i" at level α when
+```
+(L_{t,i} − C_MT) / S_MT  >  −log(−log(1 − α))
+C_MT = √(2·log(MT))/c − (log π + log(log MT)) / (2·c·√(2·log MT))
+S_MT = 1 / (c·√(2·log MT)),   c = √(2/π),   T = number of days
+```
+— the Gumbel (extreme-value) critical value. Suggested practice: 5-minute intervals, window
+K = 240 (per LM 2008 and follow-ups).
+
+| Parameter | Symbol | Typical range | Too small → | Too large → | Default (example) |
+|---|---|---|---|---|---|
+| Sampling grid | Δ | 1–15 min | microstructure noise inflates RV | jumps diluted, fewer bars | 5 min — *example* |
+| Intervals/day | M | 26–390 | power loss | noise | 78 (5-min, RTH = regular trading hours) — *example* |
+| LM window | K | 100–300 | σ̂ noisy, false flags | slow to adapt to regime | 240 — *example* |
+| Significance | α | 0.5–5% | missed real jumps | flag diffusion tails | 1% — *example* |
+
+All defaults are `example — not an institutional standard`.
+
+**Causal timing:** computed at interval *i* using returns ≤ *i*; the daily RV/BV/J_t split is
+available at the close — tradable no earlier than the next open (*t+1*). Intraday LM flags are
+tradable no earlier than bar *i+1*.
+
+**Named variants:**
+1. *Multipower / tripower variation* — products of 3+ adjacent returns for stronger robustness
+   (Barndorff-Nielsen & Shephard 2006).
+2. *Threshold BV / Mancini threshold estimator* — pre-truncate returns above a volatility-scaled
+   threshold; asymptotically efficient (uses BV only to set the threshold).
+3. *Staggered (h-skip) BV* — products |r_i|·|r_{i+h}| with h > 1 to dodge residual microstructure
+   correlation.
+
+**Batch flag (formula render warnings, from the Q-SB8-3 verification pass):** two SB8 chatbot
+formulas rendered ambiguously and must be re-confirmed from canonical sources before coding:
+(a) `VRP_t^σ = IVol_t − √(RV)` — ambiguous on the square root; (b) the 25Δ tolerance
+"±0.5 to ±1.0 delta points" — partially garbled. Both concern sibling signals (S069/S071),
+not S064; flagged here explicitly so no downstream worker treats them as confirmed.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**All numbers below are synthetic — the tape was constructed to contain one obvious +1% jump so
+the arithmetic is hand-checkable. Nothing here is a backtest (a simulated trade history on past data).** Script:
+`batches/SB8/plot_S064.py`, **seed 64** (the tape itself is a fixed 12-return sequence; the seed
+drives only script machinery).
+
+The 12 synthetic 5-min returns:
+```
+r = (0.001, −0.002, 0.0015, 0.0005, −0.001, 0.010,
+     −0.0008, 0.0012, −0.0015, 0.0007, 0.0003, −0.0009)
+```
+
+Step 1 — RV summands (×10⁻⁶): 1.00, 4.00, 2.25, 0.25, 1.00, **100.00**, 0.64, 1.44, 2.25, 0.49,
+0.09, 0.81 → Σ = 114.22×10⁻⁶, so **RV = 0.00011422** ✓ (hand-verified in duckai-answers Q-SB8-1).
+
+Step 2 — BV summands, adjacent products (×10⁻⁶): 2.00, 3.00, 0.75, 0.50, 10.00, 8.00, 0.96,
+1.80, 1.05, 0.21, 0.27 → Σ = 28.54×10⁻⁶. **BV = (π/2)(28.54×10⁻⁶) = 44.83×10⁻⁶ =
+0.00004483** ✓ (28.54 × 1.5707963 = 44.83).
+
+Step 3 — jump component: **RV − BV = 69.39×10⁻⁶**, so **J_t = 69.39×10⁻⁶** (positive, no
+truncation needed) and **RJ = 69.39/114.22 = 60.8%** of the day's variance came from the jump.
+
+The chart (`images/S064_example.png`) plots exactly these numbers: the top panel shows the
+12-return tape with the +1% bar highlighted; the bottom panel shows the RV vs BV summands per
+interval, with the totals annotated.
+
+**What to notice:** the jump bar contributes 100×10⁻⁶ of the 114.22×10⁻⁶ RV total — the square
+of the jump dominates RV — while in BV it appears only inside two adjacent products (10.00 and
+8.00), diluted against 44.83×10⁻⁶. That dilution is the robustness in action. The limits: with
+only 12 bars this is a toy — in production you need M ≈ 78+ for the asymptotics to bite, and the
+toy has no fees, no bid–ask bounce (prices oscillating between bid and ask, creating
+spurious measured volatility), and no microstructure noise, all of which inflate RV on real
+1–5-minute data.
+
+### S5. Strategies that use this signal
+
+- **T042 — Jump-Robust Vol Spike Trader (primary):** enters short-horizon vol-spike trades only
+  when the RV move survives the BV filter — i.e., trades the *continuous* vol spike, not the
+  jump (T042 also consumes S065).
+- **T098 — Jump-Validated Momentum Ignition (primary):** requires a Lee–Mykland jump flag on the
+  ignition bar before chasing momentum — ignition without a jump is treated as noise.
+- **T079 — Post-Announcement Vol Fade (filter/veto):** after an earnings/announcement event,
+  fades realized vol back toward the BV-implied continuous level; the RV−BV split sizes the fade.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade/quote-derived log returns | float | 1–5 min bars | Tier 0–1 | Evenly spaced grid required; fill short gaps, drop halted symbols |
+| Corporate-action adjustments | float | event | Tier 0–1 | Splits/dividends must be adjusted *before* return computation or every split looks like a jump |
+| Trading-halt flags | bool | bar | Tier 1 | Zero-volume bars are not jumps |
+
+Ingest sketch (≤20 lines, polars):
+```python
+import polars as pl
+bars = pl.read_parquet("bars_5m.parquet")          # t, symbol, open, high, low, close
+r = (bars.with_columns(
+        pl.col("close").log().diff().over("symbol").alias("r"))
+     .filter(pl.col("r").is_not_null()))
+rv = r.group_by(["date","symbol"]).agg(pl.col("r").pow(2).sum().alias("RV"))
+bv = (r.with_columns((pl.col("r").abs() * pl.col("r").abs().shift(1)
+        .over("symbol")).alias("adj"))
+      .group_by(["date","symbol"])
+      .agg((1.5707963 * pl.col("adj").sum()).alias("BV")))
+j = rv.join(bv, on=["date","symbol"]).with_columns(
+        (pl.col("RV")-pl.col("BV")).clip(0).alias("J"),
+        ((pl.col("RV")-pl.col("BV"))/pl.col("RV")).alias("RJ"))
+```
+Storage: 1-min bars ≈ **~0.1 MB per symbol-day** (per `notes/cost-model.md` §3); 5-minute
+returns are a fraction of that — the RV/BV/J series are three floats per symbol-day, negligible.
+**Data-quality checklist:** timestamp normalization (exchange time, DST), corporate actions
+(splits are fake jumps), halts/suspensions, half-days, stale/zero-volume bars.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** RV/BV/LM are closed-form numpy/polars reductions over 5-minute
+returns — no optimization, no training, no GPU. The pipeline is: 1-min or 5-min bars →
+returns → RV/BV per symbol-day → Lee–Mykland per-bar flags.
+
+Throughput (per `notes/cost-model.md` §2): numpy vectorized math ≈ 50–200M elements/sec; the
+daily RV/BV for 500 symbols × 78 five-min bars = 39k elements — microseconds. Even full
+history: 500 symbols × 390 min × 252 days × 20 years ≈ 982.8M returns ≈ 7.9 GB float64
+(chatbot-verified arithmetic) fits in RAM with room; in practice keep it in partitioned Parquet
+and compute per-day — cost-model §3's 77 GB working budget is never stressed.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars/numpy | Default — the whole estimator is groupby-agg; recompute daily in seconds |
+| Rust | Only if you need the per-bar LM flag in the hot path at sub-millisecond latency |
+| DuckDB | Research store for the RV/BV/J panel across symbols/days |
+
+RAM: 1 day of 5-min returns for 500 symbols ≈ 39k floats ≈ 0.3 MB; 60 days ≈ 20 MB — trivial
+(per cost-model §3 rule of thumb `rows × cols × 8`). 60-day rolling LM window needs only the
+same returns.
+
+Engineering time: cost-model §5 **Tier M, 20–60 h** for vol estimators (RV/bipower is at the
+easy end of M; the Lee–Mykland test with the Gumbel critical value and edge handling is the
+harder half). At $150/hr loaded: **$3,000–9,000** engineering. The SB8 chatbot's per-component
+estimate for range+bipower was 20–50 h prototype (labeled chatbot lead) — consistent with Tier
+M. Data: Tier 0–1 (Stooq/Polygon/Alpaca ~$0–200/mo, indicative — verify before budgeting).
+Bottleneck: none computationally — data cleaning (corporate actions, halts) is the real work.
+
+**What breaks first at 500 symbols / full OPRA (Options Price Reporting Authority, the consolidated US options tape):** nothing breaks for RV/BV on 5-min bars —
+500 symbols is trivial. Scaling to full **L1** (top-of-book) event-driven per-tick LM flags would need Rust; and
+the jump logic adds nothing to the options-data cost curve (S071–S074), which is where the real
+money goes.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX daily+15-min | Free bars for RV/BV on coarse grids | ~$0 | $0 cost, instant start | 1-min/5-min granularity gaps; no corporate-action guarantees |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP | Clean 1-min bars + corporate actions (SIP = Securities Information Processor, the consolidated tape) | ~$30–200/mo | Reliable 5-min grid, splits handled | Nothing material for this signal |
+| Tier 2: Databento Standard (MBP-1) | L1 quotes+trades for exact bar builds (MBP-1 = market-by-price level 1, i.e. top-of-book quotes and trades) | ~$200/mo + usage | Honest microstructure, your own grid | Overkill if you only need 5-min RV |
+| Academic route: LOBSTER / WRDS TAQ | Replay-grade data for research (TAQ = the NYSE Trades and Quotes database) | ~hundreds/yr academic | Publication-grade replication | Access friction, not real-time |
+
+**Verdict: build.** The estimator is 30 lines; what you might *buy* is data cleanliness (Tier 1
+for corporate actions and halt flags). Buy a better feed if — and only if — your jump flags will
+gate real money (T042/T098), where a split mislabeled as a jump is a trading error, not a
+research artifact.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Mandated framing for this chapter: **documented conditional value, but published effects much
+weaker than raw backtests once realistic execution/timing/selection/regime controls are
+imposed.** S064 is measurement infrastructure — the "efficacy" literature is about forecast
+quality and empirical regularities, not trading Sharpe ratio (mean excess return ÷ volatility). There is no credible after-cost trading
+Sharpe for "the bipower signal" as a standalone trigger, and none is claimed.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Andersen, Bollerslev & Diebold (2007), *Rev. Econ. & Stat.* — the HAR-RV-CJ model (HAR = heterogeneous autoregression; CJ = continuous + jump components) separating continuous/jump components | DM/$ (deutsche mark per US dollar), S&P 500, 30-yr Treasury yield | Significant out-of-sample (evaluated on data not used to fit the model) volatility-forecast improvements; almost all predictability from the *non-jump* component | Before cost (forecast evaluation, not a profit-and-loss (P&L) backtest) | Forecast-accuracy metric, not tradable P&L; gains are in the continuous component you *keep*, not the jump you removed |
+| Lee & Mykland (2008), *Rev. Financial Studies* — LM jump test on US equities | US individual stocks & S&P 500 | Individual-stock jumps associated with prescheduled earnings announcements and company news; index jumps with market news | Before cost (empirical regularity) | Descriptive association, not a trading rule; the test detects the jump *after* the news moved the price |
+| **IHSG** (Indeks Harga Saham Gabungan — the Jakarta Composite index) intraday study (2025–2026), 5-min bars, 93 days — bipower decomposition of the Jakarta Composite | Indonesia, Dec 2025–May 2026 | Jump component ≈ 11.77% of daily RV on average; 32.3% of days show significant jumps; share rises to 16.36% on stress days | Before cost (descriptive) | Single emerging market, short sample; not an out-of-sample trading test |
+
+Regimes where it fails: illiquid names where bid–ask bounce masquerades as jumps (use 5-min+
+sampling); adjacent jumps (re-contaminate the products — use tripower); scheduled-announcement
+clusters where jumps are expected and priced; vol-of-vol (volatility-of-volatility) regimes where the Gumbel critical
+value miscalibrates.
+
+**Honest bottom line:** as a standalone trigger this is not an edge at all — it is a
+measurement. As a filter/gate (stand down when J_t is extreme; validate ignition with LM
+flags), its conditional value is documented: jump-robust vol forecasts beat raw RV forecasts
+out-of-sample, and news-day gating is standard practice on institutional desks.
+
+### S10. Failure modes & pitfalls
+
+1. **Microstructure noise masquerading as jumps** — on 1-min raw returns, bid–ask bounce
+   inflates RV−BV. Mitigation: 5-minute (or coarser) sampling; noise-robust pre-averaging
+   (smoothing returns over short windows to damp microstructure noise) variants.
+2. **Lookahead in corporate actions** — an unadjusted split prints a giant "jump." Mitigation:
+   adjust prices before return computation; validate against the corporate-action calendar.
+3. **Adjacent/overlapping jumps** — products of neighbors re-contaminate. Mitigation: tripower
+   variation or the Mancini threshold estimator for jump-dense tapes.
+4. **Lee–Mykland over-detection under seasonality** — a strong diurnal (daily-recurring) U-shape makes the test
+   over-flag jumps in high-vol periods of the day (documented in the modified-LM literature).
+   Mitigation: deseasonalize first (S067) — LM on `r̃ = r/s_b`.
+5. **Halt/zero-volume bars** — flat prices then a reopening gap look like a diffusion tail.
+   Mitigation: drop halted symbols from the panel; treat reopenings as scheduled events.
+6. **Interpreting the jump as tradable alpha** — the flag fires *after* the price moved.
+   Mitigation: use it as a gate/filter (T042/T098/T079), never as a direction signal.
+7. **Truncation bias** — max(RV−BV, 0) biases small-sample jump estimates upward. Mitigation:
+   use formal tests (LM or the BNS z-test — Barndorff-Nielsen & Shephard's 2004 test of
+   "no jumps" against "jumps present") for significance, not raw truncation.
+8. **Parameter mining the window/grid** — K, Δ, α chosen to flatter a backtest. Mitigation:
+   fix 5-min/K=240/α=1% from literature defaults; report sensitivity, not optima.
+
+### S11. Visuals
+
+![S064 worked example — synthetic 12-return tape showing RV=114.22e-6 vs BV=44.83e-6 with the +1% jump bar highlighted](images/S064_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(1-min bars, Tier 0-1)"] -->|"1-min bars\n(Tier 0–1)"| ING["Ingest + normalize\n(adjust splits, drop halts)"]
+    ING -->|"5-min log returns"| FEAT["Feature compute\n(RV, BV, J_t, RJ_t)"]
+    FEAT -->|"RV/BV/J series + LM flags\n(per-bar granularity)"| SIG["Signal S064\njump component + LM flags"]
+    SIG -->|"jump flags + J_t series\n(per-bar granularity)"| GATE{"Cost / news\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T042 vol-spike, T098 ignition)"]
+    GATE -->|fail| DROP["No trade — jump/news day"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Barndorff-Nielsen, O. E. & Shephard, N. (2004). "Power and Bipower Variation with Stochastic
+   Volatility and Jumps." *Journal of Financial Econometrics*, 2(1), 1–37.
+   https://public.econ.duke.edu/~get/browse/courses/883/Spr16/COURSE-MATERIALS/Z_Papers/BNSJFEC2004.pdf
+2. Lee, S. S. & Mykland, P. A. (2008). "Jumps in Financial Markets: A New Nonparametric Test and
+   Jump Dynamics." *Review of Financial Studies*, 21(6), 2535–2563.
+   http://ideas.repec.org/a/oup/rfinst/v21y2008i6p2535-2563.html
+3. Andersen, T. G., Bollerslev, T. & Diebold, F. X. (2007). "Roughing It Up: Including Jump
+   Components in the Measurement, Modeling, and Forecasting of Return Volatility." *Review of
+   Economics and Statistics*.
+   https://www.sas.upenn.edu/~fdiebold/papers/paper56/abd_081605.pdf
+4. Andersen, T. G., Bollerslev, T., Diebold, F. X. & Labys, P. (2003). "Modeling and Forecasting
+   Realized Volatility." *Econometrica*, 71(2), 579–625.
+   https://papers.ssrn.com/sol3/papers.cfm?abstract_id=262720&rec=1&srcabs=2120094&pos=2
+5. IHSG intraday bipower study (2025–2026) — 93 days of 5-minute bars on the Jakarta Composite
+   (IHSG); the source of the 11.77% / 32.3% / 16.36% statistics in S9.
+   https://doi.org/10.47747/fmiic.v1i3.3561
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The 12-return
+  RV/BV worked example (RV = 0.00011422, BV = 0.00004483, RV−BV = 69.39×10⁻⁶) was
+  operator-verified arithmetic and is used in S4. Practical leads (5-min sampling; J_t
+  truncation; K = 240 for LM) are research leads — formulas come from the cited papers.
+  Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending
+  (checked 2026-09-10)."
+
+**Unverified leads:**
+- Modified Lee–Mykland test adjusting for intraday seasonality (Boudt et al.; conference
+  abstract noting LM over/under-detects jumps under strong seasonality):
+  https://www.bayes.citystgeorges.ac.uk/__data/assets/pdf_file/0020/67025/Abstracts.pdf —
+  cited as a research lead; confirm the published version before implementation.
+
+---
+## Stage 65/200 — S065: GARCH(1,1) intraday volatility
+
+*Batch SB8 · Signal 65/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | A parametric conditional-variance recursion — **GARCH** (Generalized Autoregressive Conditional Heteroskedasticity): today's variance is a weighted mix of yesterday's variance and yesterday's squared shock, fitted on deseasonalized intraday returns. |
+| **When it works** | As a fast, always-on one-bar-ahead vol forecast for position sizing, leverage caps, and VaR (value-at-risk) gates — wherever you need a number, not a story. |
+| **When it dies** | On raw intraday returns without diurnal adjustment (the U-shape breaks it — see S067); as a standalone trading trigger, where it adds nothing beyond "vol clusters." |
+| **Build-or-buy in one line** | Build — any stats library fits GARCH(1,1) in milliseconds; buy only the clean intraday bars it eats. |
+
+Provenance **[D]**: **ARCH** (Autoregressive Conditional Heteroskedasticity; Engle 1982) and GARCH (Bollerslev 1986) are documented, Nobel-cited
+methods. The *intraday* application — plain GARCH fitted on 5–30-minute returns with diurnal
+adjustment — is a practitioner adaptation, not a paper result; the source report flags this
+explicitly and so does this chapter.
+
+### S2. How it works — plain human explanation
+
+Volatility clusters. A +2% down-bar is usually followed by more big bars, not by silence; a
+quiet Tuesday is usually followed by a quiet Wednesday. **GARCH** (Generalized Autoregressive
+Conditional Heteroskedasticity — **conditional** variance = the variance we expect *given* what
+just happened) is the workhorse parametric model of that clustering.
+
+The intuition is a thermostat with memory. There are two forces: yesterday's *realized shock*
+(the squared residual — big move → raise the forecast) and yesterday's *forecast* (don't move
+too fast). The GARCH(1,1) equation blends them:
+tomorrow's variance = ω (a floor) + α × (yesterday's squared shock) + β × (yesterday's
+variance). The sum **α + β is persistence** — how slowly the forecast forgets. Practitioners
+typically see α + β ≈ 0.90–0.99 on financial returns (illustrative band, per the chatbot
+research lead — treated as a starting guess, not a standard).
+
+Intraday, there is a catch that kills the naive version. Returns at the open are ~1.4–1.5× as
+volatile as midday returns — the diurnal U-shape (S067). If you fit GARCH on *raw* 5-minute
+returns, the model sees the 9:35 bar, concludes "huge shock, raise vol," and is fooled by the
+clock, not the market. The honest intraday setup, following Andersen & Bollerslev (1997), is to
+**deseasonalize first, then GARCH**: write each return as `r_{t,i} = s_i · ε_{t,i}` where `s_i`
+is the deterministic time-of-day scale (estimated once from history, mean 1), and fit GARCH on
+the deseasonalized residuals. Alternatively, fit GARCH on daily data and scale the daily σ by
+the diurnal U-shape for intraday horizons.
+
+Economically, GARCH works as a sizing input because of **adverse selection** (trading against
+better-informed counterparties) **and inventory risk** (accumulating unwanted positions): spreads widen and algos slow down when conditional vol is high, so expected slippage
+(execution price worse than the decision-time mid) scales with σ. Picture it: 11:20, NVDA prints three −40 bp bars (bp = basis points; 1 bp = 0.01%) in a row. Your GARCH σ steps
+up; your participation cap (maximum share of market volume your orders may take) drops from 15% to 8%; overnight carry
+(positions held through the close) is cut before the close.
+No alpha was generated — but the bleed was contained.
+
+Mental model:
+- **GARCH is a thermostat, not a trader** — it forecasts how hot the tape runs, not which way it moves.
+- **α is the reflex, β is the memory** — big α reacts to each shock; big β keeps yesterday's level.
+- **Seasonality first, dynamics second** — intraday GARCH without S067 deseasonalization is misspecified.
+
+### S3. The math — exact formula
+
+Let `r_{t,i}` be the intraday return and decompose it as
+```
+r_{t,i} = μ_{t,i} + ε_{t,i},      ε_{t,i} = σ_{t,i} · z_{t,i},     z_{t,i} ~ iid(0,1)
+```
+(**iid** = independent and identically distributed.) Where **σ²_{t,i}** is the
+*conditional variance* (the variance of the next return given all
+information up to now). The **GARCH(1,1)** recursion:
+```
+σ²_{t,i} = ω + α · ε²_{t,i−1} + β · σ²_{t,i−1}
+```
+with ω > 0, α ≥ 0, β ≥ 0. **Covariance-stationarity** (finite long-run variance) requires
+**α + β < 1**, and the **unconditional (long-run) variance** is:
+```
+Var(r) = ω / (1 − α − β)
+```
+The **persistence** α + β controls mean reversion speed: half-life of a vol shock ≈
+−log(2)/log(α+β) bars (e.g. α+β = 0.95 on 5-min bars ≈ 13.5 bars ≈ ~1 hour).
+
+**Time-of-day seasonality** (intraday setup, Andersen–Bollerslev form):
+```
+r_{t,i} = s_i · ε_{t,i},      s_i = intraday seasonal scale factor (mean 1)
+```
+Estimate `s_i` from the U-shape (S067), then fit GARCH on `ε̃ = r/s_i`. The final one-bar-ahead
+forecast is `σ̂²_{t,i+1} = s²_{i+1} · σ̂²_GARCH`.
+
+**Leverage-asymmetry extensions** (variants, standard in the literature):
+- **GJR-GARCH** (Glosten–Jagannathan–Runkle GARCH): σ² = ω + α·ε²_{t−1} + γ·ε²_{t−1}·1{ε_{t−1}<0} + β·σ²_{t−1} — bad news hits harder.
+- **EGARCH** (exponential GARCH): `ln σ²_t = ω + α(|z_{t−1}| − E|z|) + γ·z_{t−1} + β·ln σ²_{t−1}` — log form, no
+  positivity constraints; γ < 0 is the leverage effect.
+
+| Parameter | Symbol | Typical range | Too small → | Too large → | Default (example) |
+|---|---|---|---|---|---|
+| Floor | ω | 1e-8–1e-5 (5-min var units) | σ collapses toward 0 after calm spells | vol never mean-reverts down | 2.0e-7 — *example* |
+| Shock weight | α | 0.02–0.15 | sluggish reaction to real vol breaks | jumpy σ, whipsaws sizing | 0.06 — *example* |
+| Persistence | β | 0.80–0.95 | forgets regimes too fast | α+β→1, integrated (nonstationary) | 0.89 — *example* |
+| Persistence sum | α+β | < 1 required | — | ≥1 → infinite long-run var | 0.95 — *example* |
+| Estimation window | — | 10–120 days of 5-min bars | noisy estimates | stale to regime breaks | 20–60 days — *example, chatbot lead* |
+
+All defaults are `example — not an institutional standard`. Heavy-tailed returns → use
+**Student-t innovations** (Bollerslev 1987) instead of Gaussian `z`; intraday residuals are
+decidedly non-Gaussian.
+
+**Causal timing:** σ̂²_{t,i} uses only returns through bar *i−1* — tradable (as a sizing input)
+for bar *i* onward, and positions using it fill at *i* or later.
+
+**Named variants:**
+1. *Multiplicative-component GARCH* (Engle & Sokalska 2012): r = σ_t · s_i · z — daily GARCH
+   level × deterministic diurnal × stochastic component; pooled cross-sectional estimation.
+2. *mcsGARCH* (Diao & Tong 2015): daily × diurnal × stochastic decomposition for intraday VaR.
+3. ***FIGARCH** (fractionally integrated GARCH) / long-memory* intraday models: persistence
+   decays slower than geometric; some studies
+   find it matches or beats short-memory GARCH on FX (before-cost forecast comparisons,
+   evaluated with superior predictive ability and Diebold–Mariano tests — statistical tests of
+   whether two competing forecasts have equal accuracy).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Synthetic throughout — one simulated RTH (regular trading hours) session of 78 five-minute bins, used only to show
+how the three pieces (season × GARCH → σ path → returns) assemble. Not a backtest (a simulated trade history on past data).**
+Script: `batches/SB8/plot_S065.py`, **seed 65**.
+
+Setup (example parameters — not institutional standards):
+- Diurnal scale: `s_i = 1 + 0.55·u²`, u ∈ [−1, +1] across the session, renormalized to mean 1 →
+  open/close bins ≈ 1.3× midday.
+- GARCH(1,1): ω = 2.0×10⁻⁷, α = 0.06, β = 0.89 → persistence 0.95; unconditional σ =
+  √(ω/(1−0.95)) = √(4.0×10⁻⁶) = 20.0 bp per 5-min bar.
+- Simulate: h₀ = ω/(1−α−β); then h_i = ω + α·ε²_{i−1} + β·h_{i−1}; final σ_i = s_i·√h_i.
+
+Hand-checkable steps (script's actual seed-65 output — corrected 2026-09-10): h₀ = 4.0×10⁻⁶
+(20.0 bp). The seed-65 first Gaussian draw is z₀ = −1.1125, so ε₀ = √h₀·z₀ and
+ε₀² = (−1.1125 × 20.0 bp)² ≈ 4.9507×10⁻⁶. Then:
+```
+h₁ = 2.0×10⁻⁷ + 0.06×4.9507×10⁻⁶ + 0.89×4.0×10⁻⁶
+   = 2.000×10⁻⁷ + 2.970×10⁻⁷ + 3.560×10⁻⁶
+   ≈ 4.0570×10⁻⁶  (20.14 bp)
+```
+— the persistence (β·h₀) term dominates, as it should with β = 0.89. **Correction note:**
+the previous draft of this paragraph claimed z₀ ≈ −0.28 and h₁ ≈ 3.78×10⁻⁶ — that
+hand-arithmetic was wrong and contradicted the script. The numbers above are the script's
+true output (re-run and re-verified 2026-09-10); the chart plots exactly this simulation.
+
+The chart (`images/S065_example.png`) plots exactly this simulation: top panel shows the
+U-shaped seasonal scale `s_i`, the pure GARCH path, and the combined σ_{t,i} = s_i·√h_i
+(mean ≈ 21.2 bp); bottom panel shows the synthetic 5-min returns drawn from it. You can see
+the open/close vol elevation *and* the stochastic GARCH wander riding underneath it.
+
+**What to notice:** the seasonal component is deterministic and knowable before the session
+starts; the GARCH component adapts to realized shocks. Their product is what a sizer should
+consume. The limits: this is one simulated path — real intraday residuals have heavier tails
+(use Student-t), real α/β need fitting (not hand-picked), and the toy ignores the bid–ask
+bounce (prices oscillating between bid and ask) that inflates real 5-minute σ estimates.
+
+### S5. Strategies that use this signal
+
+- **T043 — GARCH Regime Filter (primary):** the canonical consumer — momentum strategies run
+  when the GARCH forecast is below its own trailing median; reversal books take over above it.
+- **T042 — Jump-Robust Vol Spike Trader (also uses S065):** pairs the S064 jump split with the
+  S065 σ forecast — a "vol spike" is defined as realized vol exceeding the GARCH forecast by a
+  margin, after removing jumps.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Log returns | float | 5–30 min bars (intraday) or daily | Tier 0–1 | Must be deseasonalized before fitting (S067) |
+| Diurnal scale s_i | float | per intraday bin | computed | Estimated from 20+ days of history |
+| Corporate-action adjustments | float | event | Tier 0–1 | Splits corrupt the GARCH recursion otherwise |
+
+Ingest sketch (≤20 lines):
+```python
+import polars as pl, numpy as np
+from arch import arch_model          # pip install arch
+bars = pl.read_parquet("bars_5m.parquet")
+r = bars.with_columns(pl.col("close").log().diff().over("symbol").alias("r")).drop_nans()
+# deseasonalize with the S067 scale, then fit per symbol
+s = pl.read_parquet("diurnal_scale.parquet")      # bin -> s_b, mean 1
+x = r.join(s, on="bin").with_columns((pl.col("r")/pl.col("s_b")).alias("e"))
+fit = arch_model(x.filter(symbol="AAPL")["e"].to_numpy(),
+                 vol="Garch", p=1, q=1, dist="t").fit(disp="off")
+print(fit.params)          # omega, alpha, beta (+ nu for Student-t)
+forecast = fit.forecast(horizon=1).variance.values[-1, 0]
+```
+Storage: 1-min bars ≈ **~0.1 MB per symbol-day** (per `notes/cost-model.md` §3); the GARCH
+parameters are 4 floats per symbol — nothing. **Data-quality checklist:** deseasonalize first
+(the #1 failure), adjust corporate actions, handle half-days (shorter bin count), exclude
+halted symbols from the seasonal estimation.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** GARCH(1,1) maximum-likelihood on a few thousand 5-minute
+observations fits in milliseconds per symbol in `arch`/`statsmodels`; refitting a 500-symbol
+universe intraday is seconds. No GPU, no distributed anything.
+
+Throughput (per `notes/cost-model.md` §2): numpy ≈ 50–200M elements/sec; sklearn-class
+optimization on 1M rows ≈ 1–10 min — a per-symbol GARCH fit on 2,000–5,000 five-minute obs is
+far below that. 500 symbols × 78 bins/day of 5-min returns ≈ 39k floats/day; the full 20-year
+history ≈ 982.8M returns ≈ 7.9 GB float64 (chatbot-verified) fits the 77 GB working budget
+with room — though in practice you stream per-symbol daily files (cost-model §3).
+
+| Stack | When to pick |
+|---|---|
+| Python + `arch` package | Default — tested optimizers, Student-t built in |
+| Python + polars/numpy hand-rolled | If you need the recursion inside a hot loop (performance-critical inner execution path) with custom likelihoods |
+| Rust | Only for tick-level (trade-by-trade) per-event σ updates in the execution path |
+
+RAM: 1 day / 60 days of 5-min returns ≈ 0.3 MB / 20 MB for 500 symbols (cost-model §3 rule of
+thumb) — trivial.
+
+Engineering time: cost-model §5 **Tier M, 20–60 h** (intraday GARCH sits mid-M: the recursion
+is easy, the deseasonalization, Student-t fitting, and forecast plumbing are the real work).
+At $150/hr loaded: **$3,000–9,000**. The SB8 chatbot's per-component band for intraday GARCH
+was 30–80 h prototype / 100–220 h production — labeled chatbot lead; the cost-model band takes
+precedence and sits inside the prototype range. Data: Tier 0–1 (~$0–200/mo, indicative —
+verify before budgeting).
+
+**What breaks first at 500 symbols:** nothing in compute — but refitting per symbol per day
+with Student-t likelihoods gets slow in pure Python loops; vectorize or fit in batch, and
+consider the multiplicative-component form (one pooled diurnal + per-symbol daily GARCH) to
+cut the parameter count.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX | Free daily + coarse intraday bars | ~$0 | $0 start for daily GARCH | Intraday granularity insufficient for the 5-min recursion |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP | Clean 1-min SIP (Securities Information Processor, the consolidated tape) bars + actions | ~$30–200/mo | The right input for deseasonalization + fitting | Nothing material |
+| Library route: `arch` / `statsmodels` (open source) | Tested GARCH optimizers, t-dist | ~$0 | Don't re-derive the likelihood | You still own the diurnal layer |
+| Tier 2: Databento | L1 (top-of-book) for exact bar construction | ~$200/mo + usage | Microstructure-honest bars | Overkill for a daily refit |
+
+**Verdict: build, with open-source estimation.** The model is a commodity; the edge — if any —
+is in the deseasonalization and the plumbing (refit cadence, forecast horizon, how sizing
+consumes σ̂). Buy Tier-1 bars once the GARCH forecast gates real risk; the free tier suffices
+while you prototype.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Mandated framing: **documented conditional value, but published effects much weaker than raw
+backtests once realistic execution/timing/selection/regime controls are imposed.** GARCH is a
+forecasting technology, not a trading signal — its literature measures forecast accuracy
+(R², likelihood, VaR coverage), not Sharpe ratio (mean excess return ÷ volatility). Treating a vol forecast as a standalone entry
+trigger has no documented edge.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Andersen & Bollerslev (1997), *J. Empirical Finance* — explicit periodic (diurnal) modeling of 5-min DM/$ (deutsche mark per US dollar) and S&P 500 futures | FX + US equities, 1992–93 / 1986–89 | "Most of the distortions attributable to the intraday volatility cycle may be eliminated" by modeling seasonality; raw intraday GARCH persistence estimates were wildly irregular across sampling frequencies, stabilizing after adjustment | Before cost (model diagnostics, not P&L) | Demonstrates misspecification of raw intraday GARCH, not a trading edge |
+| Diao & Tong (2015), *Applied Economics Letters* — multiplicative-component GARCH on CSI 300 5-min returns | China CSI 300 | Diurnal component confirmed (notably *not* U-shaped under China's T+1 trading rule — shares cannot be sold the same day they are bought); model "performs well" out-of-sample (evaluated on data not used to fit the model) for intraday vol and VaR forecasting | Before cost (forecast evaluation) | Single market; "performs well" is a forecast-accuracy claim |
+| "Forecasting exchange rate volatility using high-frequency data: Is the euro different?" — intraday GARCH vs FIGARCH, out-of-sample battery (superior predictive ability / Diebold-Mariano tests — statistical tests
+   comparing the forecast accuracy of two models), deseasonalized 15-min data | EUR FX | Intraday FIGARCH "always outperforms" plain intraday GARCH; both enhanced by high-frequency data vs daily models | Before cost (forecast comparison) | FX-specific; the winner (FIGARCH) is long-memory, not the plain GARCH of this chapter |
+
+**Honest bottom line:** as a standalone trigger this is not an edge at all — it is a
+measurement. As a filter (T043's regime gate; T042's spike definition; VaR and participation
+caps), its conditional value is documented: deseasonalized intraday GARCH-class models beat
+raw or daily alternatives out-of-sample, and every serious intraday desk runs something in
+this family for risk — not for entries.
+
+### S10. Failure modes & pitfalls
+
+1. **Fitting on raw (non-deseasonalized) returns** — the U-shape masquerades as clustering;
+   α inflates, persistence misestimates. Mitigation: always deseasonalize via S067 first.
+2. **α + β ≥ 1 (integrated/nonstationary)** — forecasts never mean-revert; long-run variance
+   undefined. Mitigation: constrain the optimizer; monitor the persistence sum in production.
+3. **Gaussian innovations on fat-tailed residuals** — underestimates tail σ, VaR breaches.
+   Mitigation: Student-t innovations; backtest VaR coverage (Kupiec/Christoffersen VaR-coverage tests).
+4. **Jumps contaminating the recursion** — a single jump bar permanently lifts σ̂. Mitigation:
+   winsorize (clip extreme values at a percentile threshold) or jump-filter (S064) the input residuals; consider GJR/EGARCH for asymmetry.
+5. **Stale parameters across regimes** — 60-day fit is blind to today's vol break. Mitigation:
+   shorter windows (10–20 days) or exponentially weighted refits in fast markets; monitor
+   forecast errors.
+6. **Overfitting via model mining** — GARCH vs EGARCH vs GJR vs FIGARCH chosen by in-sample
+   (fit-period) likelihood. Mitigation: fix the family a priori; compare out-of-sample on a frozen test set.
+7. **Microstructure noise at fine grids** — 1-min σ̂ inflated by bid–ask bounce. Mitigation:
+   5-min minimum sampling (chatbot lead), or noise-robust returns.
+8. **Using the forecast as a direction signal** — the classic category error. Mitigation:
+   restrict GARCH to sizing/gates (T043); entries come from directional signals.
+
+### S11. Visuals
+
+![S065 worked example — synthetic intraday GARCH(1,1) sigma path with U-shaped diurnal scale s_i, seed 65](images/S065_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(1-min bars, Tier 0-1)"] -->|"1-min bars\n(Tier 0–1)"| ING["Ingest + normalize\n(deseasonalize via S067)"]
+    ING -->|"deseasonalized 5-min returns"| FEAT["Feature compute\n(GARCH(1,1) fit + 1-bar forecast)"]
+    FEAT -->|"sigma_{t,i+1} forecast\n(per-bar granularity)"| SIG["Signal S065\nintraday GARCH sigma"]
+    SIG -->|"sigma_{t,i+1} forecast\n(per-bar granularity)"| GATE{"Sizing / regime\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T043 regime filter, T042 sizing)"]
+    GATE -->|fail| DROP["Cut risk / stand down"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Andersen, T. G. & Bollerslev, T. (1997). "Intraday Periodicity and Volatility Persistence in
+   Financial Markets." *Journal of Empirical Finance*, 4(2–3), 115–158.
+   https://www.kellogg.northwestern.edu/academics-research/research/detail/1997/intraday-periodicity-and-volatility-persistence-in-financial-markets/
+2. Diao, X. & Tong, B. (2015). "Forecasting intraday volatility and VaR using multiplicative
+   component GARCH model." *Applied Economics Letters*, 22(18), 1457–1464.
+   http://ideas.repec.org/a/taf/apeclt/v22y2015i18p1457-1464.html
+3. "Forecasting exchange rate volatility using high-frequency data: Is the euro different?"
+   *International Journal of Forecasting* (intraday GARCH vs FIGARCH out-of-sample comparison,
+   deseasonalized 15-min data).
+   https://www.sciencedirect.com/science/article/abs/pii/S0169207011000069
+4. Engle, R. F. & Sokalska, M. E. (2012). "Forecasting intraday volatility of individual stocks:
+   a multiplicative component GARCH." Referenced in the practitioner intraday-volatility
+   literature (see source 5's survey of the decomposition r = daily × diurnal × stochastic).
+   https://assets.bbhub.io/professional/sites/10/intraday_volatility-3.pdf
+5. Canonical origins (report citations; journal references confirmed, no URL spot-checked):
+   Engle, R. F. (1982). "Autoregressive Conditional Heteroskedasticity with Estimates of the
+   Variance of United Kingdom Inflation." *Econometrica*, 50(4), 987–1007; Bollerslev, T.
+   (1986). "Generalized Autoregressive Conditional Heteroskedasticity." *Journal of
+   Econometrics*, 31, 307–327.
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The intraday
+  GARCH(1,1) formulation (σ²_{t,i} = ω + αε²_{t,i−1} + βσ²_{t,i−1}, α+β<1), the seasonal
+  decomposition r_{t,i} = s_i·ε_{t,i}, the persistence band α+β ≈ 0.90–0.99 (illustrative),
+  the 20–60-day estimation window, and Student-t innovations are chatbot research leads —
+  consistent with the cited literature above; parameter values in S3/S4 are marked
+  `example — not an institutional standard`. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3
+  (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+- Batch formula flags (from Q-SB8-3 verification): (a) the volatility-premium line
+  `VRP_t^σ = IVol_t − √(RV)` was ambiguous on the square root in the chatbot's render;
+  (b) the 25Δ tolerance "±0.5 to ±1.0 delta points" was partially garbled. Neither is used
+  in this chapter; both are cited here only as explicit flags for sibling chapters (S069,
+  S071).
+
+**Unverified leads:**
+- Score-driven intraday extensions of GARCH (report cites arXiv 2211.12376) — confirm the
+  arXiv ID from a canonical source before citing in production.
+- "Volatility around the clock" (arXiv:1211.2961) reports up to 50% improvements in
+  realized-volatility forecasts from a Bayesian intraday model with seasonal components:
+  https://arxiv.org/abs/1211.2961v1 — a single-study forecast metric, not a trading result;
+  treat as unverified until the full paper's evaluation is read.
+
+---
+## Stage 67/200 — S067: Intraday vol seasonality / diurnal deseasonalization
+
+*Batch SB8 · Signal 67/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The **diurnal** (daily-recurring) **U-shape** in intraday volatility — high at the open, low midday, high at the close — estimated as a per-bin scale factor and divided out before any intraday model is fit. |
+| **When it works** | Always as a preprocessing layer: every intraday vol or momentum model on raw returns is misspecified without it. |
+| **When it dies** | Treated as a trading signal (it is clock, not information); copied across markets where the shape differs (FX — foreign exchange — follows geographic sessions, not a U). |
+| **Build-or-buy in one line** | Build — median |r| per time bin over a few weeks; nothing to buy except the bars. |
+
+Provenance **[D]**: the U-shaped intraday pattern is documented across NYSE, London, and Tokyo
+equities and Chicago futures (Wood, McInish & Ord 1985; Andersen & Bollerslev 1997), with
+noted exceptions (FX session structure; China's T+1 market — under T+1, shares cannot be sold
+the same day they are bought). Deseasonalization itself is
+standard practitioner methodology.
+
+### S2. How it works — plain human explanation
+
+**Diurnal** means "recurring within the day." **U-shape** is the picture: plot average
+volatility against the time of day for US equities and you get a bathtub — elevated at the
+9:30 open (overnight news gets priced in), sagging through the midday lull, rising again into
+the 16:00 close (benchmarked funds and MOC (market-on-close) flows rush to finish). This pattern is not
+information arriving — it is the *clock*. The same stock, same news environment, is simply
+more volatile at 9:35 than at 12:35.
+
+That distinction is load-bearing for every other vol signal in this family. A **GARCH** model
+(S065) fitted on raw 5-minute returns sees the open spike and "learns" that volatility is
+clustering — when really it is just 9:30 being 9:30. A jump test (S064) sees the close bar and
+flags a jump that was really the scheduled end-of-day auction pressure. **Deseasonalization**
+removes the clock before the model sees the data: estimate a deterministic scale factor `s_b`
+for each time-of-day bin *b* (scaled so its average is 1), then work with adjusted returns
+`r̃ = r / s_b`. A 30-bp bar (bp = basis points; 1 bp = 0.01%) at the open with s_open = 1.4 becomes a 21-bp adjusted bar —
+comparable to a 21-bp midday bar. What remains is the *stochastic* volatility: the part the
+market actually did not schedule.
+
+Why does the U-shape exist economically? The open concentrates overnight information
+processing (adverse selection is highest when informed traders act on accumulated news);
+midday, liquidity provision dominates and spreads tighten; the close concentrates uninformed
+benchmark flow (indexers, VWAP (volume-weighted average price) completions, **MOC** — market-on-close — imbalances) which is price-insensitive and
+pushes volume up. Different mechanisms, same shape — which is why it is stable enough to
+estimate from history and divide out.
+
+But the shape is not universal, and that is a documented fact, not a footnote. In FX, the
+pattern follows geographic sessions — Ito & Hashimoto (2006) found U-shaped intraday activity
+for Tokyo and London participants but *not* for New York participants. In China's CSI 300,
+the diurnal pattern is not U-shaped at all under the T+1 trading rule (Diao & Tong 2015).
+Estimate per market; never import a shape.
+
+Mental model:
+- **The clock is not the market** — divide out the predictable U before modeling the unpredictable wiggle.
+- **s_b is a ruler, not a signal** — it normalizes other signals; it never triggers a trade by itself.
+- **Every market has its own shape** — estimate it locally, re-estimate it when structure changes.
+
+### S3. The math — exact formula
+
+For each time-of-day bin *b* (e.g. 78 five-minute bins of the US RTH — regular trading
+hours — session), estimate the
+deterministic **diurnal factor**:
+```
+s_b = median(|r_{t,b}| over days t) / mean_b(median(|r_{t,b}|))     (mean 1 by construction)
+```
+Alternatives: mean RV share per bin, or a Fourier/parametric fit. Then **deseasonalize**:
+```
+r̃_{t,b} = r_{t,b} / s_b
+```
+All downstream models (GARCH, HAR (Heterogeneous Autoregressive), jump tests) are fitted on `r̃`, not `r`.
+
+**Andersen–Bollerslev (1997) multiplicative form** (the canonical decomposition):
+```
+R_{t,n} = E(R_{t,n})/√N + σ_t · s_{t,n} · Z_{t,n}
+```
+where `R_{t,n}` is the *n*th intraday return of day *t*, `σ_t` is the daily stochastic vol
+level, `s_{t,n}` is the periodic (deterministic) component scaled to mean 1, and `Z` is
+iid (independent and identically distributed) noise. Estimation: regress `log|r|`-type measures on time-of-day dummies
+(one indicator variable per time bin) plus the daily
+vol level (their flexible Fourier/indicator procedure), or the simpler median-|r| estimator
+above.
+
+| Parameter | Symbol | Typical range | Too small → | Too large → | Default (example) |
+|---|---|---|---|---|---|
+| Bins/day | — | 13–390 | coarse shape, open/close spikes smeared | noisy s_b, overfitting the clock | 78 (5-min) — *example* |
+| Estimation window | — | 2–12 weeks | s_b noisy, day-of-week effects leak | stale after structural change | 20 days (~4 weeks) — *example* |
+| Estimator | — | median\|r\| / RV share / Fourier | mean\|r\| is jump-sensitive | over-parameterized | median\|r\| — *example* |
+
+All defaults are `example — not an institutional standard`.
+
+**Causal timing:** `s_b` is estimated on history strictly before day *t* (rolling window); the
+adjusted return `r̃_{t,b}` is available at bar *b* — tradable no earlier than *b+1*. Never
+estimate `s_b` on the same day you trade it.
+
+**Named variants:**
+1. *Fourier-flexible form* (Andersen & Bollerslev 1997): sin/cos terms in time-of-day instead
+   of per-bin dummies — smoother, fewer parameters.
+2. *Announcement-aware seasonality* (Andersen & Bollerslev 1998): add macro-announcement
+   dummies — scheduled news has its own deterministic vol bump on top of the U.
+3. *Multiplicative-component GARCH* (Engle & Sokalska 2012): daily GARCH × deterministic
+   diurnal × stochastic intraday — the production-grade descendant of this chapter.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Synthetic — 20 simulated days × 78 five-minute bins, built with a known U-shape so the
+estimator can be checked against truth. Not market data, not a backtest.** Script:
+`batches/SB8/plot_S067.py`, **seed 67**.
+
+Construction: true scale `s_true(b) = 1 + 0.60·u²` (u ∈ [−1,+1] across the session),
+renormalized to mean 1 → open/close bins ≈ 1.33×, midday bins ≈ 0.83× (a mild U-shape, so
+recovery is a real test, not a giveaway). Each day's returns:
+`r_{t,b} = s_true(b) · σ_t · z`, with random daily level σ_t and standard-normal z.
+
+Estimation step (the part you would run in production): `ŝ_b = median_t|r_{t,b}| /
+mean_b(median_t|r_{t,b}|)`. The script's output: mean(ŝ) = 1.000000 exactly (by
+construction), and the estimated profile recovers the hidden U-shape — noisily at the
+midday minimum, where small medians amplify sampling noise over only 20 days (a production
+window would use more history or Fourier smoothing).
+
+Deseasonalization on the illustrative day-1 tape: the raw open bar was −21.8 bp; divided by
+ŝ_open ≈ 1.41 → adjusted −15.4 bp. The script prints `raw_open_bin1_bp=-21.8
+adj_open_bin1_bp=-15.4` — the open "spike" is flattened to a level comparable with midday
+bars, which is exactly the point: after adjustment, a 15-bp bar means the same thing at
+9:35 and at 12:35.
+
+The chart (`images/S067_example.png`): top panel shows the true U-shape (hidden from the
+estimator) against the estimated ŝ_b — they track closely; bottom panel shows raw vs
+deseasonalized 5-minute returns for the illustrative day.
+
+**What to notice:** the estimator needs no knowledge of the truth — median |r| per bin over
+20 days is enough. The limits: 20 days is the *example* window; real estimation must exclude
+event days (FOMC — Federal Open Market Committee; CPI — Consumer Price Index) whose deterministic bumps are not the daily U, and must handle
+half-days (fewer bins). Also note what this chapter does *not* do: it never says whether the
+market will go up or down — it only makes the ruler honest.
+
+### S5. Strategies that use this signal
+
+- **T044 — Diurnal Deseasonalization Normalizer (primary):** the canonical consumer —
+  normalizes *every* signal's thresholds by time-of-day vol before any entry decision
+  (consumes S067 with S046, S083).
+- **T004 — VWAP-Deviation Mean-Reversion (uses S067):** the VWAP-deviation z-score's
+  denominator is the deseasonalized vol — without S067, open/close deviations would look
+  artificially stretched.
+- **T041 — HAR Vol-Timing Overlay (uses S067):** scales positions by **HAR**
+  (Heterogeneous Autoregressive) realized-volatility forecasts that are
+  fitted on deseasonalized returns; the overlay's intraday timing leg runs on S067-adjusted
+  series.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Log returns | float | 5-min bars (or finer) | Tier 0–1 | 20+ trading days of history minimum |
+| Session calendar | — | day | Tier 0–1 | Half-days need their own (shorter) shape |
+| Announcement calendar | — | event | Tier 0–2 | FOMC/CPI days excluded from s_b estimation |
+
+Ingest sketch (≤20 lines):
+```python
+import polars as pl
+bars = pl.read_parquet("bars_5m.parquet")          # t, symbol, bin (1..78), close
+r = (bars.with_columns(pl.col("close").log().diff().over("symbol").alias("r"))
+     .filter(pl.col("r").is_not_null()))
+# exclude event days from the seasonal estimation
+calm = r.join(event_days, on="date", how="anti")
+s = (calm.group_by(["symbol","bin"])
+     .agg(pl.col("r").abs().median().alias("med_abs"))
+     .with_columns((pl.col("med_abs")/pl.col("med_abs").mean().over("symbol")).alias("s_b")))
+adj = r.join(s, on=["symbol","bin"]).with_columns((pl.col("r")/pl.col("s_b")).alias("r_adj"))
+```
+Storage: 1-min bars ≈ **~0.1 MB per symbol-day** (per `notes/cost-model.md` §3); the `s_b`
+table is 78 floats per symbol — nothing. **Data-quality checklist:** exclude scheduled-event
+days from estimation (they have their own shape); separate half-day sessions; drop halted
+symbols; re-estimate the shape periodically (quarterly is a common *example* cadence).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** Median-|r| per bin over 20 days × 78 bins is a groupby-aggregation —
+the cheapest operation in the cost model (polars ≈ 10–50M rows/sec, `notes/cost-model.md` §2).
+The whole S067 pipeline for a 500-symbol universe runs in seconds on one core.
+
+Throughput: 500 symbols × 78 bins × 20 days = 780k rows — microseconds of compute. Even the
+full 20-year history (982.8M returns ≈ 7.9 GB float64, chatbot-verified) is a streaming
+groupby, never held whole — far inside the 77 GB working budget (cost-model §3).
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | Default — the estimator is literally a groupby |
+| DuckDB | If the bar history already lives in a research DB |
+| Rust | Never needed for this signal alone |
+
+RAM: 60 days of 5-min returns for 500 symbols ≈ 20 MB (cost-model §3 rule of thumb) —
+trivial.
+
+Engineering time: cost-model §5 — deseasonalization is a **Tier L/M boundary task, ~4–12 h**
+(Tier L band: 1-min bar signals) to **20 h** if you add the Fourier form and the
+announcement-aware variant. At $150/hr loaded: **$600–3,000**. Data: Tier 0–1 (~$0–200/mo,
+indicative — verify before budgeting).
+
+**What breaks first at 500 symbols / full OPRA (Options Price Reporting Authority, the consolidated US options tape):** nothing — this is the cheapest chapter in
+the batch. The only scaling cost is conceptual: per-symbol shapes for 500 symbols need
+per-symbol corporate-action-clean bars, and options-side deseasonalization (S071–S074) needs
+the full-chain data that dominates that sub-batch's budget.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX | Free bars | ~$0 | Enough to prototype the U-shape | Coarse granularity; action-adjustment risk |
+| Tier 1: Polygon / Alpaca SIP | Clean 1-min bars + actions (SIP = Securities Information Processor, the consolidated tape) | ~$30–200/mo | Reliable per-bin medians | Nothing material |
+| Build on vendor "intraday seasonality" analytics | Precomputed profiles | varies | Saves an afternoon | You inherit their binning, window, and event handling |
+
+**Verdict: build, always.** This is a fifteen-line groupby. Buying a precomputed seasonal
+profile means trusting someone else's bin definitions, event exclusions, and re-estimation
+cadence on the single most load-bearing preprocessing step in your vol stack — never worth
+it.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Mandated framing: **documented conditional value, but published effects much weaker than raw
+backtests once realistic execution/timing/selection/regime controls are imposed.** S067 is
+pure infrastructure — its "efficacy" is measured in model-misspecification removed, not in
+Sharpe. Nobody trades the U-shape; everybody who models intraday vol must condition on it.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Andersen & Bollerslev (1997), *J. Empirical Finance* — explicit periodic modeling of 5-min DM/$ (deutsche mark per US dollar) and S&P 500 futures | FX + US equities, 1992–93 / 1986–89 | "Most of the distortions attributable to the intraday volatility cycle may be eliminated"; raw intraday GARCH persistence estimates collapsed or exploded across sampling frequencies without the adjustment | Before cost (model diagnostics) | Diagnostic evidence, not a trading result |
+| Andersen & Bollerslev (1998), *J. Finance* — DM/$ 5-min with announcement dummies | FX, 1 year of 5-min | Intraday activity patterns + macro announcements + ARCH persistence "separately quantified and shown to account for a substantial fraction of return variability, both at the intraday and daily level" | Before cost (variance decomposition) | FX market; decomposition ≠ trade |
+| Shape non-universality: Ito & Hashimoto (2006) via MDPI survey — U-shaped activity for Tokyo/London participants, *not* for New York; Diao & Tong (2015) — CSI 300 diurnal *not* U-shaped under T+1 | FX, China equities | The U is a market-structure artifact, not a law | Before cost (descriptive) | Directly limits portability — estimate per market |
+
+Regimes where deseasonalization fails: structural breaks (tick-size — minimum price increment — changes, session-hour
+changes, the move to 24-hour trading) that shift the shape — a stale `s_b` then
+*mis*-normalizes; event days (FOMC/CPI/earnings) with their own deterministic bumps; and
+markets where the "shape" is driven by scheduled auctions rather than continuous flow.
+
+**Honest bottom line:** as a standalone trigger this is a zero edge — it is a ruler, not a
+trade. As a preprocessing layer its conditional value is as documented as anything in this
+document: skip it and your GARCH persistence, your jump flags, and your HAR forecasts are
+all measuring the clock instead of the market.
+
+### S10. Failure modes & pitfalls
+
+1. **Estimating s_b on event days** — FOMC/CPI bumps are deterministic but not daily; they
+   inflate the U. Mitigation: exclude scheduled-event days from estimation.
+2. **Stale shape after structural change** — tick-size, hours, or regime changes move the U.
+   Mitigation: re-estimate on a rolling window; monitor ŝ_b drift.
+3. **Importing another market's shape** — FX follows sessions, China isn't U-shaped.
+   Mitigation: estimate per market, per symbol class; never copy.
+4. **Mean-|r| instead of median-|r|** — jumps corrupt the mean estimator. Mitigation: robust
+   estimators (median); winsorize (clip extreme values at a percentile threshold) first.
+5. **Half-days and holidays** — fewer bins, different shape. Mitigation: separate shape or
+   exclude.
+6. **Lookahead: estimating on the trading day** — s_b must come from history strictly before
+   *t*. Mitigation: rolling window ending at *t−1*; freeze the table pre-open.
+7. **Over-granular bins** — 1-min bins give noisy s_b that overfits the clock. Mitigation:
+   5-min minimum (chatbot lead), or Fourier smoothing.
+8. **Treating the season as a signal** — "vol is high at the open, therefore fade" is clock
+   trading. Mitigation: S067 normalizes other signals; it never triggers (T044 is the
+   consumer, not the trader).
+
+### S11. Visuals
+
+![S067 worked example — estimated U-shaped diurnal volatility profile and raw vs deseasonalized 5-min returns, seed 67](images/S067_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(1-min bars, Tier 0-1)"] -->|"1-min bars\n(Tier 0–1)"| ING["Ingest + normalize\n(exclude event days, half-days)"]
+    ING -->|"5-min log returns\n(20+ day history)"| FEAT["Feature compute\n(s_b = median|r| per bin, mean 1)"]
+    FEAT -->|"diurnal scale s_b + r_tilde = r/s_b\n(per-bin granularity)"| SIG["Signal S067\ndiurnal deseasonalizer"]
+    SIG -->|"deseasonalized returns r_tilde\n(per-bin granularity)"| GATE{"Downstream model\nneeds raw or adjusted?"}
+    GATE -->|adjusted| OUT["Downstream consumer\n(S064, S065, S066, T041, T044)"]
+    GATE -->|raw| DROP["Use raw only with documented reason"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Andersen, T. G. & Bollerslev, T. (1997). "Intraday Periodicity and Volatility Persistence in
+   Financial Markets." *Journal of Empirical Finance*, 4(2–3), 115–158.
+   https://www.kellogg.northwestern.edu/academics-research/research/detail/1997/intraday-periodicity-and-volatility-persistence-in-financial-markets/
+2. Andersen, T. G. & Bollerslev, T. (1998). "Deutsche Mark–Dollar Volatility: Intraday Activity
+   Patterns, Macroeconomic Announcements, and Longer Run Dependencies." *Journal of Finance*,
+   53(1), 219–265.
+   https://www.kellogg.northwestern.edu/academics-research/research/detail/1998/deutsche-mark-dollar-volatility-intraday-activity-patterns-macroeconomic-announcements/
+3. Diao, X. & Tong, B. (2015). "Forecasting intraday volatility and VaR using multiplicative
+   component GARCH model." *Applied Economics Letters*, 22(18), 1457–1464. (Documents the
+   non-U-shaped CSI 300 diurnal under T+1.)
+   http://ideas.repec.org/a/taf/apeclt/v22y2015i18p1457-1464.html
+4. "Instantaneous Volatility Seasonality of High-Frequency Markets in Directional-Change
+   Intrinsic Time." *Journal of Risk and Financial Management*, 12(2), 54. (Surveys U-shape
+   evidence incl. Ito & Hashimoto (2006): U-shape for Tokyo/London, not New York participants.)
+   https://www.mdpi.com/1911-8074/12/2/54/html
+5. Canonical origin (report citation; journal reference confirmed, no URL spot-checked):
+   Wood, R. A., McInish, T. H. & Ord, J. K. (1985). Documented U-shaped intraday patterns in
+   NYSE equities — the original U-shape evidence this chapter's estimator operationalizes.
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The Andersen–
+  Bollerslev decomposition `R_{t,n} = E(R_{t,n})/√N + σ_t·s_{t,n}·Z_{t,n}`, the deseasonalize-
+  first rule (`r̃ = r/s_b`), and the estimation-window guidance are chatbot research leads
+  consistent with sources 1–2 above. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3
+  (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+- Batch formula flags (from Q-SB8-3 verification): (a) the volatility-premium line
+  `VRP_t^σ = IVol_t − √(RV)` was ambiguous on the square root in the chatbot's render;
+  (b) the 25Δ tolerance "±0.5 to ±1.0 delta points" was partially garbled. Neither is used
+  in this chapter; both are cited here only as explicit flags for sibling chapters (S069,
+  S071).
+
+**Unverified leads:** none beyond the chatbot items above — all efficacy claims in S9 trace
+to the checkable sources listed.
+
+---
+## Stage 68/200 — S068: VIX term structure
+
+*Batch SB8 · Signal 68/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The slope (and curvature) of the VIX futures curve — how 30-day implied volatility changes with expiry — read as a stress gauge and a carry signal. |
+| **When it works** | Calm regimes where the curve sits in *contango* (upward-sloping) and mean-reverts; used as a regime gate and roll-yield harvest. |
+| **When it dies** | Vol spikes and regime breaks: the curve inverts (*backwardation*), carry trades get run over, and slope flips faster than daily rebalances. |
+| **Build-or-buy in one line** | Buy the VIX/VX futures feed; build the analytics yourself — the math is public and the edge is in timing, not the formula. |
+
+Provenance [D] (documented: Cboe VIX methodology, variance-risk-premium literature). Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+The **VIX index** is the market's annualized forecast of S&P 500 volatility over the next 30 days, computed from S&P 500 option prices (more on the formula in S3). It is a *spot* number. But options exist for many expiries, so there is also a *term structure*: VIX futures (ticker VX, traded on CFE — Cboe Futures Exchange) expiring in 1 month, 2 months, 3 months, and so on. The *slope* of this curve is the signal.
+
+Picture a Tuesday morning, 9:47. The VIX prints 17.2. The front-month VX future trades at 17.9, the second-month at 18.6. The curve slopes upward — **contango** (future prices above spot), the normal state: traders demand compensation for bearing volatility risk over longer horizons. Flip to a stress morning: VIX 34, front-month future 35.6, second-month only 32.4 — the curve slopes *downward*, **backwardation**: front-month protection is bid up because everyone wants insurance *now*.
+
+Why should the slope be a tradable signal? Two economic mechanisms. First, **carry/roll-down**: in contango, a short front-month VX position profits mechanically as the future converges down toward spot at settlement (the "roll yield" that has historically made long-VIX ETPs (exchange-traded products) bleed in calm stretches). Second, **stress inversion**: backwardation is one of the cleanest real-time gauges of market stress, and a fast return from backwardation to contango has historically marked stress exhaustion.
+
+Mental model:
+- The VIX futures curve prices *when* the market wants volatility insurance; its slope = whether fear is now or later.
+- Contango pays carry to short-vol sellers in calm regimes — and charges it violently when stress arrives.
+- Backwardation is a stress alarm: the edge is in the *transition* back, not in the level.
+
+### S3. The math — exact formula
+
+**VIX (spot level).** The Cboe computes the VIX as the square root of a *model-free implied variance* — an average of out-of-the-money (strike below spot for puts, above spot for calls) S&P 500 option prices weighted by 1/K², interpolated between the two expiries straddling 30 days (Demeterfi et al., 1999; Britten-Jones & Neuberger, 2000; Cboe white paper). The core formula, for one expiry T (in years):
+
+$$\sigma^2(T) = \frac{2e^{rT}}{T}\left[\sum_{K_i < K_0}\frac{\Delta K_i}{K_i^2}P(K_i) + \sum_{K_i > K_0}\frac{\Delta K_i}{K_i^2}C(K_i)\right] - \frac{1}{T}\left(\frac{F}{K_0} - 1\right)^2$$
+
+where Kᵢ are strike prices (dollars), P(Kᵢ)/C(Kᵢ) are out-of-the-money put/call mid-prices, ΔKᵢ is half the distance to adjacent strikes, F is the forward index level, K₀ is the first strike at or below F, r is the risk-free rate, and VIX = 100 × √[interpolated σ² at 30 days].
+
+**Term-structure signals (the S068 features).** With VXₘ = price of the VIX future expiring in m months (points):
+
+- Level: VIX itself (30-day spot implied vol).
+- 1×2 slope: S₁ₓ₂ = VX₂ − VX₁ (points). Example value: +0.7 = contango; −3.2 = backwardation.
+- Relative slope: VX₂/VX₁ − 1 (percent). Example: +4.2% contango; −9.0% backwardation.
+- Short-vs-long: VIX − VIX3M (VIX3M = Cboe 3-Month Volatility Index), or VIX9D (Cboe 9-Day Volatility Index) vs VIX (9-day vs 30-day: front of the *spot* curve).
+- Variance-risk-premium proxy (VRVP): VIX − E[RV], where E[RV] is a realized-vol forecast (e.g. HAR — Heterogeneous Autoregressive — , S066). Positive = options rich vs history.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example — not an institutional standard) |
+|---|---|---|---|---|---|
+| Futures legs | VX₁, VX₂ | 1–6 months | single leg = no slope | far legs illiquid | 1×2 spread |
+| Smoothing | z-score lookback | 20–120 days | noisy flips | stale in breaks | 60 days |
+| Inversion trigger | slope < τ | −0.5 to −2.0 pts | false alarms | misses stress | slope < −1.0 (example) |
+| Horizon | holding period | 1 day – 4 weeks | noise | curve drifts | 1–2 weeks |
+
+Normalization: z-score the slope against its trailing history (rank works too when the distribution is skewed by crisis spikes); raw slope is regime-biased because contango depth varies with the vol level. Timing is causal by construction: the curve at close *t* uses only quotes ≤ *t*; a position is entered no earlier than *t+1* (next open).
+
+Variants: (1) **VX 1×2 calendar** — the pure slope trade; (2) **VIX vs VIX3M inversion flag** — front vs 3-month inversion as a stress regime feature (no futures needed); (3) **intraday VX-vs-ES basis** (ES = E-mini S&P 500 futures) — VX futures vs S&P 500 futures for same-day stress timing.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 10-day tape (seed **68**), all levels in index points. The chart `images/S068_example.png` plots exactly these numbers.
+
+| Day | VIX | VIX9D | VX₁ | VX₂ | Slope VX₂−VX₁ | F₂/F₁ − 1 | Regime |
+|---|---|---|---|---|---|---|---|
+| 1 | 16.2 | 14.1 | 16.8 | 17.5 | +0.7 | +4.2% | contango |
+| 2 | 16.8 | 14.6 | 17.4 | 18.1 | +0.7 | +4.0% | contango |
+| 3 | 15.9 | 13.8 | 16.4 | 17.1 | +0.7 | +4.3% | contango |
+| 4 | 17.1 | 15.0 | 17.8 | 18.5 | +0.7 | +3.9% | contango |
+| 5 | 17.6 | 15.4 | 18.2 | 18.9 | +0.7 | +3.9% | contango |
+| 6 | 18.0 | 15.8 | 18.6 | 19.3 | +0.7 | +3.8% | contango |
+| 7 | 28.4 | 25.9 | 29.9 | 28.1 | −1.8 | −6.0% | backwardation |
+| 8 | 33.7 | 30.8 | 35.6 | 32.4 | −3.2 | −9.0% | backwardation |
+| 9 | 21.2 | 19.4 | 22.3 | 21.9 | −0.4 | −1.8% | backwardation |
+| 10 | 18.3 | 16.5 | 19.0 | 19.4 | +0.4 | +2.1% | contango |
+
+Step-by-step (day 1): slope = VX₂ − VX₁ = 17.5 − 16.8 = **+0.7 points** → positive → contango. Relative: 17.5/16.8 − 1 = 0.0417 → **+4.2%**. Day 8 (stress): slope = 32.4 − 35.6 = **−3.2 points** → negative → backwardation; relative: 32.4/35.6 − 1 = −0.0899 → **−9.0%**. Day 10 (normalization): slope = 19.4 − 19.0 = **+0.4** → curve re-steepening into contango as stress fades.
+
+What to notice: days 1–6 show the textbook contango grind; the day-7/8 shock inverts the curve hard; day 10 shows the transition back. This toy tape has no fees, no bid/ask, and no settlement calendar effects — in production the VX₁/VX₂ roll and the Wednesday-morning settlement print move these numbers by tenths that matter at scale.
+
+### S5. Strategies that use this signal
+
+- **T045 — VIX Term-Structure Carry (primary entry trigger):** trades the 1×2 slope and the variance-risk-premium level directly — long contango carry, flat or long front vol on inversion.
+- **T095 — Dispersion + GEX Regime Switch (regime gate):** uses the S068 inversion flag to veto dispersion trades when the curve is backwardated (stress breaks correlation assumptions).
+- **T090 — Overnight Inventory Carry Manager (risk filter):** widens gap-risk haircuts (extra risk deductions for overnight price gaps) and reduces overnight carry when backwardation signals elevated event risk.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| VIX, VIX9D index levels | float (points) | 1-min / daily | Tier 0–1 | Cboe delayed free; real-time via vendors |
+| VX futures quotes (all expiries) | float (points) | 1-min / daily | Tier 1–2 | CFE; Databento futures feed |
+| Risk-free rate (T-bill — US Treasury bill — curve) | float (%) | daily | Tier 0 | FRED (Federal Reserve Economic Data); for VIX replication checks |
+| S&P 500 options chain (for own VIX replication) | quotes | daily snapshots | Tier 2–3 | Only if replicating the index yourself |
+
+Ingest sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+def ingest_vx_day(path: str) -> pl.DataFrame:
+    # CFE VX futures 1-min bars: ts, expiry, open/high/low/close, volume
+    df = (pl.scan_parquet(path)
+            .filter(pl.col("symbol").str.starts_with("VX"))
+            .with_columns(ts=pl.col("ts").dt.replace_time_zone("America/Chicago"))
+            .sort(["expiry", "ts"]).collect())
+    front = df.filter(pl.col("expiry") == df["expiry"].min())
+    second = df.filter(pl.col("expiry") == df["expiry"].sort().unique()[1])
+    return front.join(second, on="ts", suffix="_2")  # compute slope = close_2 - close
+```
+
+Storage per symbol-day (per `notes/cost-model.md` §4): VX futures 1-min bars are a handful of contracts — kilobytes per day; a full VIX/VX daily history is megabytes. This signal's data footprint is **trivial** next to any options-chain analytics.
+
+Data-quality checklist: CFE holiday calendar vs equity calendar; VX Wednesday-morning settlement (special opening print); VIX9D/VIX methodology changes; delayed-vs-real-time licensing flags.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial-to-feasible (Tier M, low end).** The signal is a few arithmetic operations on a tiny feed. Per `notes/cost-model.md` §2, polars handles ~10–50M rows/sec on simple ops; a day of VX 1-min data is a few thousand rows. RAM: a decade of daily VIX/VX history is <10 MB, against the ~77GB working budget (cost-model §3).
+
+Throughput/bottleneck: ingest runs a few hundred quote updates/sec per contract; signal recompute on every tick is still trivially fast in pure Python (cost-model §2: 100–500k events/sec). The bottleneck is **data licensing, not compute** — real-time CFE quotes cost money; the math costs nothing.
+
+Stack: Python + polars (default; whole pipeline is batch-friendly); DuckDB for the research archive; Rust unnecessary. Engineering band: Tier M per cost-model §5 (vol estimators S063–S070), low end — **~25–45 h ≈ $3,750–6,750 at $150/hr loaded-cost estimate**, plus ~$200/mo Tier-2 futures data (indicative — verify before budgeting). What breaks first at 500 symbols or full OPRA: nothing about this signal breaks — it covers one underlying (SPX). Scaling means adding single-name IV term structures, at which point you inherit the OPRA (Options Price Reporting Authority, the consolidated US options tape) firehose costs of S069–S071.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Cboe delayed VIX/VIX9D, Stooq) | Daily index levels, delayed futures | ~$0 | Zero cost, fine for daily regime flags | No intraday slope, no real-time inversion timing |
+| Tier-1 retail (Polygon Stocks Advanced / Alpaca SIP) | Real-time SIP (Securities Information Processor, the consolidated tape) bars on VIX-linked ETPs | ~$30–200/mo | Cheap intraday proxy | ETPs ≠ futures curve; tracking error in stress |
+| Tier-2 professional (Databento futures/CFE) | Real-time VX futures, full expiry strip | ~$200/mo + usage | True curve, intraday slope, settlement data | Still need your own analytics |
+| Tier-3 academic/institutional (OptionMetrics IvyDB) | Publication-quality options history | ~$thousands/yr academic; institutional $$$$ | Research-grade replication of the VIX formula itself | Overkill if you only trade the slope |
+
+Verdict: **build the analytics, buy the feed.** The formulas are public and the code is an afternoon; money buys lower latency and more expiries. Crossover: buy Tier-2 CFE data the moment you trade the slope intraday — a daily delayed curve cannot time an inversion; stay on free data if the signal is only a daily regime flag. All prices indicative — verify before budgeting.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Mandated framing: **documented conditional value, but published effects much weaker than raw
+backtests once realistic execution/timing/selection/regime controls are imposed.** The evidence below is about return-predictability and curve arithmetic, not about a standalone trading edge.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Bollerslev, Tauchen & Zhou (2009), "Expected Stock Returns and Variance Risk Premia," *Review of Financial Studies* 22:4463–4492 | US equities, 1990–2008 | VRP predicts ~3-month excess returns; strongest at the intermediate (quarterly) horizon, dominating P/E (price–earnings ratio), default spread (corporate yield minus Treasury yield), CAY (consumption–wealth ratio) | Before-cost (regression R² — share of variance explained — evidence, not a traded P&L) | Return-predictability, not a pure term-structure trade; horizon is months, not intraday |
+| FRB (Federal Reserve Board), "The Variance Risk Premium Around the World" (International Finance Discussion Papers 1035) | US + international equities | VRP large and time-varying; predicts equity returns internationally | Before-cost | Confirms the premium is not a US-only artifact |
+| Practitioner term-structure literature (Cboe VIX methodology; dealer/ETP research) | VIX futures since 2004 | Persistent contango funds roll yield for short-front-vol positions in calm regimes | Before-cost (roll arithmetic) | Well-known and crowded; fails exactly when the hedge is needed most |
+
+No credible published source reports an after-cost Sharpe ratio (mean excess return ÷ volatility) for a standalone intraday VIX-slope strategy. Honest bottom line: **as a standalone trigger this is a weak, crowded edge**; **as a regime gate and stress timer it is a genuinely useful filter** — inversion flags carry real information about near-term realized-vol regimes, which is why T095 and T090 consume it.
+
+### S10. Failure modes & pitfalls
+
+- **Lookahead leakage:** using the official VIX close before it is disseminated; settlement prints known only Wednesday morning — timestamp everything in exchange time.
+- **Staleness/latency:** delayed (15-min) VIX data makes "intraday inversion" signals fire on stale prints — label Tier-0 builds daily-only.
+- **Crowding/alpha decay:** short-contango is one of the most crowded vol trades in history — size it as carry, not alpha.
+- **Cost blowup:** VX bid/ask widens in stress exactly when you want to trade the inversion; model 0.05–0.15 point spreads, wider on spikes. Fees: VX round-trip commissions plus exchange/clearing fees — per-contract, e.g. ~$1.50–3.00 round-trip at retail (indicative — verify before budgeting). Impact/slippage: fading an inversion means trading into the stress flow — expect bid/ask 2–5× the quoted normal spread at size, partial fills, and slippage beyond the quoted mid; size down as the curve inverts.
+- **Regime breaks:** backwardation can persist for weeks (2008, 2020); "fade the inversion" without a time stop is picking up pennies in front of a steamroller.
+- **Overfitting/parameter mining:** slope z-score lookbacks 20 vs 60 days flip signals; pick from the economics (one earnings cycle ≈ 60 days), not a grid search.
+- **Data errors:** VX contract rolls, holiday calendars, and the VIX9D/VIX methodology revisions create fake slope jumps — maintain a corporate-action-style calendar for the curve.
+- **Microstructure confusion:** front-month futures can trade below spot VIX (negative basis) without backwardation — compare like with like (futures vs futures).
+
+### S11. Visuals
+
+![S068 worked example — synthetic 10-day VIX term-structure tape with contango and backwardation](images/S068_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(CFE VX futures, Cboe VIX)"] -->|1-min bars, daily index levels| ING["Ingest + normalize\n(exchange tz, settlement calendar)"]
+    ING -->|"1-min aligned futures strip"| FEAT["Feature compute\n(slope, F2/F1-1, z-scores)"]
+    FEAT -->|"daily slope series\n(from 1-min bars)"| SIG["Signal S068\nterm-structure slope / inversion flag"]
+    SIG -->|"daily slope + VRP level"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T045 carry, T095/T090 regime gate)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Cboe — "Cboe VIX White Paper" (model-free 30-day implied variance methodology; formula reference via the R.MFIV implementation: https://rdrr.io/github/m-g-h/R.MFIV/src/R/CBOE_VIX.R).
+- Demeterfi, K., Derman, E., Kamal, M., Zou, J. (1999). "More Than You Ever Wanted To Know About Volatility Swaps." Goldman Sachs Quantitative Strategies Research Notes. https://www.realvol.com/volatilityblog/?p=516
+- Bollerslev, T., Tauchen, G., Zhou, H. (2009). "Expected Stock Returns and Variance Risk Premia." *Review of Financial Studies*, 22:4463–4492. (Working-paper version: Federal Reserve FEDS 2007-11.)
+- Federal Reserve Board — "The Variance Risk Premium Around the World." International Finance Discussion Papers 1035. https://www.Federalreserve.gov/pubs/ifdp/2011/1035/ifdp1035.htm
+- NBER Working Paper 16884 — "Simple Variance Swaps" (replication of variance swaps from option strips; Carr–Madan/Neuberger lineage). https://www.nber.org/system/files/working_papers/w16884/w16884.pdf
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The model-free implied-variance formula (Q-SB8-1 #3, attributed to the Federal Reserve Board) and the volatility-premium decomposition are chatbot research leads — the VIX construction is cross-checked against the Cboe VIX white paper and the R.MFIV implementation cited above; no chatbot numbers are used as evidence. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+**Unverified leads:** Carr & Wu (2006) term-structure work — cited in the report entry but no checkable URL verified; chatbot claims about specific VIX-slope Sharpe ratios or hit rates are unverified and were excluded from S9.
+
+---
+## Stage 69/200 — S069: Implied-vs-realized spread / variance risk premium
+
+*Batch SB8 · Signal 69/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The **variance risk premium** (VRP): option-implied variance minus expected realized variance — the price investors pay to insure against volatility. |
+| **When it works** | At weekly-to-multi-month horizons, where index implied variance systematically exceeds subsequently realized variance on average. |
+| **When it dies** | Intraday (microstructure noise dominates), and in jump/crisis episodes when realized variance overshoots implied — the insurance pays out. |
+| **Build-or-buy in one line** | Build the realized-variance engine yourself; buy clean implied-variance surfaces — IV inversion (backing out implied volatility from observed option prices) is the expensive part. |
+
+Provenance [D] (documented: Bollerslev–Tauchen–Zhou 2009; variance-swap replication literature). Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+**Implied variance** is the market's forecast of future volatility, read off option prices. **Realized variance** is what actually happened, measured from price changes after the fact. The **variance risk premium** is the gap between them: implied minus realized. On average, for equity indices, implied exceeds realized — option sellers collect a premium for bearing volatility and crash risk, the same way insurers collect premiums for bearing fire risk.
+
+Vignette: it's the first trading day of the month. The 30-day S&P 500 implied volatility from the options market is 16.1% annualized. Your forecast of realized volatility over the next 30 days — from a HAR (Heterogeneous Autoregressive) model on 5-minute returns — is 13.9%. The spread is +2.2 vol points, or in variance units 16.1² − 13.9² = 66 variance points. That positive gap is the market paying you to be short volatility: sell the variance, delta-hedge (continuously offsetting directional exposure as the underlying moves), and harvest the difference as realized vol comes in below implied.
+
+Why does the premium exist? Three forces: (1) **crash aversion** — investors overpay for downside protection; (2) **rebalancing demand** — structured products and dealers are structurally short gamma (negative convexity — losses accelerate when the underlying moves) and pay up to hedge; (3) **volatility-of-volatility risk** — variance itself is volatile, and bearing that risk demands compensation. None is an arbitrage: the premium compensates a risk that periodically realizes against you (2008, 2020).
+
+Mental model:
+- VRP is an insurance premium, not a mispricing: positive on average because the insured event (a vol spike) is rare and nasty.
+- The signal is *richness vs your own forecast*, not vs today's realized vol — compare implied against expected future realized over a matched horizon.
+- Intraday "VRP" is mostly bid/ask bounce (prices oscillating between bid and ask) and stale quotes; the documented premium lives at weekly and longer horizons.
+
+### S3. The math — exact formula
+
+Let IVₜᵃⁿⁿ be the annualized implied volatility at time t for horizon T (e.g. 30 days), and Eₜ[RVₜ,ₜ₊ₜᵃⁿⁿ] the time-t forecast of annualized realized volatility over the same window.
+
+**Variance units (canonical):**
+$$\mathrm{VRP}_t = (\mathrm{IV}_t^{\mathrm{ann}})^2 - \mathbb{E}_t\big[(\mathrm{RV}_{t,T}^{\mathrm{ann}})^2\big] \quad \text{(variance points)}$$
+
+**Volatility units (desk shorthand):**
+$$\mathrm{VRP}_t^{\sigma} = \mathrm{IV}_t^{\mathrm{ann}} - \mathbb{E}_t\big[\mathrm{RV}_{t,T}^{\mathrm{ann}}\big] \quad \text{(vol points)}$$
+
+**Ex-post (measurable after the fact):** VRPₜᵉˣ⁻ᵖᵒˢᵗ = (IVₜᵃⁿⁿ)² − (RVₜ,ₜ₊ₜᵃⁿⁿ)², with realized variance computed from 5-minute log returns: RV = 252 × Σᵢ rᵢ², annualized in percent.
+
+**Implied variance (model-free, per the Federal Reserve Board definition used in the literature):**
+$$\mathrm{IV}_t^{\mathrm{ann}} = \frac{2e^{rT}}{T}\left[\sum_{K_i<K_0}\frac{\Delta K_i}{K_i^2}P(K_i) + \sum_{K_i>K_0}\frac{\Delta K_i}{K_i^2}C(K_i)\right] - \frac{1}{T}\left(\frac{F_t}{K_0}-1\right)^2$$
+with T in years, r the continuous risk-free rate, Fₜ the forward price, K₀ the first strike at or below Fₜ, and ΔKᵢ strike spacing. Two practical rules: interpolate **total variance** w(K,T) = σᵢᵥ²(K,T)·T across maturities — never raw vol — and interpolate across strikes in log-moneyness k = ln(K/F).
+
+> **Flag (garbled render, do NOT code as confirmed):** one source line rendered the volatility-points analog as IVolₜ − √(RVₜ,ₜ₊ₜᵃⁿⁿ) — the page render was ambiguous about whether the square root applies. Re-confirm from a canonical source before coding the vol-points variant; the variance-points form above is the verified one.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example — not an institutional standard) |
+|---|---|---|---|---|---|
+| Horizon | T | 7–90 days | microstructure noise | stale, overlapping windows | 30 calendar days |
+| RV sampling | Δ | 1–15 min | noise-dominated | misses intraday jumps | 5-min log returns |
+| Forecast | E[RV] | HAR / GARCH / lagged RV | jump-contaminated | model risk | HAR on 5-min RV |
+| Entry z-score | z | 1.0–2.5σ vs history | overtrading | never trades | z > 1.5 (example) |
+
+Normalization: z-score VRP against its trailing 6–12 month history (it is strongly regime-dependent); raw VRP is meaningless across regimes. Timing: compute at close *t* from options ≤ *t* and RV forecasts ≤ *t*; tradable no earlier than *t+1*.
+
+Variants: (1) **variance-swap VRP** — IV² from the model-free strip vs HAR forecast, traded with variance swaps; (2) **vol-points VRP** — IV − RV for straddle (call + put at the same strike)-based trading (see flag above); (3) **forward VRP** — forward-starting implied variance vs forward realized forecast, isolating specific windows (e.g. around FOMC — Federal Open Market Committee).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 12-month tape (seed **69**): IVᵃⁿⁿ = 30-day implied vol at month start; RVᵃⁿⁿ = realized vol over the matched 30-day window. The chart `images/S069_example.png` plots exactly these numbers.
+
+| Month | IVᵃⁿⁿ (%) | RVᵃⁿⁿ (%) | VRP (vol pts) | VRP (variance pts) |
+|---|---|---|---|---|
+| 1 | 15.2 | 12.4 | +2.8 | +77 |
+| 2 | 16.1 | 13.9 | +2.2 | +66 |
+| 3 | 14.8 | 11.7 | +3.1 | +82 |
+| 4 | 17.3 | 14.2 | +3.1 | +98 |
+| 5 | 28.6 | 34.1 | −5.5 | −345 |
+| 6 | 19.4 | 15.3 | +4.1 | +142 |
+| 7 | 16.9 | 13.1 | +3.8 | +114 |
+| 8 | 15.8 | 12.0 | +3.8 | +106 |
+| 9 | 24.7 | 27.8 | −3.1 | −163 |
+| 10 | 18.2 | 14.9 | +3.3 | +109 |
+| 11 | 15.5 | 12.8 | +2.7 | +76 |
+| 12 | 16.4 | 13.5 | +2.9 | +87 |
+
+Step-by-step (month 1): VRP in vol points = 15.2 − 12.4 = **+2.8**; in variance points = 15.2² − 12.4² = 231.04 − 153.76 = **+77** — implied was rich vs what realized. Month 5 (stress): 28.6 − 34.1 = **−5.5** vol points; 28.6² − 34.1² = **−345** variance points — realized overshot implied and short-vol would have lost. Mean VRP over the 12 months is positive in both units, but the two negative months show the tail risk.
+
+What to notice: the premium is *lumpy* — ten calm months of +2 to +4 vol points, two stress months of −3 to −5.5. This is why the academic evidence is strongest at weekly-to-multi-month horizons: the premium is a statistical property of many months, invisible in any single day, and intraday "VRP" is dominated by bid/ask bounce and non-synchronous prices (options and underlying printed at different timestamps) — a market-state feature, not the established premium. This toy example has no trading costs; a real short-vol position pays the full option bid/ask (see S070's 20%/2% arithmetic).
+
+### S5. Strategies that use this signal
+
+- **T010 — Variance-Risk-Premium Harvester (primary entry trigger):** delta-hedged short-vol positions when implied variance is rich vs the HAR forecast — this signal is the trade.
+- **T045 — VIX Term-Structure Carry (regime context):** uses the VRP level to scale curve-carry sizing — richer premium, larger carry allocation.
+- **T046 — Straddle-Implied Move Fade (filter):** requires the VRP to be positive before fading event straddles (never short rich-looking premium into a negative-VRP regime).
+- **T058 — Dispersion Trader (sizing input):** index-vs-single-stock VRP gap scales the dispersion book's short-index-vol leg.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Options quotes (full chain) | bid/ask, volume, OI (open interest) | intraday snapshots / EOD (end-of-day) | Tier 1–2 | OPRA (Options Price Reporting Authority, the consolidated US options tape) via Databento/Cboe LiveVol; Tier 0 Cboe delayed for prototyping |
+| 30-day IV surface | float (%) | daily | Tier 1–2 | Vendor surfaces $200–5,000/mo (indicative) |
+| Underlying 5-min bars | OHLCV (open/high/low/close/volume) | 5-min | Tier 0–1 | For RV computation; 1-min bars cheaper than options data |
+| Risk-free / dividend curves | float | daily | Tier 0 | FRED (Federal Reserve Economic Data); needed for forward Fₜ and IV inversion |
+
+Ingest sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl, numpy as np
+def monthly_vrp(iv_surface: pl.DataFrame, bars5m: pl.DataFrame) -> pl.DataFrame:
+    # iv_surface: date, expiry, strike, iv ; bars5m: ts, close
+    r = np.log(bars5m["close"][1:] / bars5m["close"][:-1])
+    rv = (252 * (r ** 2).sum()) ** 0.5 * 100          # annualized realized vol %
+    iv30 = iv_surface.filter(pl.col("days_to_expiry").is_between(28, 32))["iv"].mean()
+    return pl.DataFrame({"iv_ann": [iv30], "rv_ann": [rv],
+                         "vrp_vol": [iv30 - rv], "vrp_var": [iv30**2 - rv**2]})
+```
+
+Storage per symbol-day (per `notes/cost-model.md` §4): 5-min equity bars are trivial (~0.1 MB/day/symbol at 1-min); options snapshots dominate — an SPX full-chain snapshot runs ~100–300 MB in RAM, ~1–3 GB/day on disk as parquet. Keep live working set under the ~77GB budget (cost-model §3): snapshots for a handful of underlyings fit; full OPRA history does not — use per-underlying daily files.
+
+Data-quality checklist: timestamp normalization (options vs equity clocks), corporate actions on the underlying, halts (stale IV prints), DST/half-days, stale quotes (zero-bid chains must be excluded from the model-free sum), American-exercise (early-exercise-allowed) conventions for single names.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier M).** Per cost-model §2, numpy vectorized math runs ~50–200M elements/sec; the expensive ops are quote normalization and IV inversion across the chain, not the VRP arithmetic. A 30-day HAR forecast on 5-min bars is milliseconds; inverting a full SPX chain snapshot (a few thousand contracts) is seconds in vectorized numpy. Plan §6 places vol estimators (S063–S070) in Tier M: **20–60 h ≈ $3,000–9,000 at $150/hr loaded-cost estimate**, plus IV-surface data $200–5,000/mo or OPRA research access (indicative — verify before budgeting).
+
+RAM: one SPX snapshot 20–100 MB practical; a rolling year of daily snapshots fits comfortably in the 77GB budget; 60 days of 5-min bars for 500 symbols ≈ 195k bars/day ≈ megabytes. Bottleneck: **IV inversion + surface fitting**, then historical joins. Stack: Python + polars/numpy (default), DuckDB for the research archive, Rust only if you push to full-OPRA tick processing. What breaks first at 500 symbols or full OPRA: the options side — per cost-model §3/§4, full OPRA snapshots run 1–3 GB/day for SPX-like underlyings; selective underlyings only, or you drown in storage.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Cboe delayed, Stooq, FRED) | Delayed IV, daily bars, rates | ~$0 | Zero cost; fine for monthly VRP research | No intraday, coarse chains |
+| Tier-1 retail (Polygon Options, Alpaca) | Queryable chains, 1-min bars | ~$30–200/mo | Cheap prototyping of the full pipeline | Incomplete chains, rate limits, inconsistent OI |
+| Tier-2 professional (Databento OPRA research, Cboe LiveVol, IV surfaces) | Normalized chains, Greeks (delta, gamma, vega, theta, rho), history | ~$200–5,000/mo | Research-grade IV without building inversion | Still need your own RV forecasts and backtests |
+| Tier-3 academic/institutional (OptionMetrics IvyDB; full OPRA) | Publication-quality options history | ~$thousands/yr academic; institutional $$$$ | The dataset the papers used | Cost; redistribution limits |
+
+Verdict: **hybrid — buy the normalized chain/IV surface, build the RV engine and the VRP analytics.** The crossover: buy Tier-2 the moment you need historical chains for a real backtest (rebuilding a decade of IV surfaces from raw quotes is a 200–500 h job per the chatbot's IV-inversion component — labeled chatbot lead, cost-model takes precedence); build everything if you only need index-level monthly VRP, where delayed Cboe data suffices. All prices indicative — verify before budgeting.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Bollerslev, Tauchen & Zhou (2009), *Review of Financial Studies* 22:4463–4492 | US equities, 1990–2008 | VRP predicts excess returns; predictability strongest at the **intermediate 3-month horizon**, dominating P/E (price–earnings ratio), default spread (corporate yield minus Treasury yield), CAY (consumption–wealth ratio) | Before-cost (predictive regressions) | Return predictability, not a traded short-vol P&L; horizon is months |
+| FRB (Federal Reserve Board), "The Variance Risk Premium Around the World" (IFDP — International Finance Discussion Papers — 1035) | US + international, 1990–2008 | VRP large, time-varying (mean ~18 variance pts in the US sample), predicts returns internationally | Before-cost | Confirms pervasiveness; no execution costs modeled |
+| Practitioner variance-swap desk literature | Equity indices, 2000s–2020s | Systematic short variance earns positive average carry punctuated by large drawdowns (2008, 2020) | Before-cost in most published accounts | After-cost numbers exist only in institutional marketing; treat as unverified |
+
+Honest horizon note (mandatory): the strongest documented evidence is at weekly → monthly → multi-month horizons — **not intraday**. Honest bottom line: **as a standalone swing factor the VRP is one of the most robust findings in the vol literature; as an intraday trigger it is a different, much weaker animal.**
+
+### S10. Failure modes & pitfalls
+
+- **Lookahead leakage:** using settlement IV or corrected OI from after the signal timestamp — pin the actual chain vintage at time *t*.
+- **Staleness/latency:** stale zero-bid quotes poison the model-free sum — exclude them per the Cboe selection rule.
+- **Crowding/alpha decay:** short-VRP is the most crowded vol trade in existence; persistent vol trends compress the premium for years.
+- **Cost blowup:** shorting variance means paying the option spread twice (entry/exit) plus delta-hedging costs — see the S070 arithmetic (20% of premium on cheap options). Fees: per-contract commissions and exchange/clearing fees on *both* the option leg and the delta-hedge legs — e.g. ~$0.65/contract plus ~$1–3 per hedge-leg execution at retail (indicative — verify before budgeting). Impact/slippage: entering short-vol in size moves the implied level against you (the trade itself depresses IV), and stress exits gap beyond the quoted spread — model the full round-trip spread plus a slippage haircut of 25–100% of the spread in stress.
+- **Regime breaks:** earnings/CPI (Consumer Price Index)/FOMC jumps, vol panics, and equity-risk-premium shifts flip the sign — never size short-vol without a jump filter (S064).
+- **Overfitting/parameter mining:** horizon (7 vs 30 vs 90 days) and RV estimator choice move results; pre-commit to matched horizons.
+- **Microstructure confusion:** intraday VRP wiggles from non-sync prices and auction effects are not tradeable premium — enforce the horizon floor.
+
+### S11. Visuals
+
+![S069 worked example — synthetic 12-month implied vs realized variance with the variance risk premium](images/S069_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(OPRA options, 5-min equity bars)"] -->|intraday option quotes, 5-min bars| ING["Ingest + normalize\n(exchange ts, corp actions, halts)"]
+    ING -->|"intraday clean chains\n+ 5-min return series"| FEAT["Feature compute\n(model-free IV, 5-min RV, HAR forecast)"]
+    FEAT -->|"daily 30-day IV surface\n+ daily RV forecast"| SIG["Signal S069\nVRP = IV² − E[RV²]"]
+    SIG -->|"daily VRP z-score vs history"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T010 harvester, T045/T058 sizing)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Bollerslev, T., Tauchen, G., Zhou, H. (2009). "Expected Stock Returns and Variance Risk Premia." *Review of Financial Studies*, 22:4463–4492. (FEDS 2007-11 working version, Federal Reserve Board.)
+- Federal Reserve Board — "The Variance Risk Premium Around the World." International Finance Discussion Papers 1035. https://www.Federalreserve.gov/pubs/ifdp/2011/1035/ifdp1035.htm
+- Federal Reserve Board — "Expected Stock Returns and Variance Risk Premia" (Finance and Economics Discussion Series; model-free implied variance definition). Referenced via https://www.federalreserve.gov/Pubs/feds/2011/201145/201145pap.pdf (bibliography entry for BTZ 2009/2007).
+- Demeterfi, K., Derman, E., Kamal, M., Zou, J. (1999). "More Than You Ever Wanted To Know About Volatility Swaps." Goldman Sachs. https://www.realvol.com/volatilityblog/?p=516
+- NBER Working Paper 16884 — "Simple Variance Swaps" (variance-swap replication from option strips). https://www.nber.org/system/files/working_papers/w16884/w16884.pdf
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The variance-points and vol-points VRP formulas and the model-free implied-variance definition (Q-SB8-1 #3, attributed to the Federal Reserve Board) are chatbot research leads — the variance-points formula is verified in-chapter and cross-checked against the cited papers; the vol-points square-root render was garbled (flagged in S3, do NOT code as confirmed). IV-inversion build-cost components are labeled chatbot leads (the cost-model bands take precedence). Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+**Unverified leads:** the volatility-points VRP line rendered ambiguously on the square root (flagged in S3 — re-confirm before coding); "Exploring the Variance Risk Premium Across Assets" (afajof.org) was cited by the chatbot but no checkable URL was verified; any specific after-cost Sharpe for traded VRP strategies is an unverified chatbot claim.
+
+---
+## Stage 70/200 — S070: Straddle-implied move vs realized
+
+*Batch SB8 · Signal 70/100 · Provenance [SR] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The **at-the-money straddle price** (call + put at the same strike) read as the market's expected move; fade the event when realized moves systematically under- or over-shoot it. |
+| **When it works** | Around scheduled events (earnings, CPI — Consumer Price Index — , FOMC — Federal Open Market Committee — ) where implied volatility is systematically elevated pre-announcement and realized moves come in below implied *on average*. |
+| **When it dies** | Genuine information shocks (guidance changes, macro overlap), crowded short-vol positioning, and illiquid chains where the "implied move" is a stale midpoint. |
+| **Build-or-buy in one line** | Build the comparator yourself on bought chains — the formula is a desk standard; the edge is in execution and selection, not the math. |
+
+Provenance [SR] — standard desk reconstruction: the trading rule (fade realized vs straddle-implied moves) is practitioner-standard, but no single canonical published formula was verified, so the tag stays [SR] and is not upgraded. Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+A **straddle** is buying (or selling) a call and a put at the same strike and expiry — a bet that pays off if the stock moves a lot in either direction. An **at-the-money (ATM)** straddle — strike near the current stock price — is the market's cleanest statement of how big a move it expects: divide the straddle's price by the stock price and you get the **implied move** in percent. If a $100 stock's ATM straddle costs $6.20, the market is pricing roughly a ±6.2% move.
+
+Vignette: 3:58 PM, the day before earnings. XYZ closes at $100. The ATM straddle expiring Friday trades at $6.20 bid / $6.60 ask — implied move ≈ 6.4% at mid (the midpoint between bid and ask). Your database of XYZ's last 12 earnings shows an average absolute move of 4.1%. The market is charging for 6.4% and history delivered 4.1%: the straddle looks rich, so you sell it (the "fade"). After the announcement XYZ moves 3.8% — below the implied 6.4% — and the straddle collapses to $4.10. You buy it back: gross profit ≈ $2.30 per share pair before costs. The well-known **IV crush** — implied volatility falling sharply once the event passes — is the same phenomenon seen through the vol lens: pre-event IV is elevated, post-event it falls, and the realized move often lands below what was priced.
+
+Why should this work *on average*? Event implied vol embeds a risk premium (S069's VRP concentrated into one day): market makers charge extra for taking event risk, and hedgers overpay for certainty into the print (the announcement release). But it is emphatically not universal — "fade every straddle" is a losing rule. The edge is conditional: broad liquid samples, high IV percentile into the event, no overlapping macro catalyst, and execution at real bid/ask.
+
+Mental model:
+- The straddle price is a consensus forecast of the event move, plus an insurance markup.
+- You are not predicting the event's direction — you are betting the markup exceeds the surprise.
+- The P&L (profit and loss) is decided in dollars after the spread, not in vol points: a 60% hit rate with 20% round-trip costs can still lose money.
+
+### S3. The math — exact formula
+
+**Implied move** (standard desk reconstruction — [SR]):
+$$\text{ImpliedMove} = \frac{C_{\mathrm{ATM}} + P_{\mathrm{ATM}}}{S}$$
+where C_ATM, P_ATM are the at-the-money call and put prices for the expiry covering the event (dollars), and S is the underlying price (dollars). Result is a fraction; ×100 for percent. (A forward-consistent variant divides by the forward F instead of S.)
+
+**Signal:** compare against the subsequent realized move M_realized = |S_after − S_before|/S_before (or high-frequency realized vol over the event window):
+$$\text{edge}_t = \text{ImpliedMove}_t - M_{\text{realized},t}, \qquad z_t = \frac{\text{edge}_t - \mu_L}{\sigma_L}$$
+with μ_L, σ_L the trailing-L-event mean and standard deviation of the edge. Fade (sell straddle) when z_t is large positive; the reverse (buy realized / long straddle) when implied looks cheap vs history.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example — not an institutional standard) |
+|---|---|---|---|---|---|
+| Event window | — | 1–3 days | misses drift | dilutes the event | announcement ± 1 day |
+| History lookback | L | 8–20 events | noisy z-score | regime-stale | 12 events |
+| Fade threshold | z* | 0.5–2.0σ | overtrading | no trades | z > 1.0 (example) |
+| IV percentile gate | — | 50th–90th pct | thin edge | no trades | > 70th pct (example) |
+
+Normalization: z-score the edge vs the name's own event history — a 6% implied move is rich for a utility and cheap for a biotech. Timing: compute from the chain snapshot *before* the event close; the position is opened pre-announcement and the realized move is measured after — strictly causal, no lookahead, but the signal only resolves at *t+1* (post-print).
+
+Variants: (1) **straddle/forward** — divide by F for rate-sensitive underlyings; (2) **ex-event IV** — strip the event premium from the term structure (à la ORATS) and compare residual richness; (3) **post-announcement vol fade** — the T079 variant: sell vol *after* realization when IV stays bid.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 10-event tape (seed **70**), fictional tickers E1–E10. Implied move = ATM straddle mid / stock price; realized move = |post-earnings return|. The chart `images/S070_example.png` plots exactly these numbers.
+
+| Event | Implied move (%) | Realized move (%) | Fade wins? (realized < implied) |
+|---|---|---|---|
+| E1 | 6.2 | 3.8 | yes |
+| E2 | 8.5 | 9.7 | no |
+| E3 | 4.1 | 5.2 | no |
+| E4 | 11.0 | 7.9 | yes |
+| E5 | 5.4 | 2.9 | yes |
+| E6 | 9.8 | 13.1 | no |
+| E7 | 3.6 | 2.2 | yes |
+| E8 | 12.4 | 10.6 | yes |
+| E9 | 7.1 | 4.4 | yes |
+| E10 | 5.9 | 6.8 | no |
+
+Hit rate = 6/10 = **60% (SYNTHETIC — not a real backtest)**. Step-by-step (E1): edge = 6.2 − 3.8 = **+2.4 percentage points** in the seller's favor. Dollar walk on a $100 stock: straddle mid = $6.20; sell the fade at the bid ≈ $6.00. Post-event the stock moves 3.8%; buy the straddle back at the ask ≈ $4.00. Gross P&L ≈ 6.00 − 4.00 = **+$2.00 per straddle before commissions**. E2 (the loss): sell at ≈ $8.30, stock moves 9.7%, buy back ≈ $9.90 → **−$1.60**.
+
+After-cost arithmetic (verified): a $0.40 option with a $0.08 spread costs 2 × $0.04 = **$0.08 = 20% of premium** per round trip; a $5.00 option with a $0.10 spread costs 2 × $0.05 = **$0.10 = 2% of premium**. Cheap far-wing event options live in the 20% world; liquid ATM straddles in the 2% world. "Event-vol strategies must be evaluated in dollar P&L, not vol points or hit rate %": a 60% hit rate with small average edge is erased by a 5–10% option round trip.
+
+What to notice: even in this friendly toy tape, 4 of 10 events lose — E2, E3, E6, E10 are the genuine-shock cases where realized exceeded implied. The example has no partial fills, no early assignment (the option buyer exercising before expiry), no macro overlap, and uses mid-based implied moves; a real backtest must execute both legs at bid/ask and report the worst decile alongside the mean.
+
+### S5. Strategies that use this signal
+
+- **T046 — Straddle-Implied Move Fade (primary entry trigger):** fades overpriced event moves, confirmed by unusual-options-activity (S073) and gated by the VRP level (S069).
+- **T050 — GEX Pin / Dealer-Positioning Fade (context input):** uses the implied move to size pinning fades into expiry — the expected-move radius sets the fade zone.
+- **T068 — Scheduled-Event Vol Expansion (veto/positioning):** goes the other way pre-event when the implied move is *cheap* vs history; S070's edge series is the pricing input.
+- **T079 — Post-Announcement Vol Fade (downstream leg):** sells event volatility after realization is known — S070 identifies the candidates, T079 times the exit.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Options quotes (ATM chain) | bid/ask | intraday snapshots / EOD (end-of-day) | Tier 1–2 | OPRA (Options Price Reporting Authority, the consolidated US options tape) via Databento/Cboe LiveVol; delayed Cboe for prototyping |
+| Underlying price | float ($) | 1-min / daily | Tier 0–1 | For implied-move denominator and realized move |
+| Earnings/macro calendar | dates | daily | Tier 0–1 | SEC (Securities and Exchange Commission) EDGAR (Electronic Data Gathering, Analysis, and Retrieval), vendor calendars |
+| Historical event moves | float (%) | per event | Tier 1–2 | Built from bars; vendor series available |
+
+Ingest sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+def implied_move(chain: pl.DataFrame, spot: float) -> pl.DataFrame:
+    # chain: ts, expiry, strike, cp, bid, ask ; spot: underlying price
+    atm = (chain.with_columns(mid=(pl.col("bid") + pl.col("ask")) / 2,
+                             dist=(pl.col("strike") - spot).abs())
+                .sort("dist").head(2))  # nearest call + put
+    straddle = atm["mid"].sum()
+    return pl.DataFrame({"ts": [chain["ts"][0]], "spot": [spot],
+                         "straddle_mid": [straddle],
+                         "implied_move": [straddle / spot]})
+```
+
+Storage per symbol-day (per `notes/cost-model.md` §4): ATM-chain snapshots are small — a few MB/day per name for the strikes near the money; the full-chain archive is what costs (1–3 GB/day SPX-like). For event studies, store only the ATM strip + spot series: trivial.
+
+Data-quality checklist: snapshot the *actual* chain at the signal timestamp (no closing-chain lookahead), remove stale quotes, handle early close/half-days, corporate actions shifting strikes, American-exercise (early-exercise-allowed) premium on single names.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier M, low end).** The signal is arithmetic on a handful of quotes per event. Per cost-model §2, even a pure-Python loop handles this universe; polars does it in milliseconds. RAM: a decade of ATM-strip snapshots for 500 names is a few GB — far under the ~77GB working budget (cost-model §3).
+
+Engineering band: Tier M per cost-model §5 (vol estimators), low end — **~20–40 h ≈ $3,000–6,000 at $150/hr loaded-cost estimate**, plus chain data $200–2,000/mo for a research-grade OPRA slice (indicative — verify before budgeting). Bottleneck: **event-study hygiene** (calendar alignment, chain vintages, bid/ask execution), not compute. Stack: Python + polars + DuckDB. What breaks first at 500 symbols or full OPRA: nothing in the signal — but a production scanner across all names × all events needs the full real-time chain (Tier C OPRA $2,000–20,000+/mo, indicative), which is a data cost, not a compute wall.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Cboe delayed, EDGAR calendars) | Delayed chains, event dates | ~$0 | Zero cost; fine for EOD event studies | No intraday timing, coarse bid/ask |
+| Tier-1 retail (Polygon Options, Cboe delayed products) | Queryable chains, Greeks (delta, gamma, vega, theta, rho) | ~$0–200/mo | Cheap full pipeline prototype | Incomplete expiries, rate limits |
+| Tier-2 professional (Databento OPRA research, LiveVol) | Full historical chains, bid/ask history | ~$200–2,000/mo | Realistic backtest with executable quotes | Still need your own event-study code |
+| Tier-3 institutional (OptionMetrics IvyDB; Cboe implied-earnings-move data) | Publication-quality history; vendor implied-move series | ~$thousands/yr academic; institutional $$$$ | The dataset papers use; Cboe's own implied-move spec exists | Cost; may not cover your exact event set |
+
+Verdict: **build the comparator, buy the chains.** The formula is a one-liner; the work is the event calendar, chain vintages, and bid/ask-aware backtesting. Crossover: buy Tier-2 the day you backtest seriously — midpoint-based event studies on free data systematically overstate the edge (the spread *is* the edge in the 20%-of-premium world). All prices indicative — verify before budgeting.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Journal of Risk — "Earnings moves and pre-earnings implied volatility" | Listed US stocks, 3 calendar years | Options market predicts the *magnitude* of earnings moves well in most cases, with significant outliers; return distribution symmetric | Before-cost (forecast accuracy, not traded P&L) | Describes pricing accuracy, not a fade strategy's P&L |
+| ORATS methodology (LULU example, 8/2018) | Single name, last 12 earnings | Implied earnings move 10.93% vs average actual move 11.698% | Before-cost (practitioner measurement) | One name, one window — illustrative, not a statistical claim |
+| Nasdaq practitioner literature (IV-crush explainers) | US equity options | IV systematically elevated pre-announcement, collapses after; straddle sellers profit when realized < implied | Before-cost (educational) | No hit rates or P&L reported |
+
+Honest bottom line (mandatory framing): IV is elevated pre-announcement and falls after; realized moves come in below implied **on average — not universally**. Published-style hit rates in the **mid-50s to low-60s** for broad liquid samples are a chatbot lead (unverified — see Unverified leads), and a 60% hit rate is not automatically attractive: a 5–10% option round trip can erase a small average edge. **As a standalone trigger this is a modest, cost-sensitive edge; as a conditional event filter (high IV percentile, liquid chains, no macro overlap) it is a documented and usable one.** Evaluate in dollar P&L.
+
+### S10. Failure modes & pitfalls
+
+- **Lookahead leakage:** using the post-event chain or corrected prints to price the pre-event straddle — pin the snapshot vintage.
+- **Staleness/latency:** illiquid chains show midpoint "implied moves" that no one can trade — require two-sided quotes with size.
+- **Crowding/alpha decay:** the earnings fade is textbook; crowded shorts get carried out on genuine beats — condition on IV percentile, not habit.
+- **Cost blowup:** the 20%-of-premium arithmetic above — cheap wings are untradeable after costs; model both legs at bid/ask plus fees (per-contract commissions and exchange/clearing fees, e.g. ~$0.65/contract/side at retail — indicative, verify before budgeting). Impact/slippage: pre-event straddle bid/ask widens as the event approaches and liquidity providers pull quotes — expect to cross 1.5–2× the normal spread on entry, and a large fade moves the mid against you on exit; model explicit slippage of 10–50% of the spread per leg rather than assuming mid fills.
+- **Regime breaks:** macro overlap (CPI on earnings day), guidance shocks, sector-wide repricing — exclude or separately model overlapping events.
+- **Overfitting/parameter mining:** z-thresholds and lookbacks tuned on a handful of events per name — pool across names or accept wide error bars.
+- **Data errors:** wrong expiry (weekly vs monthly), early-close calendars, special dividends shifting the straddle.
+- **Microstructure confusion:** the straddle mid moves with the underlying into the print — measure the move consistently or delta-hedge (continuously offset directional exposure as the underlying moves).
+
+### S11. Visuals
+
+![S070 worked example — synthetic 10-event straddle-implied vs realized earnings moves](images/S070_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(OPRA chains, equity bars, event calendar)"] -->|ATM chain snapshots, 1-min bars| ING["Ingest + normalize\n(chain vintage, event tz, halts)"]
+    ING -->|"intraday ATM strip\n+ 1-min spot series"| FEAT["Feature compute\n(straddle/S, realized |return|, z-score)"]
+    FEAT -->|"per-event edge series\n(per announcement)"| SIG["Signal S070\nimplied-vs-realized edge"]
+    SIG -->|"per-event edge z-score\n+ IV percentile"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T046 fade, T050/T068/T079 context)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- "Earnings moves and pre-earnings implied volatility." *Journal of Risk*. https://www.risk.net/journal-of-risk/7960706/earnings-moves-and-pre-earnings-implied-volatility
+- Nasdaq — "Understanding Earnings Crush Implied Volatility." https://www.nasdaq.com/articles/understanding-earnings-crush-implied-volatility
+- Nasdaq — "What an Implied Volatility Crush is and How to Avoid It." https://www.nasdaq.com/articles/what-an-implied-volatility-crush-is-and-how-to-avoid-it-2021-07-09
+- ORATS — "How ORATS Removes Earnings Effect from Implied Volatility." https://orats.com/blog/how-orats-removes-earnings-effect-from-implied-volatility
+- Cboe DataShop — "Implied Earnings Move Specification" (vendor implied-move methodology). https://datashop.cboe.com/documents/ft_products/ImpliedEarningsMove_Specifications.pdf
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The straddle-implied-vs-realized framing (Q-SB8-3 #2), the per-round-trip spread arithmetic ($0.40/$0.08 = 20%, $5.00/$0.10 = 2%), and the "evaluate in dollar P&L" guidance are chatbot research leads — the arithmetic is operator-verified in S4; the mid-50s–low-60s hit-rate band (tradingview.com) is cited as an *unverified* chatbot lead, never as a published finding. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+**Unverified leads:** published hit rates in the mid-50s–low-60s for broad liquid samples (chatbot lead, tradingview.com — not independently verified); any specific after-cost Sharpe ratio (mean excess return ÷ volatility) for straddle-fade strategies is an unverified chatbot claim. The [SR] formula itself is a standard desk reconstruction, not a cited paper.
+
+---
+## Stage 71/200 — S071: 25-delta risk reversal / skew change
+
+*Batch SB8 · Signal 71/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The **25-delta risk reversal**: the implied-volatility gap between a 25-delta call and a 25-delta put — a real-time gauge of crash fear vs upside chase. |
+| **When it works** | As a regime/tail-risk feature: sudden steepening of put skew flags institutional hedging demand hours to days before downside episodes. |
+| **When it dies** | Thin/illiquid chains (the 25Δ points are noise), expiry weeks (skew deforms), and calm grinds where skew mean-reverts without any equity follow-through. |
+| **Build-or-buy in one line** | Buy clean intraday IV surfaces; build the delta-solver and the change-detection — the quoting conventions are the trap, not the arithmetic. |
+
+Provenance [D] (documented: FX-options market convention — Malz; Reiswich–Wystup; equity analog in Bakshi–Kapadia–Madan skew literature). Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+**Implied volatility (IV)** is the volatility number that makes an option-pricing formula reproduce the market price. Plot IV against strike and you get the **volatility smile** (or, for equities, the **smirk/skew**: IV much higher for downside puts than upside calls). **Delta** measures how much an option's price moves when the underlying moves $1 — a 25-delta (25Δ) put is an out-of-the-money (strike below the current price for a put, above the current price for a call) put whose price moves about $0.25 per $1 drop in the stock.
+
+A **risk reversal** (RR) is the IV of the 25Δ call minus the IV of the 25Δ put (FX — foreign exchange — market convention). If downside puts trade at 26.5% IV while equidistant upside calls trade at 16.9%, the risk reversal is 16.9 − 26.5 = −9.6 vol points: puts are much richer — the market is paying up for crash protection. Equity desks often flip the sign (put − call, so positive = fear); always state your convention. The **butterfly** — IV(call) + IV(put) − 2·IV(ATM — at-the-money) — measures the smile's curvature (kurtosis — tail-fatness — pricing) separately from its tilt.
+
+Vignette: 10:15 AM. The S&P is flat, but your skew monitor flashes: the 30-day 25Δ put IV just jumped from 24.5% to 26.5% while the 25Δ call IV didn't move. The risk reversal dropped two vol points in an hour. Nobody panicked in the stock — yet — but somebody with size (a large institutional order) just paid up for downside protection. That *change* in skew, z-scored against its history, is the S071 signal.
+
+Why should it work? Skew steepening reflects **informed hedging demand**: institutions buy puts before known risks and before portfolio de-risking. The options market aggregates that demand faster than the equity market aggregates the selling — hence "options-to-equity lead" (T093). The effect is a *change* signal: the level of skew is a permanent feature of equity markets; its sudden shifts carry the information.
+
+Mental model:
+- The risk reversal prices the market's fear asymmetry: rich puts = someone is scared, rich calls = someone is chasing.
+- Trade the *change* in skew, not the level — level is a permanent risk premium; change is news.
+- Always name the delta convention (spot delta — the strike found from the spot-price delta; forward delta — from the forward-price delta; premium-adjusted delta — the option premium subtracted from the price input) — the same "25Δ" can mean three different strikes.
+
+### S3. The math — exact formula
+
+**25-delta risk reversal (FX/desk convention, verified):**
+$$\mathrm{RR}_{25} = \sigma_{\mathrm{IV}}^{\mathrm{call},\,25\Delta} - \sigma_{\mathrm{IV}}^{\mathrm{put},\,25\Delta}$$
+Negative = downside puts richer (crash fear); positive = upside calls richer. Equity desks frequently quote the flip, σ(put) − σ(call), so that positive = fear — state the sign convention explicitly.
+
+**Black–Scholes deltas with dividend yield q (verified):**
+$$\Delta_C = e^{-qT}N(d_1), \qquad \Delta_P = e^{-qT}\,[N(d_1)-1], \qquad d_1 = \frac{\ln(S/K) + (r-q+\tfrac{1}{2}\sigma^2)T}{\sigma\sqrt{T}}$$
+The 25Δ call strike K_C solves Δ_C(K_C) = +0.25; the 25Δ put strike K_P solves Δ_P(K_P) = −0.25 (numerical root search). For futures options use the Black-76 (Fischer Black's 1976 futures-options pricing model) forward-delta convention — keep it consistent.
+
+**Butterfly (smile curvature):**
+$$\mathrm{BF}_{25} = \sigma_{\mathrm{IV}}^{\mathrm{call},\,25\Delta} + \sigma_{\mathrm{IV}}^{\mathrm{put},\,25\Delta} - 2\,\sigma_{\mathrm{IV}}^{\mathrm{ATM}}$$
+
+**Smile-construction quote convention** (simple-smile convention): σ_call = σ_ATM + σ_BF + ½σ_RR, σ_put = σ_ATM + σ_BF − ½σ_RR (the broker convention — the market-standard interpretation of RR/BF quotes — needs a numerical solver).
+
+Two implementation rules: interpolate **total variance** w(K,T) = σᵢᵥ²(K,T)·T across maturities — never raw vol — and across strikes interpolate in log-moneyness k = ln(K/F).
+
+> **Flag (garbled render, do NOT code as confirmed):** the chatbot's practical note gave the 25Δ strike-matching tolerance as "±0.5 to ±1.0 delta points," but the render was partially garbled. Re-confirm the tolerance from a canonical source (Reiswich–Wystup) before coding the root-search stopping rule.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example — not an institutional standard) |
+|---|---|---|---|---|---|
+| Delta pillar | — | 10Δ / 15Δ / 25Δ | noisy wings | insensitive | 25Δ |
+| Expiry | T | 1 week – 3 months | expiry noise | stale macro view | 30 days |
+| Change lookback | — | 1 hour – 5 days | microstructure | signal decayed | 1 day vs 20-day median |
+| Shock threshold | z* | 1.0–3.0σ | false alarms | misses hedging waves | z > 2.0 (example) |
+
+Normalization: z-score the *change* in RR against its trailing 20–60 day history of changes; raw RR level is regime-biased. Timing: compute on each IV-surface snapshot using quotes ≤ *t*; equity response is expected over hours–days, so entries at *t+1* are fine.
+
+Variants: (1) **10Δ RR** — deeper wings, more tail-sensitive, noisier; (2) **25Δ butterfly momentum** — curvature change as a vol-of-vol (volatility-of-volatility) signal; (3) **RR z-score vs ATM** — skew steepening relative to the vol level, so a vol spike alone doesn't fake a signal.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 30-day equity skew (seed **71**), S = 100, T = 30 days, q = 1.5%. BS deltas are illustrative example inputs for this expiry (puts below spot, calls above). The chart `images/S071_example.png` plots exactly these IV points with the 25Δ markers.
+
+| Moneyness K/S | IV (%) | BS delta | Marker |
+|---|---|---|---|
+| 0.80 | 34.0 | −0.08 | |
+| 0.85 | 30.0 | −0.15 | |
+| 0.90 | 26.5 | −0.25 | 25Δ put |
+| 0.95 | 22.0 | −0.40 | |
+| 1.00 | 19.5 | +0.50 | ATM |
+| 1.05 | 17.8 | +0.38 | |
+| 1.10 | 16.9 | +0.25 | 25Δ call |
+| 1.15 | 16.5 | +0.14 | |
+| 1.20 | 16.3 | +0.08 | |
+
+Step-by-step: the 25Δ put is the −0.25-delta row → moneyness 0.90, IV = **26.5%**. The 25Δ call is the +0.25-delta row → moneyness 1.10, IV = **16.9%**. Risk reversal (call − put) = 16.9 − 26.5 = **−9.6 vol points** — downside puts richer by nearly ten vol points, a steep fear skew. Equity-desk flip (put − call) = **+9.6**. Butterfly = 16.9 + 26.5 − 2×19.5 = 43.4 − 39.0 = **+4.4 vol points** of wing curvature.
+
+What to notice: the smirk shape (IV falling with moneyness) is the permanent equity feature; the *signal* would be this RR_25 moving, say, from −7.0 to −9.6 in a day (z-scored). The toy uses hand-placed deltas — production solves Δ_C(K) = 0.25 numerically per snapshot, and the delta-tolerance stopping rule is the garbled item flagged in S3. No trading costs modeled.
+
+### S5. Strategies that use this signal
+
+- **T047 — Risk-Reversal Skew Momentum (primary entry trigger):** follows 25Δ risk-reversal shifts with options-flow confirmation — this signal is the trigger.
+- **T093 — Options-to-Equity Lead Trader (primary directional input):** trades equity from options skew and signed flow with cross-asset lead-lag — S071 provides the skew leg.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Options quotes (full chain) | bid/ask | intraday snapshots (15-min–hourly) | Tier 2 | OPRA (Options Price Reporting Authority, the consolidated US options tape) via Databento/Cboe LiveVol; Tier 0 delayed for EOD (end-of-day) research |
+| IV surface (vendor or own) | float (%) | intraday snapshots | Tier 1–2 | Vendor surfaces $200–5,000/mo (indicative); own inversion needs full chain |
+| Underlying price + dividends | float | 1-min / daily | Tier 0–1 | For moneyness and the q in delta formulas |
+| Rates curve | float (%) | daily | Tier 0 | FRED (Federal Reserve Economic Data); r in d₁ |
+
+Ingest sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+from scipy.stats import norm
+from scipy.optimize import brentq
+import numpy as np
+def delta_call(K, S, T, r, q, sig):
+    d1 = (np.log(S / K) + (r - q + 0.5 * sig**2) * T) / (sig * np.sqrt(T))
+    return np.exp(-q * T) * norm.cdf(d1)
+def strike_at_delta(target, S, T, r, q, sig, cp):
+    f = lambda K: (delta_call(K, S, T, r, q, sig) if cp == "C"
+                   else delta_call(K, S, T, r, q, sig) - 1) - target
+    return brentq(f, 0.3 * S, 3.0 * S)   # then read IV at that strike
+```
+
+Storage per symbol-day (per `notes/cost-model.md` §4): intraday IV snapshots dominate — an SPX snapshot is ~100–300 MB in RAM; 8 snapshots/day ≈ 1–2.5 GB/day on disk. RR needs no full-chain OI, but the IV surface needs clean quotes across strikes. Keep the working set under ~77GB (cost-model §3).
+
+Data-quality checklist: document the delta convention per vendor (spot vs forward vs premium-adjusted — they differ); stale quotes on the wings corrupt the 25Δ read; corporate actions shift strikes; expiry-week skew deformation.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible but heavy (Tier H).** Plan §6 places full-OPRA analytics (S071–S073) in Tier H: **60–200 h ≈ $9,000–30,000 at $150/hr loaded-cost estimate**, plus chain/surface data $200–5,000/mo (Tier B queryable API) up to $2,000–20,000+/mo for full real-time OPRA (indicative — verify before budgeting).
+
+Why heavy: per-snapshot delta-solving across the chain, IV inversion, surface fitting, and snapshot alignment — per cost-model §2, numpy vectorizes the math (~50–200M elements/sec) but quote normalization and historical joins dominate. RAM: intraday snapshots for 2–3 underlyings fit the 77GB budget (cost-model §3); a 500-name intraday skew monitor does not — selective underlyings only. Stack: Python + polars/numpy default; Rust if you process the raw OPRA tick firehose. What breaks first at 500 symbols or full OPRA: the snapshot pipeline — full real-time OPRA is a message firehose (normalization, sequencing, packet recovery), and a specialized vendor's normalized chains are usually cheaper operationally than direct OPRA.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Cboe delayed options data) | Delayed chains, coarse Greeks (delta, gamma, vega, theta, rho) | ~$0–50/mo | Zero cost; EOD skew research | No intraday 25Δ changes — the signal itself |
+| Tier-1 retail (Polygon Options) | Queryable real-time chains | ~$30–200/mo | Cheap intraday skew prototype | Incomplete wings, rate limits, inconsistent conventions |
+| Tier-2 professional (Databento OPRA research, IV surfaces $200–5,000/mo) | Normalized chains, Greeks, history | ~$200–5,000/mo | Research-grade skew without building inversion | Still need delta-solver + change detection |
+| Tier-3 academic/institutional (OptionMetrics IvyDB; full OPRA Tier C) | Publication-quality history; full firehose (Tier C = full real-time consolidated feed: quotes + trades + exchange IDs + quote updates + admin messages) | ~$thousands/yr academic; $2,000–20,000+/mo institutional | The datasets the papers used | Cost; redistribution limits |
+
+Verdict: **buy the surface, build the signal.** The quoting conventions and the delta-solver are where implementations die — buy clean IV data (Tier 2) and put engineering into change-detection and convention documentation. Crossover: buy Tier-2 surfaces the moment you need intraday RR changes; delayed data suffices only for EOD regime research. All prices indicative — verify before budgeting.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Conrad, Dittmar & Ghysels (2009), "Ex Ante Skewness and Expected Stock Returns" | US individual equities, options-implied moments | More negatively (positively) skewed risk-neutral returns → subsequent higher (lower) returns; volatility negatively related to returns cross-sectionally | Before-cost (cross-sectional regressions) | Skew *level* predicts returns cross-sectionally — supports the economics, not an intraday RR-change trade |
+| Kim & Park (2018), "Is stock return predictability of option-implied skewness affected by the market state?", *J. Futures Markets* | US equities | Negative relation between option-implied skewness and subsequent returns, significant only in low-market-return / high-sentiment regimes; predictive power attributed to market state | Before-cost | Regime-dependent, not a fixed-threshold rule — matches the "change + context" framing |
+| Bakshi, Kapadia & Madan (2003), *Review of Financial Studies* 16:101–143 | Methodology | Model-free risk-neutral skewness from option strips — the measurement toolkit under the signal | N/A (methodology) | Measurement paper, no trading results |
+
+Honest bottom line: **as a standalone intraday trigger the 25Δ RR is a weak, noisy edge; as a tail-risk regime feature feeding defensive tilts and options-to-equity lead strategies it is a documented and sensible one.** The academic evidence supports skew *levels* predicting returns cross-sectionally and in regimes — the intraday *change* application is a practitioner adaptation with thinner documentation. Never trade it without the delta-convention audit.
+
+### S10. Failure modes & pitfalls
+
+- **Lookahead leakage:** using end-of-day corrected IV surfaces for an intraday signal timestamp — pin the snapshot vintage.
+- **Staleness/latency:** wide/zero-bid wings make the 25Δ IV a stale quote, not a market view — require two-sided size at the pillar strikes.
+- **Crowding/alpha decay:** skew steepening into known events is consensus; the fade-the-hedger trade is crowded — condition on *unexpected* changes.
+- **Cost blowup:** trading skew means trading wings, where spreads run 5–15% of premium (see S070) — the RR signal is often cheaper to express via the underlying. Fees: per-contract commissions and exchange/clearing fees on each wing — e.g. ~$0.65/contract/side at retail (indicative — verify before budgeting). Impact/slippage: wing quotes thin out exactly when skew moves fastest (dealers widen quotes into the hedge flow) — model 2–3× the quoted spread at size, expect partial fills, and consider that expressing the view via the underlying or a liquid ATM option often halves the cost.
+- **Regime breaks:** skew can stay steep for months in bear markets — a "fade the fear" rule bleeds; use changes, not levels.
+- **Overfitting/parameter mining:** 10Δ vs 25Δ, hourly vs daily changes, z-thresholds — pre-commit from the economics (hedging flows are daily).
+- **Data errors:** vendor delta-convention mismatches (spot vs forward vs premium-adjusted) silently move your pillars — document and test the convention.
+- **Microstructure confusion:** expiry-week and dividend-date skew deformations look like hedging demand but aren't — exclude them or code them with indicator variables.
+
+### S11. Visuals
+
+![S071 worked example — synthetic 30-day equity skew with 25-delta risk-reversal points marked](images/S071_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(OPRA chains, equity bars)"] -->|intraday option quotes, 1-min bars| ING["Ingest + normalize\n(delta convention, corp actions, halts)"]
+    ING -->|"intraday clean chain snapshots"| FEAT["Feature compute\n(IV surface, 25Δ pillar solve)"]
+    FEAT -->|"daily 30-day IV surface\n+ daily RR series"| SIG["Signal S071\nΔRR_25 z-score"]
+    SIG -->|"daily skew-change z-score"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T047 skew momentum, T093 equity lead)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Reiswich, D., Wystup, U. (2012). "FX Volatility Smile Construction." *Wilmott*. (25Δ risk-reversal quoting conventions; strike–volatility extraction.) https://www.econstor.eu/bitstream/10419/40186/1/613825101.pdf
+- "Market-consistent FX volatility surfaces" (RR/BF simple-smile vs broker conventions; Malz quadratic smile seed). https://arxiv.org/html/2512.19621
+- Bakshi, G., Kapadia, N., Madan, D. (2003). "Stock Return Characteristics, Skew Laws, and the Differential Pricing of Individual Equity Options." *Review of Financial Studies*, 16:101–143. (Risk-neutral moment estimators; related error analysis: https://acfr.aut.ac.nz/__data/assets/pdf_file/0008/328931/Pakorn-Bakshi,-Kapadia,-and-Madan-2003-Risk-Neutral-Moment-Estimators.pdf)
+- Conrad, J., Dittmar, R., Ghysels, E. (2009). "Ex Ante Skewness and Expected Stock Returns." https://pages.stern.nyu.edu/~dbackus/Disasters/ConradDittmarGhysels skewness Dec 09.PDF
+- Kim, T. S., Park, H. (2018). "Is stock return predictability of option‐implied skewness affected by the market state?" *Journal of Futures Markets*, 38(9):1024–1042. http://ideas.repec.org/a/wly/jfutmk/v38y2018i9p1024-1042.html
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The RR_25 formula, the Black–Scholes delta equations, and the Black-76 forward-delta convention (Q-SB8-1 #4) are chatbot research leads — the risk-reversal quoting convention itself is verified against Reiswich–Wystup (2012) above; the 25Δ strike-matching tolerance was partially garbled in the source render (flagged in S3, do NOT code as confirmed). Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+**Unverified leads:** the 25Δ strike-matching tolerance was partially garbled in the source render — flagged in S3, not coded; Malz (1997) is cited in the report entry but no checkable URL was verified; any specific intraday RR-change hit rate or Sharpe ratio (mean excess return ÷ volatility) is an unverified chatbot claim.
+
+---
+## Stage 72/200 — S072: Put/call ratio
+
+*Batch SB8 · Signal 72/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Ratio of put to call trading (by volume or by open interest); a crowding and hedge-demand gauge read contrarian at extremes. |
+| **When it works** | Fear/panic extremes in index options, when the reading is a sentiment state conditioned on regime, not a standalone rule. |
+| **When it dies** | Persistent bear markets, vol breakouts, and regimes where the ratio is driven by institutional hedging rather than speculation. |
+| **Build-or-buy in one line** | Build the normalization and analytics yourself; buy the chain data (free EOD (end-of-day) from Cboe, OPRA (Options Price Reporting Authority, the consolidated US options tape) if you need intraday). |
+
+Provenance **[D]** (documented): the ratio is an industry-standard series (Cboe daily market statistics) with peer-reviewed evidence behind its sentiment content. Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+A **put option** is a contract giving the right (not the obligation) to sell the underlying stock at a fixed **strike price**; a **call option** gives the right to buy. The **put/call ratio (PCR)** divides put trading by call trading — either by **volume** (contracts traded today) or by **open interest (OI)** (contracts outstanding, i.e. opened but not yet closed, exercised, or expired).
+
+Picture 9:47 on a Tuesday. SPX put volume is running 1.8× call volume while the equity-only PCR sits at 0.6. One market is buying crash insurance; the other is trading single-name calls. That split is the signal's whole point: index options carry the systematic hedge bid, equity options carry more speculation.
+
+Why should it work economically? Three channels. First, **hedging demand**: protective puts are the standard portfolio-insurance product, so a rising PCR often means institutions paying up for downside protection — fear, measurable in contracts. Second, **behavioral crowding**: at sentiment extremes the marginal trader is panicked or euphoric, and prices made at extremes tend to reverse — the classic **contrarian** read (contrarian = bet against the crowd). Third, **adverse selection** (trading against someone who knows more): informed traders prefer options for embedded **leverage** (small premium, large notional) — the case made by Black (1975) and formalized by Easley, O'Hara & Srinivas (1998), who showed *signed* (classified as buyer-initiated vs seller-initiated) option volume predicts returns while raw volume does not.
+
+The honest version the evidence supports: PCR is **better as a conditional sentiment-state variable than as a standalone buy/sell signal**. A high PCR can mean panic near a low, rational pre-crash hedging, a persistent bearish regime, or systematic put overwriting (selling puts against an existing position to collect premium) — same number, four worlds. The ratio gives the room's mood; the trade needs regime conditioning.
+
+Mental model:
+- PCR measures who is paying for what insurance, not where the stock goes next by itself.
+- Index PCR (hedging) and equity PCR (speculation) are different instruments — never blend them blindly.
+- Extremes mark sentiment states; the trade comes from conditioning on the state, never from a fixed threshold.
+
+### S3. The math — exact formula
+
+Let $V^P_t, V^C_t$ be put and call **volume** (contracts) on day $t$, and $OI^P_t, OI^C_t$ be put and call **open interest** at the close of day $t$. Let $\Delta_{j,t}$ be the option **delta** of contract $j$ (delta = the option's price sensitivity to a $1 move in the underlying, between −1 and +1; $|\Delta|$ measures how option-like the exposure is).
+
+$$\text{PCR}^{vol}_t = \frac{V^P_t}{V^C_t}, \qquad
+\text{PCR}^{OI}_t = \frac{OI^P_t}{OI^C_t}, \qquad
+\text{PCR}^{|\Delta|}_t = \frac{\sum_{j \in \text{puts}} V_{j,t}\,|\Delta_{j,t}|}{\sum_{j \in \text{calls}} V_{j,t}\,|\Delta_{j,t}|}$$
+
+The delta-weighted form (often more informative than raw counts, because it weights contracts by economic exposure) and a smoothed/standardized read:
+
+$$\overline{\text{PCR}}_t = \frac{1}{n}\sum_{k=0}^{n-1}\text{PCR}_{t-k}, \qquad
+z_t = \frac{\text{PCR}_t - \mathrm{median}(\text{PCR}_{t-L:t-1})}{1.4826 \cdot \mathrm{MAD}_{t-L:t-1}}$$
+
+where MAD is the median absolute deviation over the trailing $L$-day window, and $1.4826$ rescales MAD to a standard-deviation equivalent under normality. A percentile form is also common: rank today's PCR in its trailing 1-year distribution and fade readings above the 90th / below the 10th percentile.
+
+**Parameter table** (defaults are `example — not an institutional standard`):
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Smoothing window | $n$ | 3–20 days | noisy, whipsaws | lags turning points | 5 |
+| Robust lookback | $L$ | 20–252 days | unstable median | stale regime | 60 |
+| z threshold | $|z|$ | 1.5–3.0 | too many flags | misses extremes | 2.0 |
+| Percentile band | — | 80/20–95/5 | noise | rare signals | 90/10 |
+
+**Normalization choices.** Raw PCR drifts with market structure (0DTE flow — options expiring the same day — was roughly half of SPX volume by 2023). Always normalize: z-score vs trailing median/MAD or trailing percentile rank. Volume PCR reacts fast; OI PCR is slow-moving positioning.
+
+**Causal timing.** Computed at the close of day $t$ using only data $\le t$; tradable no earlier than the open of $t+1$. Intraday 0DTE-aware variants recompute on rolling windows with wider bands.
+
+**Named variants.** (1) Volume PCR vs OI PCR vs delta-weighted PCR. (2) Equity-only vs index-only (Cboe publishes the split; index PCR > 1 is normal because of the structural put-hedge bid, equity PCR < 1 is normal because of call speculation). (3) 0DTE-aware intraday PCR for expiry-day sessions.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 30-day daily PCR tape for fictional name "ABC" (seed **72**, `np.random.default_rng(72)`); the chart plots this same series. Trailing 20-day median and robust z-score, $L=20$ (`example`).
+
+| Day | PCR (put vol / call vol) | Trailing 20d median | z-score | Note |
+|---|---|---|---|---|
+| 19 | 0.71 | — | — | warm-up, insufficient history |
+| 20 | 0.83 | — | — | warm-up, insufficient history |
+| 21 | 0.90 | 0.83 | +0.61 | normal |
+| 22 | 1.95 | 0.85 | +9.49 | **extreme** (z > 2, example band) |
+| 23 | 1.58 | 0.85 | +5.33 | **extreme** |
+| 24 | 0.88 | 0.85 | +0.25 | normalizes |
+| 25 | 0.97 | 0.86 | +0.84 | normal |
+| 26 | 0.88 | 0.86 | +0.16 | normal |
+| 27 | 1.02 | 0.86 | +1.01 | normal |
+| 28 | 1.01 | 0.86 | +0.98 | normal |
+| 29 | 0.96 | 0.86 | +0.67 | normal |
+| 30 | 1.00 | 0.86 | +0.90 | normal |
+
+Steps: (1) compute daily PCR = put contracts ÷ call contracts; (2) trailing 20-day median of PCR; (3) MAD over the same window, rescaled by 1.4826; (4) $z_{22} = (1.95 - 0.85)/(1.4826 \times \mathrm{MAD}) = +9.49$. The chart's dashed bands mark $z=\pm 2$ at PCR ≈ 1.18 / 0.53.
+
+**What to notice.** Day 22's spike is unmistakable *because* the trailing MAD was compressed — in live data, volatility-of-PCR itself clusters, so a fixed z-band calibrated in a calm window will over-fire when regime shifts. Also note day 23 stays extreme: fear unwinds over days, not minutes, which is why the documented horizon is 1–10 days, not intraday. Limits of this toy: no fees, no bid/ask on the hedge, and the "fear spike" was injected by hand — nothing here is a backtest.
+
+### S5. Strategies that use this signal
+
+- **T048 — Put/Call Ratio Contrarian** — primary entry trigger: fades extreme PCR z-scores with stretched-move and sentiment context.
+- **T047 — Risk-Reversal Skew Momentum** — secondary/confirming input: PCR state conditions whether a 25-delta risk-reversal skew shift is faded or followed.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Put/call volume by product | int (contracts) | daily | Tier 0 | Cboe daily market statistics (free); split equity / index / ETP (exchange-traded product) |
+| Put/call open interest | int (contracts) | daily | Tier 0 | same source; EOD (end-of-day) snapshot |
+| Per-contract volume + Greeks (delta, gamma, vega, theta, rho) | float/int | intraday (OPRA — Options Price Reporting Authority, the consolidated US options tape) | Tier 1–2 | needed for delta-weighted PCR and 0DTE variants |
+| Underlying price | float | daily / 1-min | Tier 0–1 | regime conditioning (trend, VIX — Cboe Volatility Index — level) |
+
+**Collection.** Tier-0 route: scrape or download the Cboe daily market statistics page (total/index/equity/ETP PCR published daily, free). Intraday route: OPRA via Databento or Polygon Options — full trade tape with per-contract volume.
+
+```python
+import polars as pl
+# ingest loop sketch: daily Cboe PCR statistics -> normalized series
+rows = fetch_cboe_daily_stats()          # date, equity_pcr, index_pcr, etp_pcr
+df = (pl.DataFrame(rows)
+        .with_columns(date=pl.col("date").str.to_date())
+        .sort("date")
+        .with_columns(
+            pcr_eq_smooth=pl.col("equity_pcr").rolling_mean(5),          # example window
+            med=pl.col("equity_pcr").rolling_median(60),                  # example lookback
+        )
+        .with_columns(z=(pl.col("equity_pcr") - pl.col("med"))
+                      / (1.4826 * (pl.col("equity_pcr") - pl.col("med")).abs().rolling_median(60)))
+store_parquet(df, "data/s072_pcr_daily.parquet")   # date-partitioned, append-only
+```
+
+**Storage.** Daily PCR series: kilobytes per symbol-year — trivial. Full EOD chain snapshots (for the delta-weighted form): per cost-model §3, an SPX-class snapshot is ~100–300 MB in RAM, far less in parquet; selective underlyings only. **Data-quality checklist:** exchange timestamps; corporate-action adjustments; halts (zero-volume days aren't zero sentiment); DST (daylight-saving time)/half-days; stale quotes if you mix quote-derived deltas with trade volume.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial for the daily series; feasible for the intraday variant.** The documented signal is a daily ratio off a public statistics page — a spreadsheet could compute it. The engineering lives in the intraday/delta-weighted reconstruction: normalizing OPRA trades and attaching Greeks per contract.
+
+**Throughput** (per cost-model §2): daily PCR on 500 symbols is a few thousand rows — polars handles it in milliseconds. Intraday delta-weighted PCR on OPRA prints for 50 liquid names: ~100k events/sec at busy times is borderline for a pure-Python loop, comfortable in Rust, and trivial as a per-minute polars batch recompute. Bottleneck is I/O and symbol-mastering (mapping vendor contract symbols to a canonical contract master), not compute.
+
+**Stack options:**
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | default; daily and per-minute batch recompute |
+| Rust | full OPRA firehose, real-time intraday PCR across many underlyings |
+| DuckDB | research queries over the historical PCR panel |
+
+**RAM.** Daily panel for 3,000 symbols × 10 years ≈ tens of MB — fits comfortably. Per cost-model §3's 77 GB working budget, even a 60-day intraday OPRA slice for a handful of names fits with care; archive the rest as per-symbol daily parquet files.
+
+**Engineering time.** Cost-model §5 Tier M (vol estimators, S049–S070 class): **20–60 h ≈ $3,000–9,000** at the $150/hr loaded-cost estimate. The chatbot's component lead (labeled `unverified chatbot claim`, cost-model takes precedence) put PCR at 10–25 h prototype / 30–70 h production. **What breaks first at 500 symbols or full OPRA:** the Greeks join — attaching a fresh delta to every print needs an IV surface per underlying per timestamp; precompute Greeks on a grid and interpolate. Full-OPRA processing means handling the firehose (the full real-time message stream: quotes, trades, admin messages).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Cboe daily market statistics | Daily PCR (total/index/equity/ETP), OI | ~$0 | free, authoritative, zero eng | EOD only; no per-contract detail; no delta weighting |
+| Tier 1: Polygon / Alpaca options | Per-contract volume, chains, Greeks | ~$30–200/mo | cheap intraday PCR | API rate limits; OI timing inconsistent |
+| Tier 2: Databento OPRA | Full consolidated trades/quotes/OI | ~$200/mo + usage | honest intraday + delta-weighted PCR | usage costs scale with symbols |
+| Academic: OptionMetrics IvyDB | Publication-quality history | ~$thousands/yr academic | clean history for research | institutional $$$$; not real-time |
+
+All prices `indicative — verify before budgeting`. **Verdict: build if** you only need the daily sentiment-state series (Tier 0 is free and the math is 20 lines); **buy if** you need intraday or delta-weighted PCR across many names; **hybrid (common)**: buy the normalized chain feed, build the z-score analytics with your own thresholds.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Pan & Poteshman (2006), Rev. Financ. Stud. | US equities, CBOE (Chicago Board Options Exchange) 1990–2001 | Low-PCR stocks beat high-PCR by >40 bps (basis points; 1 bp = 0.01%) next day, >1% next week (risk-adjusted — adjusted for market beta/factor exposure) | **before-cost**; no trading frictions modeled | Needs buy-to-open (new positions being opened, vs closed) flags (CBOE proprietary data); public-volume replication is weaker |
+| Webb, Simon & Wiggins (2001), J. Futures Markets | S&P 500 futures, 1989–1999 | PCR as contrarian sentiment indicator: statistically and economically significant forecasting power at 10/20/30-day horizons; OOS (out-of-sample) simulations enhanced profits | **before-cost** | Sample ends 1999 — pre-0DTE, pre-ETF (exchange-traded fund)-dominance regime |
+| Cao, Li, Zhan & Zhou (2022), J. Financ. Quant. Anal. | US market, CBOE 2005–2020 | Aggregate call order imbalance negatively forecasts the market risk premium; individual-level imbalance positively predicts cross-section (informed) | **before-cost** | Dual nature: informed at the stock level, sentiment-driven in aggregate |
+
+**Regimes where it fails.** Sustained bear markets (high PCR stays high while prices fall), credit-stress episodes (hedging is rational, not fear), vol breakouts, and expiry weeks (OI distortions). The 0DTE regime has compressed intraday PCR dynamics; folklore thresholds (0.7/1.0) were never estimated rules.
+
+**Honest bottom line.** As a standalone trigger this is a *weak, regime-dependent* edge; as a conditional sentiment-state filter (T048) it is *documented and useful* — but only with conditioning.
+
+### S10. Failure modes & pitfalls
+
+1. **Hedge-vs-speculation confusion** — put volume includes collars (a long put + short call combination that brackets the position) and overwriting, not just fear. *Mitigation:* split index vs equity PCR; delta-weight to emphasize speculative strikes.
+2. **Lookahead leakage** — OI is published with a lag; using "final" OI at signal time is lookahead. *Mitigation:* timestamp every field; use only data available at $t$.
+3. **Fixed-threshold overfitting** — 0.7/1.0 folklore is not estimated. *Mitigation:* percentile/z normalization, re-estimated on rolling windows; mark defaults `example`.
+4. **Regime breaks** — 0DTE and ETF flows changed PCR's meaning. *Mitigation:* condition on VIX level and trend regime; revalidate yearly.
+5. **Staleness/latency** — EOD PCR misses intraday reversals. *Mitigation:* intraday OPRA variant with wider bands, or accept the 1–10 day horizon.
+6. **Cost blowup** — fading extremes means trading into wide spreads during stress. *Mitigation:* model spread + fees + impact; size down when spreads widen.
+7. **Crowding/alpha decay** — sentiment indicators are the most-crowded signals in existence. *Mitigation:* use as a filter, not a trigger; combine with non-sentiment signals.
+8. **Microstructure noise** — single-day PCR prints are noisy. *Mitigation:* smooth (5–10 day SMA — simple moving average) and require multi-day confirmation.
+
+### S11. Visuals
+
+![S072 worked example — synthetic 30-day PCR tape with trailing-median z-score bands, seed 72](images/S072_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(Cboe daily market stats;<br/>Databento OPRA intraday)"] -->|daily chains + OI, EOD| ING["Ingest + normalize<br/>(exchange ts, DST, halts)"]
+    ING -->|clean daily series| FEAT["Feature compute<br/>(PCR_vol, PCR_OI, z_t)"]
+    FEAT -->|daily features| SIG["Signal S072<br/>PCR sentiment-state z-score"]
+    SIG -->|daily signal| GATE{"Cost / toxicity<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T048, T047)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Pan, J. & Poteshman, A.M. (2006). "The Information in Option Volume for Future Stock Prices." *Review of Financial Studies* 19(3):871–908. https://ideas.repec.Org/a/oup/rfinst/v19y2006i3p871-908.html
+2. Webb, R.I., Simon, D.P. & Wiggins, R.A. III (2001). "S&P futures returns and contrary sentiment indicators." *Journal of Futures Markets* 21(5):447–462. https://ideas.repec.Org/a/wly/jfutmk/v21y2001i5p447-462.html
+3. Cao, J., Li, G., Zhan, X. & Zhou, G. (2022). "Betting Against the Crowd: Option Trading and Market Risk Premium." *Journal of Financial and Quantitative Analysis*. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4301015
+4. Cboe — U.S. Options Daily Market Statistics (industry data source; daily put/call ratios by product). https://www.cboe.com/us/options/market_statistics/daily/?dt=2023-06-02
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The put/call-contrarian evidence summary (Q-SB8-3 #5 — "statistically meaningful but generally modest, heterogeneous, strongest over short horizons") and the PCR build-cost components are chatbot research leads, cited as such and never as published findings; Pan & Poteshman (2006) and the Cboe statistics are independently verified above. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence): component engineering-hour ranges for a PCR build (prototype 10–25 h, production 30–70 h); folklore threshold values 0.7/1.0.
+
+---
+## Stage 73/200 — S073: Unusual options activity
+
+*Batch SB8 · Signal 73/100 · Provenance [D/SR] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Contracts trading far above their normal volume or standing open interest, read as possible fresh informed positioning — direction inferred, never observed. |
+| **When it works** | Short-horizon (hours to days) event detection: earnings, M&A (mergers and acquisitions), news — when a real informed trader needs leverage fast. |
+| **When it dies** | When the "unusual" print is a spread leg (one side of a multi-leg options strategy), a closing trade, dealer (market-maker) hedging, or index/ETF (exchange-traded fund) hedging flow rather than a directional bet. |
+| **Build-or-buy in one line** | Buy normalized OPRA (Options Price Reporting Authority, the consolidated US options tape) trades/quotes (the normalization is the product); build the ranking, filters, and alerts yourself. |
+
+Provenance **[D/SR]**: the informed-options-volume concept is documented (Pan & Poteshman 2006); the signed-volume *reconstruction* from public OPRA data is a standard reconstruction — true bought-to-open needs open/close flags that OPRA lacks. Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+**Unusual options activity (UOA)** is the options-market equivalent of a Brinks truck at a bank: a contract that normally trades 2,000 lots (blocks of contracts) suddenly prints (executes and reports) 9,800, or volume exceeds the entire standing **open interest** (outstanding contracts). A **sweep** executes across multiple exchanges nearly simultaneously — someone wants size *now* and pays the spread on every venue. That urgency smells like information.
+
+The economic logic: an informed trader with a short-lived edge wants maximum **leverage** (payoff per dollar at risk) without moving the stock. Options give both. Easley, O'Hara & Srinivas (1998) showed *signed* option volume — calls bought or puts sold (positive-news) versus puts bought or calls sold (negative-news) — predicts stock returns while raw volume does not. Pan & Poteshman (2006) showed put-call ratios from buyer-initiated *opening* volume predict next-day and next-week returns, sourced to private information rather than inefficiency.
+
+Now the central honesty problem of this chapter — read it twice: **the crucial data problem is the open/close flag.** A trade record gives contract, price, size, timestamp, exchange, sometimes the aggressor side (the side that crossed the spread to initiate the trade) — but usually not whether the trade opened or closed a position. A large call buy can be: (a) an opening bullish bet, (b) a *closing* purchase by someone short calls, (c) one leg of a spread, (d) a dealer's hedge. Same print, four opposite meanings. OI changes help only after the fact, at EOD (end-of-day) granularity. So **signed delta flow ≈ Σ_j q_j Δ_j M_j is signed traded exposure, NOT confirmed customer opening** — a proxy, never observed positioning.
+
+Mental model:
+- UOA is a ranking and event-detection feature, not a binary "call buying = stock up" rule.
+- Urgency (sweeps, premium paid) is more informative than size alone.
+- Without the open/close flag, every directional read is a hypothesis with named alternatives.
+
+### S3. The math — exact formula
+
+For contract $i$ on day/session $t$, with trailing median daily volume $\mathrm{med}(V_{i,\cdot})$:
+
+$$U_{i,t} = \frac{V_{i,t}}{\mathrm{median}(V_{i,t-20:t-1})} \qquad \text{(unusual-volume score, `example` window)}$$
+
+**UOA flag (documented rule, Stanford CS229 project on OptionMetrics data):** flag when $V_{i,t} > 2 \times$ daily average **and** $V_{i,t} \ge 500$ contracts (institutional-size block rule) — thresholds are `example — not an institutional standard`. Volume-vs-OI form: flag when $V_{i,t}/OI_{i,t} > 1.5$–$3$ (`example`).
+
+**Signed delta flow (proxy):** for each print $j$ with signed quantity $q_j$ (+1 buy-initiated, −1 sell-initiated via the quote rule — classifying a trade as buyer- or seller-initiated by comparing the trade price to the prevailing bid/ask), delta $\Delta_j$, multiplier $M_j$ (100 shares per contract):
+
+$$F_t = \sum_j q_j \, \Delta_j \, M_j \qquad \text{= signed traded delta exposure (PROXY, not confirmed opening)}$$
+
+Direction mapping (hypotheses, not facts): net call buying + high $F_t$ → bullish hypothesis; net put buying → bearish hypothesis; follow for 1–3 sessions (`example` holding window).
+
+**Parameter table** (`example` defaults throughout):
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| History window | — | 10–60 days | unstable median | stale baseline | 20 |
+| U threshold | $U$ | 1.5–5× | noise | misses events | 2.0× |
+| Block size | — | 250–1,000 contracts | retail noise | only mega-prints | 500 |
+| Vol/OI threshold | — | 1.0–3.0× | flags roll days | misses fresh opens | 1.5× |
+| Follow horizon | — | 1–5 sessions | cuts winners | signal decays | 1–3 |
+
+**Normalization choices.** $U_{i,t}$ vs trailing median (robust) or mean (the documented 2× rule uses average); per-contract vs aggregated to the underlying; delta-weighting so deep-OTM (out-of-the-money — strike far from the current price) lottery tickets don't dominate. **Causal timing:** the print at time $t$ is known at $t$; the *interpretation* (open vs close) is not fully known until next-day OI — score at $t$, confirm at $t+1$, trade no earlier than $t+1$ on the confirmed read. **Variants:** volume-vs-history ($U$), volume-vs-OI, sweep detection (multi-exchange urgency), signed delta flow, premium-weighted flow.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic one-session scan for fictional name "ABC", 8 contracts (seed **73**, `np.random.default_rng(73)`); ranked by $U$; the chart plots these same bars. The open/close flag is **missing** — that absence is the point of the example.
+
+| Contract | Type | Volume | OI | Trailing-20d median vol | $U$ | Vol/OI | Premium ($k) |
+|---|---|---|---|---|---|---|---|
+| ABC 100C | C | 9,800 | 8,200 | 2,100 | 4.67× | 1.20 | 186.0 |
+| ABC 95P | P | 7,100 | 5,400 | 2,300 | 3.09× | 1.31 | 128.0 |
+| ABC 97P | P | 2,200 | 4,200 | 2,000 | 1.10× | 0.52 | 33.0 |
+| ABC 105C | C | 2,600 | 3,100 | 2,400 | 1.08× | 0.84 | 41.0 |
+| ABC 102C | C | 5,100 | 6,600 | 4,800 | 1.06× | 0.77 | 97.0 |
+| ABC 90P | P | 1,600 | 2,900 | 1,700 | 0.94× | 0.55 | 24.0 |
+| ABC 85P | P | 610 | 1,200 | 900 | 0.68× | 0.51 | 8.0 |
+| ABC 110C | C | 340 | 1,500 | 1,500 | 0.23× | 0.23 | 6.0 |
+
+Steps: (1) $U = V/\mathrm{median}$: ABC 100C gives $9{,}800/2{,}100 = 4.67$; (2) vol/OI: $9{,}800/8{,}200 = 1.20$; (3) rank by $U$; (4) the 2×-and-500 rule flags ABC 100C (4.67×, 9,800 ≥ 500) and ABC 95P (3.09×, 7,100 ≥ 500).
+
+**What to notice.** The top hit fails the volume/OI > 1.5 rule (1.20) while passing the $U$ rule (4.67×) — the two standard screens *disagree*, which is normal: $U$ says "unusual versus its own history," vol/OI says "not obviously fresh versus standing positions." And the directional read is genuinely ambiguous: 9,800 calls could be informed opening buying — or a fund closing a short-call book, or one leg of a spread. This toy has no fees, no multi-leg linkage, and no aggressor-side classification error — three things the real tape has in abundance. Treat the output as a ranked alert queue, not a signal with a sign.
+
+### S5. Strategies that use this signal
+
+- **T049 — Unusual Options Activity Follower** — primary entry trigger: follows signed options sweeps confirmed by equity RVOL (relative volume — today's volume vs its historical average) and news sentiment.
+- **T046 — Straddle-Implied Move Fade** — confirming filter: unusual activity confirms whether an overpriced event move has informed sponsorship behind it.
+- **T094 — Squeeze Breakout (Options-Confirmed)** — confirming filter: unusual call activity confirms Bollinger-squeeze (Bollinger Band contraction signaling a volatility breakout) breakouts.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Options trades (price, size, exchange, ts) | mixed | trade-by-trade (OPRA) | Tier 1–2 | Databento OPRA / Polygon Options; sweep detection needs exchange IDs |
+| Options quotes (bid/ask) | float | tick (every quote update) | Tier 1–2 | quote rule for signing prints; needs synchronized timestamps |
+| Open interest by contract | int | daily (EOD) | Tier 1–2 | next-day confirmation of open vs close; lagged |
+| Underlying price | float | 1-min / tick | Tier 0–1 | delta computation, event context |
+
+**Collection.** OPRA is the consolidated US listed-options feed (quotes, trades, OI, EOD summaries). Vendor APIs (Databento, Polygon) normalize it; raw OPRA direct is a message firehose (the full real-time message stream) requiring symbol mastering (mapping vendor contract symbols to a canonical contract master) and sequence-gap (missing packet/message detection and recovery) handling.
+
+```python
+import polars as pl
+# ingest sketch: sign prints via quote rule, aggregate signed delta flow
+trades = load_opra_trades("ABC", date)          # ts, contract, price, size, exch
+quotes = load_opra_quotes("ABC", date)          # ts, contract, bid, ask
+t = trades.join_asof(quotes, on="ts", by="contract")   # causal: quote <= trade ts
+t = t.with_columns(
+    side=pl.when(pl.col("price") >= (pl.col("bid")+pl.col("ask"))/2).then(1).otherwise(-1),
+    delta=bs_delta(pl.col("contract"), pl.col("underlying"), pl.col("iv")),  # per-contract
+)
+flow = t.group_by("contract").agg(
+    U=(pl.col("size").sum() / pl.col("hist_median_vol").first()),
+    signed_delta=(pl.col("side")*pl.col("delta")*pl.col("size")*100).sum(),  # PROXY
+)
+```
+
+**Storage.** Per cost-model §4, full OPRA chain snapshots run ~1–3 GB/day (SPX-like) in parquet — selective underlyings only. **Data-quality checklist:** quote/trade timestamp sync (stale quotes mis-sign prints); corporate actions; OI corrections (use as-of — point-in-time, unrevised — vintages, not revised); spread legs look like independent prints — the feed has no multi-leg linkage; expiry-day volume spikes are calendar effects, not information.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier H per cost-model §5, the S071–S074 OPRA-analytics class) — the math is simple, the data plumbing is the project.** Scanning is arithmetic; honest signing needs synchronized quotes, per-contract Greeks (the option risk sensitivities — delta, gamma, vega, theta), and next-day OI reconciliation.
+
+**Throughput** (per cost-model §2): a per-minute batch scan over 50 names is trivial in polars (~10–50M rows/sec). Real-time sweep detection across full OPRA wants Rust (~5–50M events/sec); a Python loop (~100–500k/sec) covers ≤20 symbols. Bottleneck: quote normalization and the Greeks join.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | default; batch scans, research, alerting |
+| Rust | real-time sweep detection on the full OPRA firehose |
+| DuckDB | historical UOA panel queries |
+
+**RAM.** Per cost-model §3, an SPX-class chain snapshot is ~100–300 MB live; a 60-day panel for 30–50 names fits inside the 77 GB working budget — per-symbol daily files, never the whole OPRA archive in RAM.
+
+**Engineering time.** Cost-model §5 Tier H: **60–200 h ≈ $9,000–30,000** at the $150/hr loaded-cost estimate — most of it data quality and ops. The chatbot's component lead (labeled `unverified chatbot claim`; cost-model takes precedence) put the unusual-activity scanner at 40–100 h prototype / 150–350 h production. **What breaks first at 500 symbols or full OPRA:** signing — quote-rule accuracy collapses on stale quotes, and vendor aggressor-side misclassification becomes the dominant error.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: exchange delayed quotes | Coarse chain snapshots | ~$0 | free prototyping | no real-time scans; incomplete chains |
+| Tier 1: Polygon Options / broker APIs | Trades, quotes, chains | ~$30–200/mo | cheap scanner feed | rate limits; inconsistent OI timing; restricted redistribution |
+| Tier 2: Databento OPRA | Normalized full trades/quotes/OI | ~$200/mo + usage | honest signing + sweep detection | usage scales; you still build the ranking |
+| Tier 3: full OPRA direct / historical archive | Raw firehose + history | $$$$ institutional | complete | normalization is a full-time job |
+
+All prices `indicative — verify before budgeting`. **Verdict: hybrid (the standard answer)** — buy normalized trades/quotes/OI, build the ranking, filters, and alerts. Building the *feed normalization* only pays if OPRA-direct economics beat the vendor at your scale; the *analytics* are always yours, because your thresholds are the edge.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Pan & Poteshman (2006), Rev. Financ. Stud. | US equities, CBOE (Chicago Board Options Exchange) 1990–2001 | Buyer-initiated opening PCR: low-minus-high spread >40 bps (basis points; 1 bp = 0.01%) next day, >1% next week (risk-adjusted — adjusted for market beta/factor exposure) | **before-cost** | Needs buy-to-open (new positions opened, vs closed) flags (CBOE proprietary); public-volume replication is weaker |
+| Johnson & So (2012), J. Financ. Econ. | US equities, 1996–2009 approx. | Lowest O/S (option-to-stock volume) decile (tenth of the sorted sample) beats highest by 1.47%/month, risk-adjusted | **before-cost** | Unsigned volume; their model attributes the negative relation to stock short-sale costs, not pure informed flow |
+| Ge, Lin & Pearson (2016), J. Financ. Econ. | US equities, signed CBOE volume | Purchases of calls that *open* new positions are the strongest return predictor; embedded leverage is the key channel | **before-cost** | Again needs signed + open/close data; confirms the flag is where the information lives |
+
+The literature's own summary: option volume and signed flow *can* predict returns — statistically meaningful but generally modest, heterogeneous, strongest over short horizons. Nothing here is a "call buying = stock up" rule, and the strongest effects come from the papers using the flags retail data doesn't have.
+
+**Regimes where it fails.** Spread-dominated prints, index/ETF hedging flows, liquid fast-diffusion names, near-expiry calendar effects, stale quotes, prints after the stock already moved.
+
+**Honest bottom line.** As a standalone directional trigger this is a *modest, fragile* edge whose documented strength lives in data you probably don't have; as a ranked event-detection feature (T049, T094) it is *genuinely useful* — with the open/close caveat on every output.
+
+### S10. Failure modes & pitfalls
+
+1. **Open/close ambiguity** — the central failure: direction inferred, never observed. *Mitigation:* score at $t$, confirm with next-day OI change, and publish the alternative hypotheses alongside every alert.
+2. **Spread legs masquerading as directional flow** — multi-leg prints look like conviction. *Mitigation:* cluster prints by timestamp/underlying/expiry; discount offsetting legs.
+3. **Aggressor-side misclassification** — quote rule fails on stale quotes and midpoint prints. *Mitigation:* drop prints where the quote is older than N ms (`example`); track your own mis-sign rate.
+4. **Lookahead via revised OI** — OI gets corrected; backtests on final OI overstate. *Mitigation:* as-of vintages only; embargo (withhold from the sample a buffer window around the event) the confirmation leg.
+5. **Dealer hedging mistaken for informed flow** — customer flow begets dealer hedging prints. *Mitigation:* separate customer-vs-dealer flow if classified; otherwise widen holding windows.
+6. **Cost blowup** — following sweeps means crossing the spread (paying the full bid/ask cost to execute immediately) after the informed trader did. *Mitigation:* model full round-trip spread + fees + impact; the edge must survive paying what the sweep paid.
+7. **Event-selection bias** — UOA clusters around scheduled events where straddles are already rich. *Mitigation:* condition on the implied move (S070).
+8. **Overfitting the flag definition** — tuning thresholds on the events you trade. *Mitigation:* freeze the screen out-of-sample (on data not used to choose the thresholds); purged/embargoed (training samples whose labels overlap the event window are removed, plus an embargo buffer) validation (S088).
+
+### S11. Visuals
+
+![S073 worked example — synthetic unusual-activity scan ranked by U score, open/close flag missing, seed 73](images/S073_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(OPRA trades+quotes;<br/>Databento/Polygon)"] -->|trade-by-trade prints + tick quotes| ING["Ingest + normalize<br/>(quote sync, corp actions)"]
+    ING -->|"trade-by-trade signed prints\n(per-contract)"| FEAT["Feature compute<br/>(U score, signed delta flow)"]
+    FEAT -->|ranked alerts, 1-min bars| SIG["Signal S073<br/>UOA rank + direction proxy"]
+    SIG -->|"ranked alerts\n(per-session)"| GATE{"Cost / toxicity<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T049, T046, T094)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Pan, J. & Poteshman, A.M. (2006). "The Information in Option Volume for Future Stock Prices." *Review of Financial Studies* 19(3):871–908. https://ideas.repec.Org/a/oup/rfinst/v19y2006i3p871-908.html
+2. Johnson, T.L. & So, E.C. (2012). "The Option to Stock Volume Ratio and Future Returns." *Journal of Financial Economics* 106(2):262–286. https://doi.org/10.1016/j.jfineco.2012.05.008
+3. Ge, L., Lin, T.-C. & Pearson, N.D. (2016). "Why does the option to stock volume ratio predict stock returns?" *Journal of Financial Economics* 120(3):601–622. https://ideas.repec.Org/a/eee/jfinec/v120y2016i3p601-622.html
+4. Easley, D., O'Hara, M. & Srinivas, P.S. (1998). "Option Volume and Stock Prices: Evidence on Where Informed Traders Trade." *Journal of Finance* 53(2):431–465. https://afajof.org/issue/volume-53-issue-2/
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The UOA-direction evidence summary (Q-SB8-3 #3 — "statistically meaningful but generally modest, heterogeneous, strongest over short horizons") and the scanner cost/price components are chatbot research leads, cited as such and never as published findings; Pan & Poteshman (2006) is independently verified above. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence): unusual-activity scanner build hours (prototype 40–100 h, production 150–350 h); unusual-activity data pricing band ($500–10,000+/mo); the Stanford CS229 2×-volume/500-contract rule is cited from the signal's source entry, not re-verified against the original project page.
+
+---
+## Stage 74/200 — S074: Gamma exposure (GEX) & dealer positioning
+
+*Batch SB8 · Signal 74/100 · Provenance [SR] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | An estimate of how much stock dealers must buy or sell to stay delta-hedged (their option-book delta — the sensitivity of position value to the underlying — kept near zero) after a 1% move, built from public open interest under an assumed dealer-positioning sign convention. |
+| **When it works** | As an intraday *regime context* (positive-gamma = dampened moves, negative-gamma = amplified moves) near large, fresh option expiries. |
+| **When it dies** | Whenever you lack full-chain open interest, trust a single sign convention, or expect gamma walls to forecast direction out-of-sample. |
+| **Build-or-buy in one line** | Buy the full-chain OI feed (you cannot build this honestly without it); build the estimator — but label it a proxy, never observed positioning. |
+
+Provenance **[SR]** (standard reconstruction): true dealer books are proprietary; every public GEX number is a practitioner reconstruction from open interest plus a positioning assumption. Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+**Gamma** (Γ) is how fast an option's **delta** (price sensitivity to the stock) changes as the stock moves — how fast the hedge ratio runs away from the hedger. **Dealers** (options market makers) sit opposite customer trades and keep books **delta-neutral** (offsetting stock so small moves don't change book value); when the stock moves they re-hedge — net long gamma damps moves (buy dips/sell rips), net short gamma amplifies them. **Gamma exposure (GEX)** estimates that dollar hedging flow: per strike, gamma × **open interest** (outstanding contracts), scaled to the P&L of a 1% underlying move, summed across strikes. A **gamma wall** is a strike with peak |GEX| (largest hedging flow); the **zero-gamma flip** is where cumulative net GEX changes sign (popularized extension — see S12); **max pain** minimizes total option-holder payout at expiry; **pinning** is price clustering at strikes near expiry (Ni, Pearson & Poteshman 2005).
+
+Now the honesty core of this chapter, stated plainly: **you cannot honestly claim a reliable dealer-positioning or GEX estimator from quotes and trades alone. Full-chain open interest is required — and even full OI does not reveal the dealer side.** OI tells you contracts exist; not who holds them. The standard move — calls positive, puts negative (or the reverse), i.e. "customers are net long options" — is an *assumption*, not an accounting identity. A strike's OI was built from weeks of both buying and selling; netting it to one sign invents information. Without full-chain OI you cannot honestly build: full-chain GEX by strike, total GEX, gamma walls or zero-gamma levels, historical GEX time series, OI-adjusted unusual activity, or reliable dealer-positioning estimates. Anything built without it is a **PROXY** — "OI-based gamma exposure," never "dealer gamma."
+
+And the effect size, from the literature: pinning exists but is **modest — cents or a small fraction of a percent, NOT a reliable intraday magnet**. Gamma walls are **visually impressive and have little out-of-sample (data the model was not tuned on) forecasting value**.
+
+Mental model:
+- GEX estimates a hedging *impulse*, not a price target; it describes how moves propagate, not where they go.
+- The sign convention is the model — change it and the "walls" move; publish multiple conventions or none.
+- Full-chain OI is the entry ticket; without it you are drawing pictures, not measuring.
+
+**Chatbot material (labeled, per question-bank protocol):**
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB8-1–Q-SB8-3. The gamma-hedging research summary (Q-SB8-3 #4 — "statistically meaningful but generally modest, heterogeneous, strongest over short horizons") and the GEX-engine cost/price components are chatbot research leads, cited as such and never as published findings; Ni, Pearson & Poteshman (2005) is independently verified above. Source log: "Duck.ai answered Q-SB8-1–Q-SB8-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10)."
+
+### S3. The math — exact formula
+
+For strike $K$, with Black–Scholes (BS) gamma $\Gamma(K)$, net open interest $OI^{net}(K) = OI^C(K) - OI^P(K)$ (**sign convention = ASSUMPTION**), multiplier $M$ (100 for equity options), spot $S$ (current underlying price):
+
+$$\Gamma(K) = \frac{e^{-qT}\,\phi(d_1)}{S\,\sigma\sqrt{T}}, \qquad
+\mathrm{GEX}(K) = \Gamma(K)\cdot OI^{net}(K)\cdot M\cdot S^2\cdot 0.01$$
+
+where $q$ is the dividend yield, $T$ time to expiry in years, $\sigma$ implied volatility (IV — the volatility implied by the option's market price), $\phi$ the standard normal density, and $d_1 = [\ln(S/K) + (r - q + \sigma^2/2)T]/(\sigma\sqrt{T})$. The factor $M\cdot S^2\cdot 0.01$ converts per-contract gamma into **dollars of P&L (profit and loss) for a 1% spot move**. Total exposure: $\mathrm{GEX}_{total} = \sum_K \mathrm{GEX}(K)$ (sum over strikes *and* expiries).
+
+**Named variants.** (1) Aggregate GEX (SqueezeMetrics original: one number). (2) Per-strike GEX with flip/walls (popularized extension). (3) Charm/vanna-adjusted intraday hedging flow (charm $= \partial\Delta/\partial t$, vanna $= \partial\Delta/\partial\sigma$). (4) DDOI-based dealer-directional OI (SqueezeMetrics' own dealer-side model) — DDOI = dealer-directional open interest, their proprietary estimate of which side the dealer book sits on.
+
+Attribution honesty: the $S^2 \times 0.01$ normalization is a *charting-tool convention*; the original SqueezeMetrics whitepaper (2016/2017) computes $\Gamma \cdot OI \cdot 100$ as a *single aggregate* across all strikes and expiries — the per-strike flip is a popularized extension. Its dealer assumption is also narrower than "customers buy, dealers sell": investors net-*sell* calls via overwriting (selling calls against an existing long position) and net-*buy* puts for protection.
+
+**Parameter table** (`example` defaults; every choice changes the answer):
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Strike window | — | ±10–20% of spot | misses wing gamma | illiquid-wing noise | ±15% |
+| Expiries included | — | nearest weekly → 6–12M | misses term gamma | stale far-dated OI dominates | all listed |
+| Sign convention | — | C−P / P−C / DDOI | — | — | publish ≥2 (`example`) |
+| Gamma input | $\sigma$ | per-contract IV | surface noise | stale vol | per-contract IV, own $T$ |
+
+**Causal timing.** OI publishes EOD (end-of-day) with corrections — GEX stamped 16:00 on "final" OI is lookahead (using data that was not yet available at the decision time); honest intraday GEX uses the last *as-of* (point-in-time, unrevised) vintage, tradable no earlier than the next bar after the snapshot completes.
+
+**Named variants.** (1) Aggregate GEX (SqueezeMetrics original: one number). (2) Per-strike GEX with flip/walls (popularized extension). (3) Charm/vanna-adjusted intraday hedging flow.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Verified 5-strike synthetic chain, $S=100$, $M=100$, so $M\cdot S^2\cdot 0.01 = 10{,}000$ (seed **74**; gamma values are illustrative inputs; the chart plots these same bars).
+
+$$\mathrm{GEX}(K) = \Gamma(K)\times OI^{net}(K)\times 10{,}000$$
+
+| Strike | Γ (illustrative) | Net OI ($OI^C - OI^P$, assumed) | GEX ($ per 1% move) |
+|---|---|---|---|
+| 90 | 0.020 | +800 | $0.020 \times 800 \times 10{,}000 = \mathbf{+\$160{,}000}$ |
+| 95 | 0.025 | −500 | $0.025 \times (-500) \times 10{,}000 = \mathbf{-\$125{,}000}$ |
+| 100 | 0.030 | +300 | $0.030 \times 300 \times 10{,}000 = \mathbf{+\$90{,}000}$ |
+| 105 | 0.028 | −200 | $0.028 \times (-200) \times 10{,}000 = \mathbf{-\$56{,}000}$ |
+| 110 | 0.022 | +100 | $0.022 \times 100 \times 10{,}000 = \mathbf{+\$22{,}000}$ |
+| **Total** | | | **$\mathbf{+\$91{,}000}$** |
+
+Largest positive: K90 (+$160k). Largest negative: K95 (−$125k). Gamma walls (top-2 by |GEX|, `example` rule): K90, K95. Cumulative net GEX from low strikes: +160k → +35k → +125k → +69k → +91k — never changes sign, so there is **no zero-gamma flip inside this strike range** under this convention; a good reminder that the flip is not guaranteed to exist.
+
+**What to notice.** The arithmetic is clean; the economics are not. Flip the sign convention and K95 becomes +$125k, K90 −$160k, total −$91k — the *regime label inverts* while the OI data never changed. Five near-the-money strikes are a toy — real estimation needs the full chain, since missing far-wing (strikes far from the current price), short-dated, or index positions can flip the aggregate sign. And nothing here is tradable evidence: pinning runs to cents or small fractions of a percent, walls have little OOS (out-of-sample) value.
+
+### S5. Strategies that use this signal
+
+- **T050 — GEX Pin / Dealer-Positioning Fade** — primary trigger/regime: fades moves away from gamma walls into expiry, conditioned on the net-GEX sign.
+- **T095 — Dispersion + GEX Regime Switch** — regime gate: runs dispersion only when the dealer-gamma regime is supportive.
+- **T070 — MOC (market-on-close) Auction-Pin Trader** — context input: GEX levels inform the closing-auction pin read.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Full option chain + OI by strike/expiry | mixed | EOD snapshot minimum; intraday delayed for live | Tier 2–3 | **Non-negotiable**: all strikes, all expiries incl. weeklies (weekly-expiring options), index options (SPX — S&P 500 index options) |
+| C/P classification, multiplier, style | categorical/int | per contract | Tier 2–3 | American (exercisable any time) vs European (exercisable at expiry) exercise changes gamma |
+| Spot/forward, $T$, IV or gamma inputs | float | per snapshot | Tier 2–3 | use each option's own IV and $T$ for Γ; spot = current price, forward = delivery price |
+| Corporate actions / adjustments | events | as-of (point-in-time, unrevised) | Tier 2–3 | adjusted strikes otherwise corrupt the strike map |
+
+**Full-chain OI is non-negotiable.** An NTM (near-the-money) chain alone **cannot** support total-GEX, zero-gamma, or dominant-wall claims. Confirm before paying: OI included (not just volume), *all* strikes, *all* expiries including weeklies, index options (SPX), historical snapshots, commercial/non-display rights.
+
+```python
+import polars as pl
+# ingest sketch: chain snapshot -> per-strike GEX (sign convention explicit)
+chain = load_chain_snapshot("SPX", ts)   # strike, expiry, cp, oi, iv, T, mult
+g = (chain.with_columns(gamma=bs_gamma(pl.col("strike"), S, pl.col("T"), pl.col("iv"), pl.col("cp")))
+          .with_columns(net_oi=pl.when(pl.col("cp")=="C").then(pl.col("oi"))
+                                   .otherwise(-pl.col("oi")))   # ASSUMPTION: document it
+          .with_columns(gex=pl.col("gamma")*pl.col("net_oi")*pl.col("mult")*S**2*0.01))
+per_strike = g.group_by("strike").agg(pl.col("gex").sum())
+total = per_strike["gex"].sum()          # "OI-based gamma exposure" -- NEVER "dealer gamma"
+```
+
+**Storage.** Per cost-model §4, OPRA (Options Price Reporting Authority, the consolidated US options tape) full-chain snapshots run ~1–3 GB/day (SPX-like) in parquet — selective underlyings only; historical full-chain archives are a Tier-3 purchase. **Data-quality checklist:** OI vintages (as-of, never revised); listing/delisting gaps; index settlement conventions (AM (morning) vs PM (afternoon) settlement); vendor Greek conventions (delta, gamma, vega, theta, rho inputs: rate/dividend/forward/American-exercise) — validate, don't assume.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier H per cost-model §5, the S071–S074 OPRA-analytics class) — with the giant asterisk that the compute is trivial and the data is the project.** Greeks (the option risk sensitivities — delta, gamma, vega, theta) for 300,000 contracts vectorize in NumPy in milliseconds; the expensive operations are quote normalization, IV inversion, and historical OI joins.
+
+**Throughput** (per cost-model §2): numpy vectorized math runs ~50–200M elements/sec — a full SPX snapshot's Greeks compute in well under a second. Keep the working set under cost-model §3's 77 GB budget with per-symbol daily files.
+
+**Stack options:**
+
+| Stack | When to pick |
+|---|---|
+| Python + polars/numpy | default; snapshot GEX, research, dashboards |
+| Rust | tick-level hedging-flow replay, full OPRA |
+| DuckDB | historical GEX time-series queries |
+
+**RAM.** One SPX snapshot ≈ 10,000 contracts × 40 fields ≈ 3.2 MB raw numeric (verified arithmetic), 20–100 MB working — fits comfortably. A 60-day watchlist panel fits with care under the 77 GB budget; full-history tick archives stream, never load.
+
+**Engineering time.** Cost-model §5 Tier H: **60–200 h ≈ $9,000–30,000** at the $150/hr loaded-cost estimate — "large range mostly from data quality + ops, not formulas." The chatbot's component lead (labeled `unverified chatbot claim`; cost-model takes precedence) put the GEX engine at 50–120 h prototype / 180–450 h production. **What breaks first at 500 symbols or full OPRA:** the OI join — historical full-chain OI by contract and date is the licensed asset you cannot scrape, and without it there is no estimator.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0/1: Cboe delayed / broker APIs | Coarse chains, delayed OI | ~$0–50/mo | free prototyping | incomplete chains — **cannot support wall/flip claims** |
+| Tier 1: queryable real-time chain API | Current chains on request | ~$500–5,000/mo | usable for live GEX | confirm: all strikes/expiries, OI included, history, redistribution rights |
+| Tier 2: Databento OPRA / vendor chains | Normalized full chains + Greeks + history | ~$200/mo + usage | honest inputs | usage costs; still your assumptions |
+| Tier 3: historical full-chain archive | Historical quotes/trades/OI/Greeks | ~$5,000–50,000+/yr | backtestable GEX | institutional pricing |
+
+All prices `indicative — verify before budgeting` (chatbot bands: OI-based GEX data $500–20,000+/mo; historical GEX custom or $2,000–25,000+/mo). **Verdict: buy the data, build the estimator** — the GEX *calculation* is always worth building (your conventions, your audit trail); the full-chain OI *feed* is virtually never worth building (you would be re-licensing OPRA).
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Ni, Pearson & Poteshman (2005), J. Financ. Econ. | US optionable stocks, 1996–2002 | Expiration-day closes cluster at strikes; returns altered ≥16.5 bps (basis points; 1 bp = 0.01%) avg (~$9B market-cap — market capitalization — shifts); market-maker hedge rebalancing contributes | **before-cost** | Expiration-day only; basis points, not a standalone trading edge |
+| Barbon, Beckmeyer, Buraschi & Moerke (work. paper) | US equities, intraday | Large negative (positive) gamma imbalance vs avg dollar volume → significant end-of-day momentum (reversal); reverts at next open | **before-cost** | The next-open reversion is what makes it hard to monetize after costs |
+
+The verified research brief's framing, kept verbatim because it is the honest summary: pinning exists but effect sizes are **modest — cents or a small fraction of a percent, NOT a reliable intraday magnet**; gamma walls are **visually impressive with little out-of-sample forecasting value**; published effects shrink once realistic execution, timing, selection, and regime controls are imposed.
+
+**Regimes where it fails.** Spot far from any wall; macro-event days; gaps across strikes; too far from expiry (gamma too diffuse); stale or corrected OI; incomplete chains; OTC/structured hedges dominating the listed book; wrong dealer-sign assumption; trending-vol regimes where charm/vanna dominate.
+
+**Honest bottom line.** As a standalone directional trigger this is a *weak* edge with small, hard-to-capture effects; as an intraday *regime context* (T050/T095) it is *defensible* — provided every number is labeled "OI-based gamma exposure under an assumed sign convention," never dealer positioning.
+
+### S10. Failure modes & pitfalls
+
+1. **Sign-convention risk** — the #1 failure: one assumption flip inverts every wall and the regime. *Mitigation:* publish ≥2 conventions.
+2. **Incomplete chain** — NTM-only or missing weeklies/index positions can flip the aggregate sign. *Mitigation:* full-chain coverage check; refuse walls on partial chains.
+3. **Stale/corrected OI** — backtests on final prints overstate. *Mitigation:* as-of vintages; embargo the series.
+4. **Lookahead on snapshot timing** — stamping intraday GEX with EOD OI. *Mitigation:* timestamp the OI vintage on every number.
+5. **Over-interpreting walls** — compelling visuals, little OOS (out-of-sample) value. *Mitigation:* regime context, not entry triggers; validate wall rules out-of-sample.
+6. **Cost blowup** — fading into walls means trading options with 1–15% round-trip spreads (verified: a $0.40 option with a $0.08 spread costs 20% round-trip before fees). **Explicit cost stack:** bid/ask spread (round-trip) + per-contract commissions/exchange/clearing fees + impact/slippage (price moves against you while executing) and stress widening of spreads on macro days. *Mitigation:* evaluate in dollar P&L; buy at ask/sell at bid in backtests.
+7. **OTC (over-the-counter)/structured dominance** — listed OI may be the minority of the real hedge book. *Mitigation:* treat listed GEX as a lower bound; widen uncertainty bands.
+8. **0DTE (options expiring the same day)/charm regime shifts** — near-expiry charm/vanna flows can dominate gamma. *Mitigation:* include charm/vanna aggregates; condition on days-to-expiry.
+
+### S11. Visuals
+
+![S074 worked example — verified 5-strike synthetic GEX chain, total +$91,000 per 1% move, seed 74](images/S074_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(full-chain OI;<br/>OPRA/vendor chains)"] -->|full chain + OI by strike/expiry, EOD| ING["Ingest + normalize<br/>(as-of OI vintages, adjustments)"]
+    ING -->|"EOD clean chain snapshots"| FEAT["Feature compute<br/>(BS gamma, GEX per strike)"]
+    FEAT -->|per-strike GEX, daily| SIG["Signal S074<br/>OI-based gamma exposure"]
+    SIG -->|daily regime read| GATE{"Cost / toxicity<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T050, T095, T070)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Ni, S.X., Pearson, N.D. & Poteshman, A.M. (2005). "Stock price clustering on option expiration dates." *Journal of Financial Economics* 77(2):249–274. https://optionmetrics.com/research/s-xiaoyan-ni-n-d-pearson-and-a-m-poteshman-stock-price-clustering-on-option-expiration-dates/
+2. Barbon, A., Beckmeyer, H., Buraschi, A. & Moerke, M. "The Role of Leveraged ETFs and Option Market Imbalances on End-of-Day Price Dynamics." Working paper. https://www.alexandria.unisg.ch/server/api/core/bitstreams/5a99db31-0d37-4f86-9502-8cb0f3bff4fe/content
+3. SqueezeMetrics (2016, rev. 2017). "GEX — Gamma Exposure" methodology guide (practitioner construction; aggregate GEX, DDOI dealer-direction model). https://squeezemetrics.com/monitor/static/guide.pdf
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence): GEX engine build hours (prototype 50–120 h, production 180–450 h); chain-normalization hours (60–150 / 200–500 h); OI-based GEX data ($500–20,000+/mo) and historical GEX ($2,000–25,000+/mo) pricing bands; the "cents or small fraction of a percent" effect-size framing (kept as a qualitative caution, not a measured statistic).
 
 ---
 <!-- SIGNAL CHAPTERS APPEND BELOW -->
