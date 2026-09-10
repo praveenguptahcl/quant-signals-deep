@@ -32,59 +32,81 @@ PALETTE = {
     "zero":    "#2c3e50",  # baseline
 }
 
-# ---- T060 worked-example data (MUST match T4 text exactly) ----
-rng = np.random.default_rng(160)  # seed stated in T4
-par = 1.00
-days = np.arange(0, 6)
-# anchors: (day, wUSD price) — hand-set; seeded noise keeps anchors exact
-anchors = {0: 0.9600, 1: 0.9120, 2: 0.9050, 3: 0.8700, 4: 0.9400, 5: 1.0000}
-base = np.interp(days, list(anchors.keys()), list(anchors.values()))
-noise = rng.normal(0, 0.004, len(days))
-noise[list(anchors.keys())] = 0.0
-wusd = base + noise
-redeem_fee = 0.005   # 0.5% redemption haircut (example)
-swap_fee = 0.003     # 0.3% DEX swap fee per side (example)
+# ---- T060 worked-example numbers (seed 160, synthetic) ----
+# 12 synthetic intraday jump events across 6 names.
+# Rule (examples): jump z>3.5 on 5-min bars, min jump 1.5%; match window w=15min;
+# identified=1 & novelty>=0.5 -> FOLLOW (hold 60min); identified=0 -> FADE;
+# earnings announcements always FOLLOW leg with SUE-size context (S100).
+rng = np.random.default_rng(160)
+names = ["ALP", "BET", "GAM", "DEL", "EPS", "ZET"]
+jump_pct = np.round(rng.uniform(1.6, 4.5, 12), 2) * np.where(rng.random(12) < 0.5, 1, -1)
+identified = np.array([1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0])
+novelty = np.round(rng.uniform(0.2, 1.0, 12), 2)
+earnings = np.array([0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0])
+sue = np.round(rng.uniform(1.0, 4.0, 12), 1)
+FEE = 0.0008
 
-# Trade T1: buy 50k wUSD @ 0.9120 (day 1), redeem day 5 at par minus haircut
-t1 = dict(label="T1 buy 50k", day=1, qty=50000, entry=0.9120, exit_day=5)
-t1_buy = t1["qty"] * t1["entry"]
-t1_recv = t1["qty"] * par * (1 - redeem_fee)
-t1_net = t1_recv - t1_buy * (1 + swap_fee) - 25.00 - 40.00  # bridge fee + gas (example)
-print(f"{t1['label']}: buy {t1_buy:.2f}$ recv {t1_recv:.2f}$ NET {t1_net:+.2f}$")
-# Trade T2: buy 5k @ 0.9050 (day 2), stop 0.8700 (day 3)
-t2 = dict(label="T2 buy 5k", day=2, qty=5000, entry=0.9050, exit=0.8700, exit_day=3)
-t2_net = t2["qty"] * (t2["exit"] * (1 - swap_fee) - t2["entry"] * (1 + swap_fee))
-print(f"{t2['label']}: entry {t2['entry']:.4f} exit {t2['exit']:.4f} NET {t2_net:+.2f}$")
-print(f"TOTAL NET {t1_net + t2_net:+.2f}$")
+events, cum = [], 0.0
+print("T060 synthetic jump events (seed 160)")
+print("#  name jump%  ident nov  earn  SUE   action shares   entry     exit      gross      fees     net")
+for i in range(12):
+    nm = names[i % 6]
+    if earnings[i]:
+        action, side = "FOLLOW(earn)", int(np.sign(jump_pct[i]))
+    elif identified[i] == 1 and novelty[i] >= 0.5:
+        action, side = "FOLLOW", int(np.sign(jump_pct[i]))
+    elif identified[i] == 0:
+        action, side = "FADE", -int(np.sign(jump_pct[i]))
+    else:
+        action, side = "SKIP(stale)", 0
+    if side == 0:
+        shares, entry, exitp, gross, fees, net = 0, 0.0, 0.0, 0.0, 0.0, 0.0
+    else:
+        shares = 12000 if "FOLLOW" in action else 8000
+        if "earn" in action:
+            shares = int(shares * min(1.0, sue[i] / 3.0))
+        entry = round(50.0, 3)
+        drift = float(rng.normal(35 if "FOLLOW" in action else 30, 55))  # hold P&L in bp, signed by side
+        exitp = round(entry + side * drift / 100.0, 3)
+        gross = round(side * shares * (exitp - entry), 2)
+        fees = round(shares * 2 * FEE, 2)
+        net = round(gross - fees, 2)
+    cum += net
+    events.append((i + 1, nm, jump_pct[i], identified[i], novelty[i], earnings[i], sue[i],
+                   action, side, shares, entry, exitp, gross, fees, net, cum))
+    print(f"{i+1:2d} {nm:3s} {jump_pct[i]:+6.2f} {identified[i]:5d} {novelty[i]:4.2f} "
+          f"{earnings[i]:5d} {sue[i]:4.1f} {action:12s} {side:+3d} {shares:7d} "
+          f"{entry:8.3f} {exitp:8.3f} {gross:9.2f} {fees:7.2f} {net:9.2f} cum {cum:9.2f}")
+print(f"TOTAL NET: ${cum:,.2f}")
 
-fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, height_ratios=[3, 2])
-ax1.axhline(par, color=PALETTE["zero"], lw=1.5, ls="-", label="native par ($1.00)")
-ax1.fill_between(days, wusd, par, alpha=0.25, color=PALETTE["band"], label="reported discount")
-ax1.plot(days, wusd, color=PALETTE["price"], lw=2, label="wUSD synthetic price ($)")
-for t, n, px in [(t1, t1_net, 0.9120), (t2, t2_net, 0.9050)]:
-    ax1.scatter([t["day"]], [t["entry"]], s=90, marker="^", color=PALETTE["profit"],
-                zorder=5, edgecolors="k")
-    ex, exd = (par * (1 - redeem_fee), 5) if t is t1 else (t["exit"], 3)
-    ax1.scatter([exd], [ex], s=90, marker="v",
-                color=PALETTE["profit"] if n > 0 else PALETTE["loss"],
-                zorder=5, edgecolors="k")
-    ax1.annotate(f"{t['label']}\nnet {n:+.2f}$", xy=(exd, ex),
-                 xytext=(10, 14 if n > 0 else -22), textcoords="offset points",
-                 fontsize=8, color=PALETTE["profit"] if n > 0 else PALETTE["loss"],
-                 arrowprops=dict(arrowstyle="->",
-                                 color=PALETTE["profit"] if n > 0 else PALETTE["loss"], lw=1))
-ax1.set_ylabel("price ($)")
-ax1.legend(loc="lower right")
-ax1.set_title("T060 — Cross-Chain Bridge Flow Arbitrage: synthetic wrapped-asset discount & net P&L")
+nums = [e[0] for e in events]
+nets = np.array([e[13] for e in events])
+cums = np.array([e[14] for e in events])
+leg = [e[7] for e in events]
+legcol = {"FOLLOW": PALETTE["profit"], "FOLLOW(earn)": PALETTE["signal2"], "FADE": PALETTE["signal"],
+          "SKIP(stale)": PALETTE["volume"]}
 
-cum = np.array([0, t2_net, t1_net + t2_net])
-ax2.step([0, 3, 5], cum, where="post", color=PALETTE["price"], lw=2,
-         label="cumulative net P&L ($)")
-ax2.fill_between([0, 3, 5], cum, 0, step="post", alpha=0.25, color=PALETTE["profit"])
-ax2.axhline(0, color=PALETTE["zero"], lw=1)
-ax2.set_xlabel("days since bridge stress (t=0)")
-ax2.set_ylabel("cumulative net ($)")
-ax2.legend(loc="lower right")
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.2), sharex=True,
+                               gridspec_kw={"height_ratios": [2, 1], "hspace": 0.08})
+ax1.plot(nums, cums, color=PALETTE["price"], lw=2, marker="o", ms=5, label="Cumulative net P&L ($)")
+for e in events:
+    n = e[0]
+    ax1.scatter([n], [e[14]], color=legcol[e[7]], s=60, zorder=5)
+    ax1.annotate(e[7].split("(")[0], xy=(n, e[14]), xytext=(0, 11), textcoords="offset points",
+                 ha="center", fontsize=7, color=legcol[e[7]], weight="bold")
+ax1.axhline(0, color=PALETTE["zero"], lw=1)
+ax1.set_title("T060 — Identified-News Drift Portfolio: 12 synthetic jump events, cumulative net P&L")
+ax1.set_ylabel("Cum. net P&L ($)")
+ax1.legend(loc="upper left")
+ax1.text(0.98, 0.06, f"Total net ${cum:,.0f}", transform=ax1.transAxes, ha="right",
+         fontsize=11, weight="bold", color=PALETTE["profit"] if cum > 0 else PALETTE["loss"])
+
+ax2.bar(nums, nets, color=[legcol[l] for l in leg])
+from matplotlib.patches import Patch
+ax2.legend(handles=[Patch(color=v, label=k) for k, v in legcol.items()], loc="upper right")
+ax2.set_xlabel("Synthetic event # (1–12)")
+ax2.set_ylabel("Net/event ($)")
+ax2.set_xticks(nums)
 
 # ---- SYNTHETIC WATERMARK (mandatory) ----
 fig = plt.gcf()
@@ -93,6 +115,6 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
 plt.tight_layout()
-plt.savefig("images/T060_example.png", bbox_inches="tight")  # <-- use the chapter's ID
+plt.savefig("images/T060_example.png", bbox_inches="tight")
 plt.close()
 print("saved images/T060_example.png")

@@ -32,56 +32,71 @@ PALETTE = {
     "zero":    "#2c3e50",  # baseline
 }
 
-# ---- T059 worked-example data (MUST match T4 text exactly) ----
-rng = np.random.default_rng(159)  # seed stated in T4
-wallets = ["W1", "W2", "W3", "W4", "W5"]
-meta_p  = np.array([0.72, 0.68, 0.61, 0.48, 0.35])   # S086 meta-labeler score (example)
-tau = 0.55                                             # veto threshold (example)
-farmed = meta_p > tau                                  # W1..W3 farmed; W4, W5 skipped
-gas    = np.array([52.40, 48.10, 55.75, 51.00, 49.25])  # $ gas spent per wallet (example)
-drop_usd = 180.00                                      # 450 AIRX @ $0.40 (example projection)
-claim_gas = 3.00                                       # $ per eligible wallet (example)
-eligible = np.array([True, True, False, False, False]) # realized eligibility
-nets = np.where(farmed & eligible, drop_usd - gas - claim_gas,
-       np.where(farmed & ~eligible, -gas, 0.0))
-for w, p, f, g, e, n in zip(wallets, meta_p, farmed, gas, eligible, nets):
-    print(f"{w}: meta {p:.2f} {'BET' if f else 'SKIP'} gas ${g:.2f} "
-          f"{'eligible' if (f and e) else ('ineligible' if f else 'skipped')} NET {n:+.2f}$")
-print(f"TOTAL NET {nets.sum():+.2f}$")
+# ---- T059 worked-example numbers (seed 159, synthetic) ----
+# 10 synthetic news events; gate: |s|>=0.50, |r1m|>=15bp, sign match, RVOL>=2.0, spread<=3 ticks
+rng = np.random.default_rng(159)
+s_vals   = np.round(rng.uniform(-0.80, 0.80, 10), 2)
+r1m_vals = np.round(rng.uniform(-45, 45, 10), 1)      # first-minute return, bp
+rvol_vals = np.round(rng.uniform(1.0, 6.0, 10), 1)
+spr_vals  = rng.integers(1, 6, 10)                    # quoted spread, ticks
+tickers = ["ABC", "DEF", "GHI", "JKL", "MNO", "PQR", "STU", "VWX", "YZA", "BCD"]
 
-# weekly cashflow: gas spread over weeks 1-8 (seeded jitter, anchors exact at totals)
-weeks = np.arange(0, 9)
-week_gas = np.zeros(9)
-jitter = rng.normal(0, 0.4, 8); jitter -= jitter.mean()
-for i, g in enumerate(gas[farmed]):
-    wk = g / 8 + jitter * (g / gas[farmed].sum())
-    week_gas[1:9] += wk
-cum = -np.cumsum(week_gas)
-cum[8] += (drop_usd * (farmed & eligible).sum() - claim_gas * (farmed & eligible).sum())
+FEE = 0.0008  # $ per share per side
+events = []
+cum = 0.0
+print("T059 synthetic events (seed 159)")
+print("#  tkr   s     r1m  RVOL spr  trade side  shares   entry     exit      gross      fees     net")
+for i in range(10):
+    s, r1m, rvol, spr = s_vals[i], r1m_vals[i], rvol_vals[i], spr_vals[i]
+    trade = (abs(s) >= 0.50 and abs(r1m) >= 15 and np.sign(r1m) == np.sign(s)
+             and rvol >= 2.0 and spr <= 3)
+    if trade:
+        side = +1 if s > 0 else -1
+        shares = int(round(25000 * abs(s) * min(1.0, abs(r1m) / 40.0) / 100.0) * 100)
+        slip_in = round(float(rng.uniform(0.01, 0.05)), 3)   # entry slippage vs decision mid, $
+        slip_out = round(float(rng.uniform(0.005, 0.03)), 3)
+        entry = round(100.0 + side * 0.0, 3)                 # decision mid normalized to 100.00
+        drift_bp = round(float(rng.normal(6 if s > 0 else 6, 18)), 1)  # hold return, bp (signed by side)
+        exitp = round(entry + side * drift_bp / 100.0, 3)
+        gross = round(side * shares * (exitp - entry), 2)
+        fees = round(shares * 2 * FEE, 2)
+        net = round(gross - fees, 2)
+    else:
+        side, shares, entry, exitp, gross, fees, net = 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0
+    cum += net
+    events.append((i + 1, tickers[i], s, r1m, rvol, spr, trade, side, shares, entry, exitp, gross, fees, net, cum))
+    print(f"{i+1:2d} {tickers[i]:3s} {s:+.2f} {r1m:+6.1f} {rvol:4.1f} {spr:3d}  "
+          f"{'Y' if trade else 'N':>5} {'+' if side>0 else '-' if side<0 else ' ':>4} {shares:7d} "
+          f"{entry:8.3f} {exitp:8.3f} {gross:9.2f} {fees:7.2f} {net:9.2f}  cum {cum:9.2f}")
+print(f"TOTAL NET: ${cum:,.2f}")
 
-fig, (ax1, ax2) = plt.subplots(2, 1, sharex=False, height_ratios=[3, 2])
-colors = [PALETTE["profit"] if n > 0 else (PALETTE["loss"] if n < 0 else PALETTE["volume"])
-          for n in nets]
-bars = ax1.bar(wallets, nets, color=colors, edgecolor="k", zorder=3)
+nums = [e[0] for e in events]
+nets = np.array([e[13] for e in events])
+cums = np.array([e[14] for e in events])
+colors = [PALETTE["profit"] if v > 0 else PALETTE["loss"] if v < 0 else PALETTE["volume"] for v in nets]
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.2), sharex=True,
+                               gridspec_kw={"height_ratios": [2, 1], "hspace": 0.08})
+ax1.plot(nums, cums, color=PALETTE["price"], lw=2, marker="o", ms=5, label="Cumulative net P&L ($)")
+for e in events:
+    n, tkr, s, r1m, rvol, spr, trade, side, shares, entry, exitp, gross, fees, net, c = e
+    marker = "o" if trade else "x"
+    mc = (PALETTE["profit"] if net > 0 else PALETTE["loss"] if net < 0 else PALETTE["volume"])
+    ax1.scatter([n], [c], color=mc, s=55, zorder=5, marker=marker)
+    if trade:
+        ax1.annotate(f"${net:,.0f}", xy=(n, c), xytext=(0, 10), textcoords="offset points",
+                     ha="center", fontsize=8, weight="bold", color=mc)
 ax1.axhline(0, color=PALETTE["zero"], lw=1)
-for w, p, n, f in zip(wallets, meta_p, nets, farmed):
-    ax1.text(w, n + (6 if n >= 0 else -10), f"meta {p:.2f}\n{n:+.2f}$",
-             ha="center", fontsize=8, color=PALETTE["zero"])
-ax1.set_ylabel("net P&L per wallet ($)")
-ax1.set_title("T059 — Airdrop Farming Yield Optimizer: synthetic campaign per-wallet net & EV path")
+ax1.set_title("T059 — News-Sentiment First-Minute Momentum: 10 synthetic events, cumulative net P&L")
+ax1.set_ylabel("Cum. net P&L ($)")
+ax1.legend(loc="upper left")
+ax1.text(0.98, 0.06, f"Total net ${cum:,.0f}", transform=ax1.transAxes, ha="right",
+         fontsize=11, weight="bold", color=PALETTE["profit"] if cum > 0 else PALETTE["loss"])
 
-ax2.step(weeks, cum, where="post", color=PALETTE["price"], lw=2,
-         label="cumulative campaign net ($)")
-ax2.fill_between(weeks, cum, 0, step="post", alpha=0.25,
-                 color=PALETTE["profit"] if cum[-1] > 0 else PALETTE["loss"])
-ax2.axhline(0, color=PALETTE["zero"], lw=1)
-ax2.scatter([8], [cum[8]], s=80, color=PALETTE["profit"], edgecolors="k", zorder=5)
-ax2.annotate(f"drop claimed\ncum {cum[8]:+.2f}$", xy=(8, cum[8]), xytext=(-70, 25),
-             textcoords="offset points", fontsize=8, color=PALETTE["profit"],
-             arrowprops=dict(arrowstyle="->", color=PALETTE["profit"], lw=1))
-ax2.set_xlabel("campaign week")
-ax2.set_ylabel("cumulative net ($)")
-ax2.legend(loc="lower right")
+ax2.bar(nums, nets, color=colors)
+ax2.set_xlabel("Synthetic event # (1–10)")
+ax2.set_ylabel("Net/event ($)")
+ax2.set_xticks(nums)
 
 # ---- SYNTHETIC WATERMARK (mandatory) ----
 fig = plt.gcf()
@@ -90,6 +105,6 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
 plt.tight_layout()
-plt.savefig("images/T059_example.png", bbox_inches="tight")  # <-- use the chapter's ID
+plt.savefig("images/T059_example.png", bbox_inches="tight")
 plt.close()
 print("saved images/T059_example.png")
