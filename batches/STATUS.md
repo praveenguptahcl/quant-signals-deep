@@ -92,3 +92,9 @@
 - SB10 first review COMPLETE (2026-09-10): 1/10 PASS (S009), 9/10 failed (attempt 1/2). Substantive: S093 H3 primary formula must be Novelty_i=1-cos(e_i,cbar_i) w/ trailing-10 centroid (max-sim demoted; S4 recomputed); S096 H2 +1.61% is pre-entry bounce (rewrite attribution + post-h53 numbers), H6 rpt_*->reported_*; S095 H3 "per matched $1" garbled. V4: S097-S100 wrong diagram skeleton (must be 6-node V2-S per visual-spec L109); S092 one edge. C4: S019 (NBBO/SIP/L1/TAQ/BVC), S092 (bps), S093 (TF-IDF), S095 (OI), S098 (bps). S097 H2 rounding (+0.064/0.317->+0.0637/0.3168), V2 twin axes, \u00a73 typo (S097/S098/S100). All arithmetic/citations/plots verified clean. SB10 rework attempt 1/2 dispatched.
 
 - SB2 rework attempt 1/2 COMPLETE (2026-09-10): S021 H3 bar-8->bar-9-open fill (t->t+1); S027 H3 Gao 6.94/1.6% attributed to Gao's window; S032 H3 rolling_mean.shift(1) leak fixed; S063 H3 actual YZ sigma2_c=0.00018599, 30.79% ann.; S013/S042/S066 C4 defs; S083 vpin row->Unverified leads, AFML defined; all plots exit 0. SB2 strict re-review attempt 2/2 (FINAL) dispatched.
+
+## Push log (GitHub auth live as of 2026-09-10 ~18:37 UTC)
+- 2026-09-10 18:42 UTC: pushed 0b134c8 "Stage: SB2 rework 1/2 files (re-review pending)" -> origin/main OK (c96d2d1..0b134c8).
+- 2026-09-10 18:43 UTC: pushed 2712f57 "Stage: SB3 rework 1/2 files (re-review pending)" -> origin/main OK.
+- 2026-09-10 18:44 UTC: pushed 0c7a099 "Stage: SB6 S059/S060 C4+V4 polish (in-flight)" -> origin/main OK.
+- 2026-09-10 18:45 UTC: pushed ccd6c07 "Stage: SB10 rework 1/2 files (re-review pending)" -> origin/main OK.
