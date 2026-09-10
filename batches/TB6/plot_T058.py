@@ -42,8 +42,8 @@ gross_daily = np.round(rng.normal(1500, 5000, 20)).astype(int)
 # Daily delta-hedge slippage ($)
 hedge_slip = np.round(rng.uniform(60, 180, 20)).astype(int)
 
-ENTRY_COST = 495.0   # spread cross $105 + commissions $390
-EXIT_COST = 495.0    # symmetric unwind
+ENTRY_COST = 10890.0  # spread cross (500*$0.15 + 100*$0.30)*100 contracts = $10,500 + commissions 600*$0.65 = $390
+EXIT_COST = 10890.0   # symmetric unwind
 
 net_daily = gross_daily - hedge_slip
 cum_net = np.zeros(21)

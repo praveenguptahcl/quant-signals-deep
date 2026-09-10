@@ -44,11 +44,14 @@ identified = np.array([1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0])
 novelty = np.round(rng.uniform(0.2, 1.0, 12), 2)
 earnings = np.array([0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0])
 sue = np.round(rng.uniform(1.0, 4.0, 12), 1)
-FEE = 0.0008
+FEE = 0.0008        # $ per share per side
+SPREAD_HALF = 0.015  # event-time widened spread: 3 ticks -> $0.03/2 (example)
+IMPACT_PS = 0.005    # POV impact per share (example)
+BORROW_APR = 0.02    # 2% annualized, midpoint of T2's 1-3% example band
 
 events, cum = [], 0.0
 print("T060 synthetic jump events (seed 160)")
-print("#  name jump%  ident nov  earn  SUE   action shares   entry     exit      gross      fees     net")
+print("#  name jump%  ident nov  earn  SUE   action shares   entry     exit      gross      fees   spread  impact  borrow      net")
 for i in range(12):
     nm = names[i % 6]
     if earnings[i]:
@@ -60,7 +63,7 @@ for i in range(12):
     else:
         action, side = "SKIP(stale)", 0
     if side == 0:
-        shares, entry, exitp, gross, fees, net = 0, 0.0, 0.0, 0.0, 0.0, 0.0
+        shares, entry, exitp, gross, fees, spread, impact, borrow, net = 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     else:
         shares = 12000 if "FOLLOW" in action else 8000
         if "earn" in action:
@@ -70,18 +73,23 @@ for i in range(12):
         exitp = round(entry + side * drift / 100.0, 3)
         gross = round(side * shares * (exitp - entry), 2)
         fees = round(shares * 2 * FEE, 2)
-        net = round(gross - fees, 2)
+        spread = round(2 * SPREAD_HALF * shares, 2)          # cross the widened event spread both legs
+        impact = round(2 * IMPACT_PS * shares, 2)            # POV market impact
+        hold_h = 120.0 if earnings[i] else 1.0               # 5-day earnings hold vs 60-min intraday
+        borrow = round(shares * entry * BORROW_APR * hold_h / 8760.0, 2) if side < 0 else 0.0
+        net = round(gross - fees - spread - impact - borrow, 2)
     cum += net
     events.append((i + 1, nm, jump_pct[i], identified[i], novelty[i], earnings[i], sue[i],
-                   action, side, shares, entry, exitp, gross, fees, net, cum))
+                   action, side, shares, entry, exitp, gross, fees, spread, impact, borrow, net, cum))
     print(f"{i+1:2d} {nm:3s} {jump_pct[i]:+6.2f} {identified[i]:5d} {novelty[i]:4.2f} "
           f"{earnings[i]:5d} {sue[i]:4.1f} {action:12s} {side:+3d} {shares:7d} "
-          f"{entry:8.3f} {exitp:8.3f} {gross:9.2f} {fees:7.2f} {net:9.2f} cum {cum:9.2f}")
+          f"{entry:8.3f} {exitp:8.3f} {gross:9.2f} {fees:7.2f} {spread:7.2f} {impact:7.2f} "
+          f"{borrow:7.2f} {net:9.2f} cum {cum:9.2f}")
 print(f"TOTAL NET: ${cum:,.2f}")
 
 nums = [e[0] for e in events]
-nets = np.array([e[13] for e in events])
-cums = np.array([e[14] for e in events])
+nets = np.array([e[17] for e in events])
+cums = np.array([e[18] for e in events])
 leg = [e[7] for e in events]
 legcol = {"FOLLOW": PALETTE["profit"], "FOLLOW(earn)": PALETTE["signal2"], "FADE": PALETTE["signal"],
           "SKIP(stale)": PALETTE["volume"]}
@@ -91,8 +99,8 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.2), sharex=True,
 ax1.plot(nums, cums, color=PALETTE["price"], lw=2, marker="o", ms=5, label="Cumulative net P&L ($)")
 for e in events:
     n = e[0]
-    ax1.scatter([n], [e[14]], color=legcol[e[7]], s=60, zorder=5)
-    ax1.annotate(e[7].split("(")[0], xy=(n, e[14]), xytext=(0, 11), textcoords="offset points",
+    ax1.scatter([n], [e[18]], color=legcol[e[7]], s=60, zorder=5)
+    ax1.annotate(e[7].split("(")[0], xy=(n, e[18]), xytext=(0, 11), textcoords="offset points",
                  ha="center", fontsize=7, color=legcol[e[7]], weight="bold")
 ax1.axhline(0, color=PALETTE["zero"], lw=1)
 ax1.set_title("T060 — Identified-News Drift Portfolio: 12 synthetic jump events, cumulative net P&L")

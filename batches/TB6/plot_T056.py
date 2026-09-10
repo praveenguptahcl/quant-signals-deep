@@ -65,7 +65,8 @@ def forecast(t):
     return float(A1[0] @ x1 + A2[0] @ x2) * 100.0  # cents
 
 def rt_cost_usd():
-    return (HALF_SPREAD_C / 100.0) * SHARES + 2 * FEE_SHARE * SHARES
+    # 0.50c half-spread + $0.005/share commission, each way, two legs
+    return 2 * (HALF_SPREAD_C / 100.0) * SHARES + 2 * FEE_SHARE * SHARES
 
 trades = []
 print("seed=156 | VAR(2) tape (signal_bar, forecast_c, hawkes_z, action; fill at t+1, exit t+2):")
