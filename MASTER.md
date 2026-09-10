@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 30/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 40/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -39,6 +39,16 @@
 - Stage 88/200 — S088 merged 2026-09-10 · reviewer: acd4b0b4 · plot verified (seed 88088)
 - Stage 91/200 — S091 merged 2026-09-10 · reviewer: acd4b0b4 · plot verified (seed 91091)
 - Stage 94/200 — S094 merged 2026-09-10 · reviewer: acd4b0b4 · plot verified (seed 94094)
+- Stage 2/200 — S002 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 5/200 — S005 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 7/200 — S007 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 10/200 — S010 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed 10)
+- Stage 12/200 — S012 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed 12)
+- Stage 15/200 — S015 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed 15)
+- Stage 17/200 — S017 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 18/200 — S018 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 20/200 — S020 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 47/200 — S047 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
 
 
 ## Table of contents
@@ -83,6 +93,19 @@
 - [x] Stage 88/200 — [S088 — Purged / embargoed cross-validation](#stage-88200--s088-purged--embargoed-cross-validation)
 - [x] Stage 91/200 — [S091 — Machine-readable news sentiment (first-minute reaction)](#stage-91200--s091-machine-readable-news-sentiment-first-minute-reaction)
 - [x] Stage 94/200 — [S094 — Unusual intraday volume (RVOL) & signed block-trade pressure](#stage-94200--s094-unusual-intraday-volume-rvol--signed-block-trade-pressure)
+
+**Batch SB4** — Order-flow estimation toolkit (L1/L2).
+
+- [x] Stage 2/200 — [S002 — Multi-level / integrated OFI (MLOFI)](#stage-2200--s002-multi-level--integrated-ofi-mlofi)
+- [x] Stage 5/200 — [S005 — Multi-level book pressure (static depth imbalance)](#stage-5200--s005-multi-level-book-pressure-static-depth-imbalance)
+- [x] Stage 7/200 — [S007 — Trade classification: Lee–Ready & Bulk Volume Classification](#stage-7200--s007-trade-classification-leeready--bulk-volume-classification)
+- [x] Stage 10/200 — [S010 — Kyle's lambda (price impact / illiquidity)](#stage-10200--s010-kyles-lambda-price-impact--illiquidity)
+- [x] Stage 12/200 — [S012 — Roll implied effective spread](#stage-12200--s012-roll-implied-effective-spread)
+- [x] Stage 15/200 — [S015 — Spread decomposition — Huang–Stoll](#stage-15200--s015-spread-decomposition--huangstoll)
+- [x] Stage 17/200 — [S017 — Hawkes self-excitation intensity of order flow](#stage-17200--s017-hawkes-self-excitation-intensity-of-order-flow)
+- [x] Stage 18/200 — [S018 — Order-sign autocorrelation / sequential trade correlation](#stage-18200--s018-order-sign-autocorrelation--sequential-trade-correlation)
+- [x] Stage 20/200 — [S020 — Retail & odd-lot order imbalance](#stage-20200--s020-retail--odd-lot-order-imbalance)
+- [x] Stage 47/200 — [S047 — Bid–ask bounce exploitation](#stage-47200--s047-bidask-bounce-exploitation)
 
 ### Strategy chapters
 
@@ -6335,6 +6358,1899 @@ flowchart LR
 **Unverified leads:** one item — *unverified practitioner rule (no checkable citation obtained)*: a Stanford CS229-style options filter on OptionMetrics data — flag an option when its volume exceeds 2× its daily average **and** ≥ 500 contracts. A screening flag for further research, not a documented result. All other quantitative claims above trace to the cited papers or the labeled synthetic example; RVOL trigger levels and block-size thresholds are marked *example* throughout.
 
 *Source log: Duck.ai answered Q-SB3-1–Q-SB3-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).*
+
+---
+## Stage 2/200 — S002: Multi-level / integrated OFI (MLOFI)
+
+*Batch SB4 · Signal 2/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| Event-counted net order flow (bid additions minus ask pressure) per book level, combined into one directional regressor. | Liquid large-tick names, stable regimes, short buckets, Ridge estimation. | Small-tick fast-replenishing books, news shocks, spoofing, SIP-only feeds, horizons > ~1 min. | Build the estimator (one Ridge regression on MBP-10); buy the L2 feed. |
+
+Provenance: **[D]** (documented: Xu–Gould–Howison 2019; Cont–Cucuringu–Zhang 2023).
+
+### S2. How it works — plain human explanation
+
+*Level 1* of a limit order book is the "touch" — the best bid and best ask, what you see on any price screen. *Level 2 and beyond* (L2) are the resting limit orders stacked a few cents behind the touch. (A *tick* is the minimum price increment — one cent for most US stocks; a *large-tick* stock is one whose spread is usually pinned at exactly one tick, like ORCL or CSCO, while a *small-tick* stock like AMZN trades many ticks wide.) The classical order-flow imbalance (OFI, signal S001) watches only level 1: when buyers add bid size and sellers cancel ask size, the mid-price tends to tick up.
+
+Multi-level OFI asks: why throw away levels 2–10? Suppose the touch shows bid 231.40 × 800 / ask 231.41 × 300, mildly bid-heavy. But three cents down, someone just posted 50,000 shares on the bid side, and two cents up, the ask stack thinned by 30,000. That deeper flow is also supply and demand — latent, but real. In large-tick stocks the touch itself barely moves, so *most* price-pressure information lives a few levels deep; in small-tick stocks the touch carries more of it.
+
+The catch, and the reason this needs its own machinery: level OFIs are strongly correlated with each other. Naively regressing the mid-price change on ten level OFIs with plain OLS gives coefficients that slosh around (multicollinearity). Xu, Gould & Howison show the fix is Ridge regression, and Cont, Cucuringu & Zhang show a cleaner one: take the first principal component of the level-OFI vector — the "integrated OFI" — and regress on that single number.
+
+**Mental model:**
+- Flow deep in the book is partially *independent* information about supply and demand, not a noisier copy of the touch.
+- Deep levels matter *most* where the touch can't move — large-tick names — and least where it can.
+- Correlated inputs need regularization: Ridge, or PCA down to one integrated regressor. Never ten raw OLS coefficients.
+
+### S3. The math — exact formula
+
+Let $P^b_{k,t}$, $Q^b_{k,t}$ (resp. $P^a_{k,t}$, $Q^a_{k,t}$) be the price and resting size at level $k$ ($k=1$ = best) on the bid (resp. ask) side after event $t$. An *event* is any order-book update: limit order, cancel, trade.
+
+**Level-$k$ event contribution** (Cont et al., event-time OFI):
+
+$$e_{k,t} = \mathbf{1}\{P^b_{k,t} \ge P^b_{k,t-1}\}\,Q^b_{k,t}
+- \mathbf{1}\{P^b_{k,t} \le P^b_{k,t-1}\}\,Q^b_{k,t-1}
+- \mathbf{1}\{P^a_{k,t} \le P^a_{k,t-1}\}\,Q^a_{k,t}
++ \mathbf{1}\{P^a_{k,t} \ge P^a_{k,t-1}\}\,Q^a_{k,t-1}$$
+
+in shares. Reading it: if the level-$k$ bid price *rises*, all its current size counts as buying pressure ($+Q^b_{k,t}$); if it *falls*, its old size counts as selling pressure ($-Q^b_{k,t-1}$); if the price is unchanged, only the *size change* $Q^b_{k,t}-Q^b_{k,t-1}$ counts. Mirror image for the ask side (ask price falling = buying pressure). Bucket $B$ (e.g. 1 s or 100 updates):
+
+$$\mathrm{OFI}_{k,B} = \sum_{t \in B} e_{k,t}, \qquad
+\mathbf{OFI}_B = [\mathrm{OFI}_{1,B},\dots,\mathrm{OFI}_{L,B}]^\top$$
+
+**Integrated OFI** (Cont–Cucuringu–Zhang): $\mathrm{iOFI}_B = \mathbf{v}_1^\top(\mathbf{OFI}_B - \boldsymbol{\mu})$, where $\mathbf{v}_1$ is the unit eigenvector of the largest eigenvalue of $\mathrm{Cov}(\mathbf{OFI}_B)$, sign-flipped so positive means buying pressure. Price-impact regression: $r_B = \alpha + \beta \cdot \mathrm{iOFI}_B + \varepsilon_B$, with $r_B$ the contemporaneous mid-price change (ticks). Economically: adverse selection — informed flow hits the book (cancels, repriced limits) before it hits the tape — plus inventory: makers skew quotes against one-sided depth (see S089). Variants: equal-weighted sum (crude); inverse-depth weights; full Ridge vector regression (Xu–Gould–Howison). Timing: computed at bucket close using only events ≤ $t$; tradable no earlier than $t{+}1$.
+
+| Parameter | Symbol | Typical range | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Levels | $L$ | 5–10 | $<3$ loses deep-book info; $>10$ adds collinear noise | 5 *(example — not an institutional standard)* |
+| Bucket | $B$ | 100 ms–5 s or 100–1,000 updates | too short = noise; too long = stale | 1 s *(example)* |
+| Ridge penalty | $\lambda$ | $10^1$–$10^4$ | 0 = unstable OLS; huge = kills deep levels | cross-validated *(example)* |
+| PCA window | $W$ | 1–20 days rolling | too short = noisy loadings; too long = regime bleed | 5 days *(example)* |
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic tape, seed **20260902** (all numbers below are the script's output, plotted identically in the chart). Ten 1-second buckets, $L=5$.
+
+First, one event contribution by hand (level 1, bid side): bid price rises 100.00 → 100.01 with size 650 at the new level. Indicators: $\mathbf{1}\{100.01 \ge 100.00\}=1$, $\mathbf{1}\{100.01 \le 100.00\}=0$ → bid contribution $+650$ shares. Same event, ask side: ask price unchanged at 100.02, size 700 → 500: contribution $-(700-500) = -200$ shares. Level-1 event contribution $e_{1,t} = +650 - 200 = +450$ shares.
+
+Aggregating each bucket's events level-wise and summing across levels (equal-weight integration, *example* choice):
+
+| Bucket | OFI L1 | OFI L2 | OFI L3 | OFI L4 | OFI L5 | iOFI (shares) | Δmid (ticks) |
+|---|---|---|---|---|---|---|---|
+| 1 | −74.4 | −84.4 | −30.7 | −0.9 | −54.8 | −245.2 | −0.46 |
+| 2 | 19.6 | −14.4 | −2.5 | −53.7 | 34.7 | −16.3 | 0.32 |
+| 3 | 99.2 | 34.6 | 60.9 | 36.7 | 11.9 | 243.3 | 1.26 |
+| 4 | −157.3 | −126.6 | −110.9 | −80.6 | −64.0 | −539.4 | −2.03 |
+| 5 | −100.2 | −116.6 | −96.2 | −62.2 | −29.6 | −404.8 | −1.86 |
+| 6 | −59.2 | −30.0 | −12.8 | −29.6 | −4.8 | −136.4 | −1.06 |
+| 7 | 198.0 | 81.5 | 84.3 | 80.5 | 19.6 | 463.9 | 1.91 |
+| 8 | −36.8 | −36.3 | −7.4 | −38.5 | −20.7 | −139.7 | −0.70 |
+| 9 | −263.9 | −135.7 | −118.9 | −118.5 | −37.2 | −674.2 | −2.42 |
+| 10 | −209.5 | −171.6 | −68.6 | −77.7 | −36.5 | −563.9 | −2.42 |
+
+Bucket 5 check (the level-vector chart panel): $-100.2 -116.6 -96.2 -62.2 -29.6 = -404.8$ ✓, and its point $(-404.8, -1.86)$ sits on the scatter ✓.
+
+**What to notice:** deep levels (L3–L5) carry real signal — bucket 9's −674 shares are 45% deep-book flow that touch-only OFI would miss. Limits: this is a *contemporaneous* fit, not a prediction; it includes no spread cost; and the generator is kind to the model by construction. Real level-OFI vectors are far more correlated and need the Ridge/PCA treatment of §S3.
+
+### S5. Strategies that use this signal
+
+- **T030 — primary entry trigger (direction).** T030 (Multi-Level OFI Weighted Predictor) is this signal: integrated OFI across 10 levels, VAR-confirmed.
+- **T091 — confirmation filter.** T091 (Multi-Level Book-Pressure Swing) uses MLOFI's *flow* reading to confirm or veto its static-pressure swing, and to scale size.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Level prices/sizes, k=1..10 | float/int | L2 depth events (MBP-10), ~10–50k ev/s busy | Tier 2–3 | Genuine L2 required — the SIP (Securities Information Processor, the consolidated US tape; its NBBO carries only the touch) has no depth, so SIP-derived depth is simulated-only |
+| Trade prints (for bucket validation) | int/float | trade events | Tier 1–2 | align timestamps to quotes |
+| Symbol reference, corporate actions | strings | daily | Tier 0–1 | splits corrupt level continuity |
+
+MBP-10 (market-by-price) means *aggregated* size per price level — no individual order identity or queue position, unlike MBO/ITCH (individual orders). Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+# schema: ts, symbol, action(add/cancel/trade), side, level, price, size
+ev = pl.scan_parquet("mbp10/2026-09-10/*.parquet").filter(
+    pl.col("symbol") == "AAPL")
+# reconstruct per-level state, compute e_{k,t} on each update
+def level_ofi(g):  # g: one (symbol, level) event stream, sorted by ts
+    dP_b = g["bid_px"].diff(); dQ_b = g["bid_sz"].diff()
+    dP_a = g["ask_px"].diff(); dQ_a = g["ask_sz"].diff()
+    e = (dP_b > 0) * g["bid_sz"] - (dP_b < 0) * g["bid_sz"].shift(1) \
+        + (dP_b == 0) * dQ_b \
+        - (dP_a < 0) * g["ask_sz"] + (dP_a > 0) * g["ask_sz"].shift(1) \
+        - (dP_a == 0) * dQ_a
+    return g.with_columns(e.fill_null(0).alias("e_k"))
+```
+Storage per symbol-day: L2 MBP-10 ≈ 10–40 GB parquet, per cost-model §4 (research-only archiving). Data-quality checklist: exchange-timestamp normalization, corporate actions/splits, halts, DST/half-days, stale/locked-crossed quotes, sequence gaps.
+
+### S7. Local build on M5 Max / 128GB
+
+**Verdict: feasible, Tier H.** Justification: per cost-model §5, L2/MBO signals are Tier H (60–200 h → $9,000–30,000 loaded-cost estimate at $150/hr) — book-reconstruction, validation, and regularized calibration dominate, not the arithmetic. Throughput per cost-model §2: L2 full depth (MBP-10) runs ~10–50k events/sec busy for top names; a Python event loop (~100–500k events/sec) handles a handful of symbols, but a 50-symbol real-time book engine wants Rust (~5–50M events/sec) or Python ingest + Rust book state. RAM: L2 MBP-10 is ~8–40 GB per symbol-day in RAM (cost-model §3) — 500 symbols × 60 days does **not** fit the 77 GB working budget; use per-symbol daily files plus streaming, computing OFI incrementally. Stack: Rust for the real-time book engine; Python+polars for research recompute; DuckDB for the parquet archive. Engineering band: Tier H 60–200 h. A chatbot build estimate (Duck.ai, labeled lead) puts a *full production L2 research system* at row-sum 520–1,020 h (its printed "600–1,180" contradicts its own rows) — treat that as the L2 platform cost and the cost-model Tier H band as this signal's cost. **What breaks first at 500 symbols:** network decompression and burst handling, not the M5 Max; then SSD write bandwidth for raw L2 retention (~40–120 GB/day compressed for 50 names).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / Stooq | L1/trade bars, delayed | ~$0 | free prototyping of touch-only OFI | no genuine depth — MLOFI impossible |
+| Tier 1: Polygon Stocks Advanced | real-time SIP bars/trades | ~$30–200/mo | cheap L1 pipeline | SIP ≠ depth; synthetic L2 = model simulation, labeled simulated-only |
+| Tier 2: Databento MBP-10 | honest 10-level depth events | ~$200/mo + usage | true input for this signal | usage/licensing scales; no queue identity |
+| Tier 3: LOBSTER (academic) | ITCH order-book replay | ~hundreds/yr academic | individual-order (MBO) fidelity | academic license only; not production |
+
+All prices `indicative — verify before budgeting`. **Verdict: build** custom buckets/Ridge/PCA/thresholds (no vendor sells those); **buy** the raw MBP-10 feed — crossover at ~5 symbols of depth history. Synthetic-L2-from-SIP stays labeled model simulation, never traded as depth.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Mandatory framing (Q-SB4-3 chatbot lead, independently consistent with the papers): the literature shows **stronger evidence for short-horizon statistical predictability than for after-cost tradability**. Report both OOS forecast improvement *and* net implementation performance; without the second, these are predictive features, not demonstrated edges.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Xu–Gould–Howison 2019, Table 10 (verified against paper's own table) | 6 liquid Nasdaq stocks, 2016 LOBSTER | OOS RMSE reduction, 10-level vs 1-level, Ridge: ~15–30% small-tick (AMZN 17%, TSLA 15%, NFLX 31%), ~65–75% large-tick (ORCL 68%, CSCO 74%, MU 64%); OLS slightly weaker (~5–35% / ~60–70%) | before cost — forecast fit only | Contemporaneous mid-price change, not tradeable P&L; regularization required |
+| Cont–Cucuringu–Zhang 2023 (arXiv:2112.13213) | S&P 500 constituents, 2017–2019 | Integrated OFI (PCA) beats best-level OFI in/out-of-sample; lagged cross-asset OFIs improve forward-return $R^2$ | before cost | Cross-impact decays rapidly with horizon |
+| Cont–Kukanov–Stoikov 2011 (arXiv:1011.6402) | 50 US stocks, NYSE TAQ 2008 | Linear OFI→price-change relation, slope ∝ 1/depth | before cost | Touch-level OFI only (the S001 ancestor) |
+
+**Bottom line:** as a standalone trigger this is a *promising but not established after-cost* edge — the documented wins are RMSE/R² improvements on mid-price changes, and the hurdle is E[gross move] > spread + fees + slippage + impact. As a *feature inside an execution or market-making model* (T030's VAR confirmation, T091's swing filter), it is the best-evidenced depth signal in Family A. Failure regimes: small-tick fast-replenishment books, spoofing (deep size that never intends to trade), news jumps, and any consolidated/SIP feed (no real depth).
+
+### S10. Failure modes & pitfalls
+
+1. **Collinearity without regularization** — ten level OFIs move together; naive OLS coefficients are unstable. *Mitigate: Ridge or PCA integration, cross-validated.*
+2. **Spoofing / non-bona-fide depth** — deep quotes can be bait. *Mitigate: weight by level fill probability; discount cancel-heavy size.*
+3. **Lookahead via stale buckets** — computing "contemporaneous" OFI with a mid-price from inside the bucket. *Mitigate: strict event-time bucketing, trade at t+1.*
+4. **SIP feed masquerading as depth** — the SIP's NBBO has no levels beyond the touch. *Mitigate: real MBP-10 or label simulated-only.*
+5. **Regime breaks** — vol events change depth replenishment. *Mitigate: rolling PCA loadings (1–20 d), regime-gated thresholds.*
+6. **Cost blowup** — a 0.1-tick expected move dies against a 1-tick spread. *Mitigate: model spread + fees + slippage + impact explicitly before sizing.*
+7. **Overfitting levels/buckets** — grid-searching L and B on one month. *Mitigate: walk-forward OOS, embargo between folds.*
+8. **Data errors** — crossed books, sequence gaps, halts. *Mitigate: validation layer that halts signal on gap/lock.*
+
+### S11. Visuals
+
+![S002 worked example — synthetic 10-bucket multi-level OFI tape, level bars and integrated OFI vs mid-price change](images/S002_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(Databento MBP-10)"] -->|"L2 depth events"| ING["Ingest + normalize\n(exchange ts, halts, splits)"]
+    ING -->|"per-event level state"| FEAT["Feature compute\ne_{k,t} per level,\nbucketed OFI_{k,B}"]
+    FEAT -->|"MLOFI vector (L=5, per 1-s bucket)"| SIG["Signal S002\nintegrated OFI iOFI_B\n(Ridge/PCA)"]
+    SIG -->|"per-bucket iOFI"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T030 trigger, T091 filter)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Xu, K., Gould, M. D., & Howison, S. D. (2019). "Multi-Level Order-Flow Imbalance in a Limit Order Book." arXiv:1907.06230 [q-fin.TR]. https://arxiv.org/abs/1907.06230 — Table 10 figures quoted in S9 verified against the paper's own table (Ridge row).
+- Cont, R., Cucuringu, M., & Zhang, C. (2023). "Cross-Impact of Order Flow Imbalance in Equity Markets." Quantitative Finance 23(10), 1373–1393. arXiv:2112.13213. https://arxiv.org/abs/2112.13213
+- Cont, R., Kukanov, A., & Stoikov, S. (2011). "The Price Impact of Order Book Events." arXiv:1011.6402 [q-fin.TR]. http://arxiv.org/pdf/1011.6402v3
+- Chatbot source (labeled): Duck.ai (GPT-5.6 Luna, anonymous) answered Q-SB4-1–Q-SB4-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10). Formulas verified against literature; Q-SB4-2 hour rows used with printed-total discrepancy noted; Q-SB4-3 framing lead adopted.
+
+**Unverified leads**
+- Duck.ai's Q-SB4-2 full-pipeline hour bands (L2 rows 520–1,020 h; printed total "600–1,180" contradicts row sums — unverified chatbot claim, use row sums or the cost-model band).
+- Any vendor per-symbol depth price for 50 liquid names ($1,000–10,000+/mo range from chat — indicative chatbot claim, verify with Databento/exchange schedules).
+
+---
+## Stage 5/200 — S005: Multi-level book pressure (static depth imbalance)
+
+*Batch SB4 · Signal 5/100 · Provenance [SR] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| The ratio of resting bid depth to total depth across the first *L* book levels — a still photograph of latent supply vs demand. | Deep, stable books in liquid names; calm sessions where posted size means what it says. | Spoof-heavy or news-driven tapes, thin books, SIP-only feeds (no depth), fast replenishment regimes. | Build the ratio in ten lines; buy (or skip) the L2 feed — the feed is the whole cost, the math is free. |
+
+Provenance: **[SR]** (standard reconstruction — practitioner standard; academic grounding in multi-level OFI, entry 2). Never upgraded without a real citation.
+
+### S2. How it works — plain human explanation
+
+If order-flow imbalance (S001/S002) is a *movie* — it counts orders arriving and leaving — book pressure is a *photograph*. At any instant, the limit order book holds resting buy orders (bids) and resting sell orders (asks) stacked at each price level. Book pressure adds up the bid-side depth across the first *L* levels, adds up the ask-side depth, and takes the normalized difference. A book with 65,000 shares resting on the bid side and 46,000 on the ask side has pressure $+0.17$: latent demand outweighs latent supply.
+
+Why should a still photo predict the next move? Two economic channels. First, *mechanical*: for the mid-price to fall, sellers must chew through the entire bid queue at the touch; a fat bid queue is a wall that takes longer to demolish (Gould & Bonart's queue-imbalance result formalizes exactly this for level 1). Second, *informational*: patient traders post size where they think the price is going — resting depth is a revealed belief, though a noisy and sometimes dishonest one (spoofers post size they never intend to trade). This is the adverse-selection channel: one-sided depth is how informed flow shows up before it prints, and it is why market makers widen or pull quotes when the book tilts.
+
+**Jargon, defined once:** *NBBO* (National Best Bid and Offer) = the best bid/ask across all US exchanges, consolidated by the *SIP* (Securities Information Processor — the official consolidated tape); *MBP-10* = market-by-price data giving aggregate size at each of the top 10 price levels; *basis points* (bps) = hundredths of a percent (1 bp = 0.01%).
+
+**Mental model:**
+- Static pressure measures *latent* supply/demand; flow measures *revealed* aggression. They are complements, not substitutes.
+- Deep-book pressure matters most when the touch is pinned (large-tick names) — same logic as S002.
+- Posted size is a claim, not a fact: always discount for spoofing and cancellation rates.
+
+### S3. The math — exact formula
+
+$$BP_L(t) = \frac{\sum_{l=1}^{L} Q^b_l(t) - \sum_{l=1}^{L} Q^a_l(t)}
+{\sum_{l=1}^{L} Q^b_l(t) + \sum_{l=1}^{L} Q^a_l(t)} \in [-1, +1]$$
+
+$Q^b_l(t)$ ($Q^a_l(t)$) = resting bid (ask) size in shares at level $l$ at time $t$; $l=1$ is the touch. Dimensionless. Positive = bid-side pressure (latent buying). Variants: touch-only ($L=1$, = S003 queue imbalance); exponential level weights $w_l = e^{-\eta(l-1)}$ with decay $\eta$ (*example* 0.5); depth-weighted microprice cousin $P^{micro} = \frac{Q^a_1 P^b_1 + Q^b_1 P^a_1}{Q^a_1 + Q^b_1}$ (S004). Timing: snapshot at $t$ from the book state; tradable no earlier than $t{+}1$ (a snapshot is already one step behind the tape).
+
+| Parameter | Symbol | Typical range | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Levels | $L$ | 5–10 | $<3$ ≈ touch-only; $>10$ dilutes with stale depth | 5 *(example — not an institutional standard)* |
+| Decay | $\eta$ | 0–1.0 | 0 = flat sum (deep noise); >1 ≈ touch-only | 0.5 *(example)* |
+| Snapshot cadence | $\Delta t$ | 100 ms–5 s | faster = redundant; slower = stale | 1 s *(example)* |
+| Tilt threshold | $\theta$ | 0.1–0.3 | too low = noise trades; too high = never fires | 0.2 *(example)* |
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic book, seed **20260905**, 8 snapshots × 5 levels (chart plots the same numbers). Hand-computing snapshot 4, the deepest-tilted one:
+
+Bid sizes L1–L5: 1359, 1331, 1319, 1246, 1248 → $\sum Q^b = 6503$ shares.
+Ask sizes L1–L5: 792, 1319, 715, 654, 1149 → $\sum Q^a = 4629$ shares.
+
+$$BP = \frac{6503 - 4629}{6503 + 4629} = \frac{1874}{11132} = +0.1683$$
+
+The full 8-snapshot series (BP panel of the chart):
+
+| Snapshot | Σ bid | Σ ask | BP |
+|---|---|---|---|
+| 1 | 6147 | 6395 | −0.0198 |
+| 2 | 5761 | 4905 | +0.0803 |
+| 3 | 4797 | 5764 | −0.0916 |
+| 4 | 6503 | 4629 | **+0.1683** |
+| 5 | 5618 | 4252 | +0.1384 |
+| 6 | 5271 | 5033 | +0.0231 |
+| 7 | 4691 | 4740 | −0.0052 |
+| 8 | 5102 | 4344 | +0.0802 |
+
+Against the *example* ±0.20 tilt band, no snapshot fires a tilt — snapshot 4 at +0.1683 is the closest. That is deliberate: with honest thresholds, a static photo of a synthetic book *should* mostly say "no edge," which is the toy-tape's way of showing how weak this signal is on its own. **What to notice:** BP is smooth and slow-moving relative to event flow — it lags aggression by construction (limits and cancels move first, the photograph updates after). Limits: no fees, no spread, no spoofing in the toy data; real books have all three.
+
+### S5. Strategies that use this signal
+
+- **T091 — primary swing trigger.** T091 (Multi-Level Book-Pressure Swing) is built on this exact quantity: 10-level static book-pressure swing positions with vol-breakout exits.
+- **T030 — confirmation filter.** T030 (Multi-Level OFI Weighted Predictor) triggers on *flow* (S002); static pressure confirms the flow isn't leaning into a wall — or vetoes when BP contradicts iOFI.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Level sizes Q^b_l, Q^a_l, l=1..L | int (shares) | L2 depth snapshots or events, ≥1 s cadence | Tier 2–3 | Genuine MBP-10; SIP has no depth |
+| Level prices (for decay weights) | float | same | Tier 2–3 | touch price from NBBO suffices for weights |
+| Halt/split calendar | strings | daily | Tier 0–1 | splits shift level indexing |
+
+Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+# snapshots: ts, symbol, level, bid_sz, ask_sz  (1-second cadence)
+snaps = pl.scan_parquet("mbp10_snap/2026-09-10/*.parquet").filter(
+    (pl.col("symbol") == "AAPL") & (pl.col("level") <= 5))
+eta = 0.5  # example decay — not an institutional standard
+w = pl.Series([__import__("math").exp(-eta * (l - 1)) for l in range(1, 6)])
+bp = (snaps.group_by(["ts", "symbol"]).agg(
+        (pl.col("bid_sz") * w).sum().alias("wb"),
+        (pl.col("ask_sz") * w).sum().alias("wa"))
+      .with_columns(((pl.col("wb") - pl.col("wa"))
+                     / (pl.col("wb") + pl.col("wa"))).alias("BP")))
+```
+Storage per symbol-day: L2 snapshots ≈ 10–40 GB/day parquet if kept at event granularity (cost-model §4); 1 s snapshots compress to ~1–5 GB/day. Data-quality checklist: exchange timestamps, corporate actions, halts (freeze or drop), DST/half-days, stale snapshots (drop if older than 2× cadence).
+
+### S7. Local build on M5 Max / 128GB
+
+**Verdict: feasible, Tier H (the data, not the math).** The ratio itself is ten lines; the work is the L2 pipeline — per cost-model §5 this is Tier H, 60–200 h ($9,000–30,000 loaded-cost estimate at $150/hr), same band as S002, since both need honest depth. Throughput per cost-model §2: 1 s snapshots are trivial for polars (~10–50M rows/sec simple ops); real-time snapshot maintenance at 50 symbols needs only a light event loop — the L2 cost driver is *retention*, not compute: ~8–40 GB RAM per symbol-day live (cost-model §3), so 60 days of raw depth for 50 names does **not** fit; keep per-symbol daily parquet + rolling in-memory snapshots. Stack: Python+polars for research, Rust only if you maintain sub-second real-time state across many names, DuckDB for the snapshot archive. Chatbot lead (Duck.ai, labeled): build the L1/trade pipeline *first* (~300–500 h production-quality, row-sum 315–650 h — its printed "285–650" contradicts its own rows), and add MBP-10 only with a specific depth hypothesis like this one; 60 days of raw L2 retention is the storage + data-cost problem, not compute. **What breaks first at 500 symbols:** SSD capacity for depth history, then feed-handler CPU on bursts.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX | daily bars, L1 snapshots | ~$0 | free toy prototype | no multi-level depth |
+| Tier 1: Polygon Stocks Advanced | real-time SIP NBBO/trades | ~$30–200/mo | cheap, honest L1 | SIP has no depth — any "book pressure" from it is a model simulation |
+| Tier 2: Databento MBP-10 | real 10-level depth | ~$200/mo + usage | genuine input | usage + licensing scale with names |
+| Tier 3: LOBSTER (academic) | ITCH replay | ~hundreds/yr academic | order-level truth | academic license; not production |
+
+All prices `indicative — verify before budgeting`. **Verdict: build if** your hypothesis is specific (which L, which decay, which tilt threshold — no vendor sells *your* pressure variant); **buy** the raw depth feed. Crossover: the moment you want more than a couple of names of depth history, buy MBP-10; the DIY alternative is re-licensing anyway. Never ship a SIP-derived "depth pressure" number without the **model simulation, NOT observed L2** label — e.g. exponential decay $Q_k = Q_1 e^{-\eta(k-1)}$ invented from the touch is a simulation, and honest labeling (per the Duck.ai build lead) is the difference between a pressure estimate and a fabrication.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Gould & Bonart 2015/16 (arXiv:1512.03492) | 10 liquid Nasdaq stocks | Logistic regression: queue imbalance vs direction of *next* mid-price move — strongly statistically significant for all 10; "considerable" binary/probabilistic classification improvement for large-tick stocks, "moderate" for small-tick, vs null model | before cost — classification skill, not P&L | Touch-level (L=1) predictor; the multi-level extension is the [SR] step this chapter takes |
+| Xu–Gould–Howison 2019, Table 10 (verified) | 6 Nasdaq stocks, 2016 LOBSTER | OOS RMSE reduction 10-level vs 1-level: Ridge ~15–30% small-tick, ~65–75% large-tick | before cost — forecast fit | Flow (OFI), not static pressure — academic grounding, not direct evidence |
+| Q-SB4-3 framing lead (labeled chatbot) | — | "Stronger evidence for short-horizon statistical predictability than for after-cost tradability" | — | No documented after-cost P&L for book-pressure strategies found in this research pass |
+
+**Bottom line:** as a standalone trigger this is a *predictive feature, not a demonstrated edge* — the documented evidence is classification skill and forecast improvement, all before cost; no after-cost study was located. As a *filter inside T091/T030* (veto flow trades leaning into a static wall), it earns its place on mechanism and on the large-tick queue-imbalance literature. Failure regimes: spoofed books (pressure without intent), news jumps (static picture invalidated in milliseconds), thin names (one iceberg order dominates BP), and any SIP-only implementation (simulated depth).
+
+### S10. Failure modes & pitfalls
+
+1. **Spoofing** — posted size that cancels before execution. *Mitigate: discount size by historical cancel rate per level; require flow confirmation (S002).*
+2. **Static-vs-flow confusion** — trading a photo as if it were a movie. *Mitigate: pair BP with a flow signal; treat BP as regime/tilt, not trigger.*
+3. **SIP-derived pseudo-depth** — exponential-decay depth invented from the touch. *Mitigate: label model simulation, NOT observed L2; never trade it as real depth.*
+4. **Lookahead in snapshots** — timestamping the snapshot after the price moved. *Mitigate: exchange timestamps; tradable no earlier than t+1.*
+5. **Overfit decay/threshold** — tuning η and θ to one month's noise. *Mitigate: walk-forward validation, embargo.*
+6. **Cost blowup** — tilt edges are typically sub-tick. *Mitigate: explicit spread + fees + slippage + impact model; sub-spread expectations → no trade.*
+7. **Regime breaks** — depth replenishment changes under stress. *Mitigate: rolling normalization; stand down on vol spikes.*
+8. **Thin-book concentration** — one large order dominates the ratio. *Mitigate: cap per-level contribution; require minimum total depth.*
+
+### S11. Visuals
+
+![S005 worked example — synthetic 5-level depth bars and book pressure across 8 snapshots](images/S005_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(Databento MBP-10)"] -->|"L2 depth events"| ING["Ingest + normalize\n(exchange ts, halts, splits)"]
+    ING -->|"book snapshots (1 s)"| FEAT["Feature compute\nΣQb_l, ΣQa_l, decay weights"]
+    FEAT -->|"book-pressure series (1-s snapshots)"| SIG["Signal S005\nBP_L(t)"]
+    SIG -->|"per-snapshot BP_L"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T091 swing, T030 filter)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Gould, M. D., & Bonart, J. (2015). "Queue Imbalance as a One-Tick-Ahead Price Predictor in a Limit Order Book." arXiv:1512.03492 [q-fin.TR]. https://arxiv.org/abs/1512.03492 (published Market Microstructure and Liquidity, 2016).
+- Xu, K., Gould, M. D., & Howison, S. D. (2019). "Multi-Level Order-Flow Imbalance in a Limit Order Book." arXiv:1907.06230 [q-fin.TR]. https://arxiv.org/abs/1907.06230
+- Cont, R., Kukanov, A., & Stoikov, S. (2011). "The Price Impact of Order Book Events." arXiv:1011.6402 [q-fin.TR]. http://arxiv.org/pdf/1011.6402v3
+- Chatbot source (labeled): Duck.ai (GPT-5.6 Luna, anonymous) answered Q-SB4-1–Q-SB4-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10). Q-SB4-2 build-ordering lead ("build L1/trade first; add MBP-10 only with a specific depth hypothesis") and synthetic-L2-from-SIP = model-simulation label adopted; Q-SB4-3 evidence-framing lead adopted.
+
+**Unverified leads**
+- Duck.ai Q-SB4-2 production-pipeline hour bands (L1/trade rows 315–650 h vs printed "285–650"; L2 rows 520–1,020 h vs printed "600–1,180" — use row sums; unverified chatbot claims).
+- Any named vendor's per-name MBP-10 subscription price — indicative chatbot range only; verify with the vendor.
+
+---
+## Stage 7/200 — S007: Trade classification: Lee–Ready & Bulk Volume Classification
+
+*Batch SB4 · Signal 7/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| Labeling each trade (or bar of volume) as buyer- or seller-initiated so every downstream flow signal has a sign. | Clean quote alignment, ordinary spreads, Lee–Ready when you have quotes; BVC when you only have bars. | Fast markets with stale quotes, midpoint-heavy prints, locked/crossed quotes, odd lots, off-exchange prints. | Build both classifiers in an afternoon — the hard part is honest quote alignment, not the formula. |
+
+Provenance: **[D]** (documented: Lee & Ready 1991; Easley, López de Prado & O'Hara 2012).
+
+### S2. How it works — plain human explanation
+
+A trade print says "100 shares changed hands at $100.10." It does *not* say who demanded liquidity and who supplied it — yet nearly every flow signal (OFI, volume delta, VPIN, Kyle's lambda) needs that sign. *Trade classification* infers the initiator: the buyer-initiated side is the aggressor who crossed the spread.
+
+Two canonical methods. **Lee–Ready (1991):** compare the trade price to the quote midpoint. Above the mid → buyer-initiated (+1); below → seller-initiated (−1); exactly at the mid → fall back to the *tick rule* (uptick = buy, downtick = sell, zero-tick inherits the last direction). **Bulk Volume Classification (BVC):** don't classify individual trades at all — take a *volume bar* (a fixed chunk of traded shares), look at its open-to-close price change, and split the bar's volume probabilistically: a strongly up bar is mostly buys, a flat bar is 50/50. BVC is robust to coarse clocks and missing quotes, at the price of per-trade resolution.
+
+*Jargon, defined once:* *NBBO* (National Best Bid and Offer) = the consolidated best bid/ask across exchanges, disseminated by the *SIP* (Securities Information Processor); *midpoint* = (bid+ask)/2; *BVC* = Bulk Volume Classification; *MBO/ITCH* = exchange feeds with individual-order messages; *basis points* (bps) = 0.01%; *ADV* = average daily volume.
+
+**Mental model:**
+- Lee–Ready is a *microscope*: per-trade signs, needs good quotes, fragile in fast markets.
+- BVC is a *satellite photo*: robust aggregate split, needs only bars, blind to individual trades.
+- Misclassification is *concentrated*, not random — errors cluster exactly when flow is most informative (midpoints, fast markets). An "85% accurate" classifier can still badly bias an imbalance.
+
+### S3. The math — exact formula
+
+**Lee–Ready.** Let $m_i = (a_i + b_i)/2$ be the midpoint at (or just before) trade $i$ with price $p_i$:
+
+$$d^Q_i = \begin{cases} +1 & p_i > m_i \quad \text{(quote rule: buy)} \\ -1 & p_i < m_i \quad \text{(quote rule: sell)} \\ 0 & p_i = m_i \quad \text{(unclassified)} \end{cases}$$
+
+For midpoint prints, the tick rule: let $j < i$ be the most recent trade with $p_j \ne p_i$; $d^T_i = +1$ if $p_i > p_j$ else $-1$. Final sign $d_i = d^Q_i$ if nonzero, else $d^T_i$. Signed trade imbalance over bucket $B$: $\mathrm{OFI}^{trade}_B = \sum_{i \in B} d_i v_i$ (shares). The 1991 original used quotes lagged 5 seconds (a fix for 1988-era reporting delays); modern practice uses contemporaneous quotes — the 5-second lag is obsolete and should not be copied.
+
+**BVC.** For volume bar $\tau$ with volume $V_\tau$, open $p_{\tau,o}$, close $p_{\tau,c}$:
+
+$$z_\tau = \frac{p_{\tau,c} - p_{\tau,o}}{\sigma_{\Delta P}}, \qquad
+V^B_\tau = V_\tau \cdot \Phi(z_\tau), \qquad
+V^S_\tau = V_\tau - V^B_\tau, \qquad
+\mathrm{BVC}_\tau = V^B_\tau - V^S_\tau = V_\tau(2\Phi(z_\tau) - 1)$$
+
+$\Phi$ = standard normal CDF (dimensionless), $\sigma_{\Delta P}$ = stdev of bar price changes (price units). BVC allocates *volume probabilistically* — it does **not** classify individual trades.
+
+| Parameter | Symbol | Typical range | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Quote lag (LR) | — | 0 (modern) | 5 s is obsolete; 0 with stale SIP quotes mislabels | 0 *(example — not an institutional standard)* |
+| Bar volume (BVC) | $V^*$ | 50–500 median trades; 0.1–1% ADV | tiny bars = noise; huge bars = multi-regime mush | 1,000 shares *(example)* |
+| $\sigma$ window | — | 50–500 bars | short = jumpy; long = stale | 100 bars *(example)* |
+| z cap | — | ±2–3 | uncapped = one bar dominates | ±3 *(example)* |
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 12-trade tape, seed **20260907** (the chart plots these prices with the corrected signs). All sizes 10 shares; midpoint $m = 100.00$ constant.
+
+| # | Price | vs mid | Rule applied | Sign |
+|---|---|---|---|---|
+| 1 | 100.00 | = mid | tick, no prior → +1 convention | **+1** |
+| 2 | 100.10 | above | quote | **+1** |
+| 3 | 100.10 | above | quote | **+1** |
+| 4 | 100.20 | above | quote | **+1** |
+| 5 | 100.10 | above | quote | **+1** *(see correction box)* |
+| 6 | 100.00 | = mid | tick: downtick from 100.10 | **−1** |
+| 7 | 100.00 | = mid | tick: downtick from 100.10 | **−1** |
+| 8 | 99.90 | below | quote | **−1** |
+| 9 | 100.00 | = mid | tick: uptick from 99.90 | **+1** |
+| 10 | 100.10 | above | quote | **+1** |
+| 11 | 99.90 | below | quote | **−1** |
+| 12 | 100.00 | = mid | tick: uptick from 99.90 | **+1** |
+
+Result: **8 buys / 4 sells**, $\mathrm{OFI}^{trade} = 10 \times (8 - 4) = \mathbf{40}$ shares.
+
+> **⚠ Corrected chatbot error (visible by design).** The Duck.ai worked example labeled trade 5 (price 100.10 > midpoint 100.00) as "−" — under its own quote rule it must be **+1**. Its printed table actually shows 7 buys / 5 sells (OFI = 20 for the printed table ✓) while its prose claimed "eight buys, four sells." This chapter presents the **corrected** tape: trade 5 = +1, 8 buys / 4 sells, OFI_LR = **40**.
+
+**BVC on 3 synthetic volume bars** (40 shares each, $\sigma_{\Delta P} = 0.10$), independently verified:
+
+| Bar | Open | Close | $z$ | $\Phi(z)$ | Buy vol | Sell vol | BVC |
+|---|---|---|---|---|---|---|---|
+| 1 | 100.00 | 100.20 | +2.0 | 0.97725 | 39.09 | 0.91 | **+38.18** |
+| 2 | 100.10 | 99.90 | −2.0 | 0.02275 | 0.91 | 39.09 | **−38.18** |
+| 3 | 100.00 | 100.00 | 0.0 | 0.50000 | 20.00 | 20.00 | **0.00** |
+
+Check bar 1: $z = 0.20/0.10 = 2.0$; $40 \times 0.97725 = 39.09$; $39.09 - 0.91 = 38.18$ ✓. Bar 2 mirrors it ✓; the flat bar splits 50/50 ✓. **What to notice:** Lee–Ready gives you 12 individual signs (fragile at midpoints — 4 of 12 trades needed the tick rule); BVC gives you 3 smooth aggregate splits with no per-trade claims. The toy tape has no fees and a perfectly constant midpoint — real tapes have neither.
+
+### S5. Strategies that use this signal
+
+- **T025 — primary confirmation filter.** T025 (Trade-Classification Trend Filter) is built on this: Lee–Ready/BVC signed imbalance confirms or vetoes momentum entries.
+- **T056 — model input.** T056 (Hasbrouck Trade–Quote VAR Predictor) consumes the trade-sign series $d_i$ jointly with quote revisions — classification quality directly feeds its estimates.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade price + size | float/int | trade events | Tier 1 (SIP) / Tier 2 | TAQ, Databento, Polygon |
+| NBBO bid/ask with timestamps | float | quote events | Tier 1–2 | Lee–Ready only; align to trade ts |
+| OHLCV bars | float/int | 1 s–1 min (BVC) | Tier 0–1 | BVC needs only bars |
+
+**Ingest sketch** (polars, ≤20 lines):
+
+```python
+import polars as pl
+trades = pl.scan_parquet("trades.parquet").select("ts", "price", "size")
+quotes = pl.scan_parquet("nbbo.parquet").select("ts", "bid", "ask")
+tq = trades.join_asof(quotes, on="ts", strategy="backward")  # asof join: latest quote at/before each trade
+tq = tq.with_columns(mid=(pl.col("bid") + pl.col("ask")) / 2,
+                     prev=pl.col("price").shift(1))
+tq = tq.with_columns(
+    d=pl.when(pl.col("price") > pl.col("mid")).then(1)       # quote rule
+      .when(pl.col("price") < pl.col("mid")).then(-1)
+      .when(pl.col("price") > pl.col("prev")).then(1)        # tick rule fallback
+      .when(pl.col("price") < pl.col("prev")).then(-1)
+      .otherwise(None))
+lr = tq.filter(pl.col("d").is_not_null()).select("ts", "price", "size", "d")
+```
+
+Lee–Ready ingest: for each trade, asof-join (time-aligned join matching each trade to the latest prior quote) the latest NBBO *at or before* the trade timestamp (exchange timestamps, not SIP, when available), apply quote rule, fall back to tick rule on midpoints — ≤20 lines of polars with an `asof` join. BVC: resample trades into volume bars, compute $z$, apply $\Phi$. Storage: trades-only is tiny (~10–200 events/sec busy per name, cost-model §2); quote-joined series heavier but still L1-scale. Data-quality checklist: timestamp normalization (exchange vs SIP clock), locked/crossed NBBO (drop), corporate actions, halts, odd-lot prints (classify with care — direction is ambiguous), late/corrected reports.
+
+### S7. Local build on M5 Max / 128GB
+
+**Verdict: trivial-to-feasible, Tier M.** Per cost-model §5, L1 event pipelines are Tier M (20–60 h → $3,000–9,000 loaded-cost estimate at $150/hr); classification itself is minutes — the hours go to quote alignment, the asof-join infrastructure, and validation against a reference implementation. Throughput per cost-model §2: a Python per-tick loop does ~100–500k events/sec (fine for ≤20 symbols of L1); trades-only classification for a 500-symbol universe is a polars batch job on 1-min bars — trivial. RAM: one symbol-day of L1 quotes+trades ≈ 0.5–4 GB (cost-model §3); a full day across the liquid universe fits the 77 GB working budget comfortably with per-symbol files. Stack: Python+polars is the right default; reach for Rust only if you classify full-depth MBO streams in real time. **What breaks first at 500 symbols:** nothing in classification — the quote feed's normalization and the asof-join state are the costs.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX | daily/1-min bars | ~$0 | free BVC prototype | no per-trade signs; coarse |
+| Tier 1: Polygon / Alpaca SIP | trades + NBBO | ~$30–200/mo | honest Lee–Ready input | SIP quote staleness in fast markets |
+| Tier 2: Databento (trades+NBBO) | exchange-timestamped | ~$200/mo + usage | best public quote alignment | cost scales with usage |
+| Academic: TAQ via WRDS | research TAQ | institutional/academic | the literature's own data | licensing, not real-time |
+
+All prices `indicative — verify before budgeting`. **Verdict: build** — classification is pure logic on data you already buy for S001–S006; there is nothing to buy except the feed. The one genuine buy decision is quote quality: if your Lee–Ready signs drive execution (T025), exchange-timestamped quotes (Tier 2) beat SIP.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Ellis–Michaely–O'Hara (2000), JFQA 35(4) | Nasdaq proprietary data, identified trade direction | Correct classification: quote rule 76.4%, tick rule 77.66%, Lee–Ready **81.05%** | before cost — accuracy, not P&L | "Very limited success" on inside-the-quote trades; mediocre for effective-spread estimation |
+| Lee & Ready (1991), J. Finance 46 | 150 NYSE firms, 1988 | Algorithm definition + 5 s lag rationale (quote changes recorded ahead of trades) | before cost | 1988 market structure; the 5 s lag is obsolete |
+| Easley–López de Prado–O'Hara (2012), RFS 25(5) | E-mini S&P 500 futures, 2008–2011 | BVC-based VPIN: robust to classification scheme; VPIN > 0.7 preceded the May 2010 flash crash ~60–90 min (labeled practitioner finding) | before cost — toxicity indicator | Andersen & Bondarenko (2014) dispute: VPIN correlates with volume/volatility by construction; control for both |
+| Q-SB4-3 evidence lead (labeled chatbot) | — | No single modern instrument-independent accuracy number honestly quotable; error *concentration* is the key limit — misclassification clusters when flow is most active | — | Treat signed-imbalance inputs as noisy, not ground truth |
+
+**Bottom line:** as a standalone trigger this signal has no edge at all — it is *infrastructure*, and its "success ratio" is classification accuracy, which the best documented number puts at ~81% for Lee–Ready in favorable (Nasdaq, ordinary-trade) settings and worse for midpoints, fast markets, and inside-spread prints. Its value is as the sign-maker for every downstream flow signal (T025, T056, S008 VPIN): garbage signs in, garbage imbalance out. BVC's documented role is aggregate toxicity measurement, not per-trade truth — asking it for per-trade accuracy is a category error.
+
+### S10. Failure modes & pitfalls
+
+1. **Stale quotes in fast markets** — SIP NBBO lags the true quote; trades get the wrong sign exactly when it matters. *Mitigate: exchange timestamps; contemporaneous quotes; validate against direct-feed signs.*
+2. **Midpoint clustering** — midpoint prints force the tick rule, the weakest rule. *Mitigate: track the fraction of tick-rule classifications as a quality metric.*
+3. **Locked/crossed quotes** — midpoint is meaningless. *Mitigate: drop or flag; never classify against a crossed book.*
+4. **Error concentration** — 85% accuracy with errors clustered in active flow biases imbalance more than uniform 80%. *Mitigate: model sign uncertainty; shrink imbalance by estimated accuracy.*
+5. **Odd lots & off-exchange prints** — ambiguous direction, venue fragmentation. *Mitigate: classify separately; report venue mix.*
+6. **The obsolete 5-second lag** — copying Lee–Ready's 1991 lag into modern data misaligns quotes. *Mitigate: lag 0; validate.*
+7. **BVC on tiny/poor-vol bars** — $z$ explodes, splits become extreme. *Mitigate: cap $|z|$ at ~3; minimum bar-quality filters.*
+8. **Cost blindness** — a signed imbalance says nothing about spread/fees. *Mitigate: every downstream use models spread + fees + slippage + impact explicitly.*
+
+### S11. Visuals
+
+![S007 worked example — synthetic 12-trade tape with corrected Lee–Ready signs and BVC bar splits](images/S007_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(TAQ / Databento trades+NBBO)"] -->|"trade + quote events"| ING["Ingest + normalize\n(asof join, exchange ts,\nhalts, odd lots)"]
+    ING -->|"aligned trade/quote stream"| FEAT["Feature compute\nquote rule, tick rule,\nvolume bars + z"]
+    FEAT -->|"per-trade classified signs"| SIG["Signal S007\nLee–Ready d_i,\nBVC_b"]
+    SIG -->|"per-trade sign series"| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T025 filter, T056 VAR,\nS008 VPIN)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Lee, C. M. C., & Ready, M. J. (1991). "Inferring Trade Direction from Intraday Data." Journal of Finance 46, 733–746. https://doi.org/10.1111/j.1540-6261.1991.tb02683.x
+- Ellis, K., Michaely, R., & O'Hara, M. (2000). "The Accuracy of Trade Classification Rules: Evidence from Nasdaq." Journal of Financial and Quantitative Analysis 35(4), 529–551. https://ideas.repec.org/a/cup/jfinqa/v35y2000i04p529-551_00.html
+- Easley, D., López de Prado, M. M., & O'Hara, M. (2012). "Flow Toxicity and Liquidity in a High Frequency World." Review of Financial Studies 25(5), 1457–1493.
+- Chatbot source (labeled): Duck.ai (GPT-5.6 Luna, anonymous) answered Q-SB4-1–Q-SB4-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10). Q-SB4-1 formula sections matched standard literature forms (verified — except the Lee–Ready tape error corrected in S4); BVC numbers fully verified as printed.
+
+**Unverified leads**
+- Duck.ai's "~80–90% Lee–Ready accuracy in favorable settings" and modern market-structure caveats — directionally consistent with Ellis et al. (2000)'s 81.05% but the modern figure is an unverified chatbot claim.
+- Duck.ai's flash-crash-timing phrasing for VPIN — use the ELO (2012) paper's own numbers before quoting.
+
+---
+## Stage 10/200 — S010: Kyle's lambda (price impact / illiquidity)
+
+*Batch SB4 · Signal 10/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Slope of mid-price change on signed share volume: dollars the price moves per signed share traded — a per-name illiquidity gauge. |
+| **When it works** | Stable continuous trading, balanced two-sided flow, liquid names — λ stable enough to throttle participation. |
+| **When it dies** | News jumps, auctions, one-sided sweeps, stale quotes, regime breaks — flow stops being informative. |
+| **Build-or-buy in one line** | Build the estimator yourself (an OLS slope), buy the trade tape. |
+| Provenance | `[D]` — Kyle (1985); empirical forms per Hasbrouck (2009), Goyenko–Holden–Trzcinka (2009). Family A — Microstructure & order flow. |
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *SIP* (Securities Information Processor — the official consolidated tape); *NBBO* (National Best Bid and Offer — the consolidated best bid/ask across exchanges).
+
+It's 9:47:03. AAPL's best bid is 231.40 × 800, ask 231.41 × 300 — the **midquote** (average of bid and ask, the market's best guess of fair value) sits at 231.405. A seller dumps 2,000 shares at the bid; the midquote ticks to 231.398. Another seller hits for 3,000; it ticks to 231.390. Each share of net selling pressure nudged the price down a little — that "little," dollars of price move per signed share, is Kyle's lambda (λ).
+
+Why does flow move prices? Three costs hide in every quote:
+
+- **Adverse selection**: some traders know more than the market maker. A **market maker** (anyone quoting both sides) loses to better-informed flow, so it shades quotes against incoming flow — that shading *is* price impact.
+- **Inventory cost**: a dealer left long 5,000 shares moves quotes down to discourage selling and attract buyers.
+- **Order processing**: the fixed cost of standing ready to trade (systems, capital, attention).
+
+Kyle (1985) formalized this: with an informed trader, uninformed **noise traders** (liquidity-motivated flow), and competitive market makers who can't tell the two apart, the equilibrium price is linear in total order flow: P(Q) = v₀ + λQ. λ is higher when informed trading is large relative to noise trading — i.e., when flow is **toxic** (likely informed). Rising λ = thin or toxic book: expensive to trade, dangerous to quote.
+
+**Mental model (3 bullets):**
+- λ answers: "if I need to trade Q shares right now, how much worse does my own flow make my price?" — impact̂ ≈ λ̂·Q, first-order only.
+- A *state variable*, not a trigger: high λ → trade less, widen quotes, demand more edge; low λ → be more aggressive.
+- It is **local**: a linear coefficient fitted on small recent flow. Extrapolating it to large orders is where slippage forecasts go to die.
+
+### S3. The math — exact formula
+
+**Base regression** (through-origin **OLS**, ordinary least-squares, on signed flow):
+
+$$\Delta p_t = \alpha + \lambda\, q_t + \varepsilon_t$$
+
+$$\hat{\lambda} = \frac{\sum_{t=1}^{T} q_t\,\Delta p_t}{\sum_{t=1}^{T} q_t^2}\quad \text{(through-origin; with-intercept form uses demeaned sums)}$$
+
+Symbols and units:
+
+- Δp_t — midquote (or trade-price) change from *t−1* to *t*, in **$**. Midquote changes preferred — they strip out bid–ask bounce.
+- q_t = d_t · v_t — **signed volume** in **shares**: d_t ∈ {+1, −1} trade direction (+1 = buyer-initiated), v_t share size. λ̂ thus has units **$ per signed share**.
+- α — intercept ($); through-origin sets α = 0 (standard when q̄ ≈ 0 over the window).
+- ε_t — residual price move.
+- T — window length (trades or bars).
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Estimation window | T | 500–10k trades (HF); 30–240 min (bars); 20–120 d (daily) | noisy, unstable λ̂ | stale, misses regime shifts | 1,000 trades *example — not an institutional standard* |
+| Signed-flow normalization | q_t scale | raw shares / ADV / √v | raw incomparable across names | over-normalization hides size effects | q_t/ADV for cross-name panels *example* |
+| Price series | Δp_t | midquote changes preferred | trade prices inject bounce noise | midquote lags on stale quotes | midquote Δ, 1-min bars *example* |
+| SE correction | — | Newey–West (SEs robust to serial correlation) | understated SEs — flow is autocorrelated | — | Newey–West SEs *example* |
+
+**Normalization:** z-score λ̂ within name/day for ranking; keep raw λ̂ ($/signed-share) for execution. Report units explicitly — **bps** (basis points, 1/100th of a percent) per fraction of daily volume, or $/signed-share — a λ without units is meaningless.
+
+**Causal timing:** λ̂ at event *t* uses trades ≤ *t* only; a decision based on it is tradable no earlier than *t+1*.
+
+**Named variants:**
+1. **Square-root form** (desk standard): ΔP_t = α + λ·sign(trade_t)·√|volume_t| + ε_t over a trailing window (e.g., 300 s) — concave impact.
+2. **ADV-normalized**: r_t = α + λ·(q_t/ADV) + ε_t, **ADV** = average daily volume (shares) — λ in return per unit of daily volume, comparable across names.
+3. **Kyle–Obizhaeva invariance**: impact ∝ σ·√(Q/(V·L)) — for cross-name sizing.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Synthetic 8-trade tape** (Δp in $, q in signed shares; seed 10; fully tabulated — exactly reproducible):
+
+| t | Δp_t ($) | q_t (signed shares) | q_t·Δp_t | q_t² |
+|---|---|---|---|---|
+| 1 | +0.005 | +100 | 0.50 | 10,000 |
+| 2 | −0.008 | −200 | 1.60 | 40,000 |
+| 3 | +0.006 | +100 | 0.60 | 10,000 |
+| 4 | +0.013 | +300 | 3.90 | 90,000 |
+| 5 | −0.006 | −100 | 0.60 | 10,000 |
+| 6 | +0.011 | +200 | 2.20 | 40,000 |
+| 7 | −0.004 | −100 | 0.40 | 10,000 |
+| 8 | −0.017 | −300 | 5.10 | 90,000 |
+| **Sum** | **0.000** | **0** | **14.90** | **300,000** |
+
+λ̂ = Σq_tΔp_t / Σq_t² = 14.90 / 300,000 = **4.97×10⁻⁵ $/signed-share**. A 10,000-share order has first-order impact̂ ≈ λ̂·Q ≈ **$0.50** — before spread, fees, and nonlinearity.
+
+**Note on the chatbot draft's errors** (Duck.ai Q-SB4-1, 2026-09-10; operator-verified): its direction-unit table had q̄ = **0** (not −0.2; its q vector sums to 0), Σq² = **10** (not 9.60), λ̂ = 0.80/10 = **0.08** (not 0.0833). Worse, q = ±1 were *directions*, not shares — with 10-share units the estimate is **0.008 $/signed-share**, so "0.0833 dollars per signed share" was wrong on units too; and that (q, Δp) series was a *separate* synthetic dataset, not derived from the 12-trade tape. The example above fixes all of this with explicit share units.
+
+**What to notice:** λ̂ is tiny because each trade is small — the *product* λ̂·Q is what matters. This toy tape has no fees, spread, or nonlinearity; a real 10,000-share order costs more. λ̂ is a **ranking/conditioning variable** (which names are expensive to trade), not a slippage forecast.
+
+### S5. Strategies that use this signal
+
+- **T026 — Kyle-Lambda Participation Throttle** — *primary sizing signal*: child-order participation set inversely to rolling λ̂, with Amihud caps; keeps impact̂ ≈ λ̂·Q inside budget.
+- **T084 — Block-Trade Impact Reversion** — *filter/sizing*: λ̂ (with S048 resiliency) decides whether a post-block fade is cheap enough to enter; vetoes above the toxicity cap.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade price | float $ | tick | Tier 0–2 | SIP ok for daily λ; HF λ wants exchange timestamps |
+| Trade size | int shares | tick | Tier 0–2 | odd-lot handling |
+| Trade direction d_t | ±1 | tick | Tier 0–2 | Lee–Ready: quote rule on lagged midquote, tick rule at midpoint |
+| Quote mid m_t | float $ | tick / 1-min | Tier 1–2 | direct BBO for HF; SIP NBBO usually adequate (S7) |
+| ADV (for normalization) | float shares | daily | Tier 0–1 | 20–60 day median volume |
+
+Collection: consolidated trades + NBBO (Databento `trades`+`tbbo`, or Polygon stocks v3). Ingest sketch (≤20 lines, Python/polars):
+
+```python
+import polars as pl
+trades = pl.scan_parquet("trades_*.parquet")          # ts, price, size, venue
+quotes = pl.scan_parquet("tbbo_*.parquet")            # ts, bid, ask (lag ~1s for Lee–Ready)
+m = quotes.with_columns(mid=(pl.col("bid")+pl.col("ask"))/2)
+signed = trades.join_asof(m, on="ts", strategy="backward", tolerance="1s")
+signed = signed.with_columns(
+    d=pl.when(pl.col("price")>pl.col("mid")).then(1)
+       .when(pl.col("price")<pl.col("mid")).then(-1).otherwise(None),
+    q=pl.col("d")*pl.col("size"), dmid=pl.col("mid").diff())
+lam = signed.filter(pl.col("d").is_not_null()).select(
+    (pl.col("q")*pl.col("dmid")).sum()/ (pl.col("q")**2).sum()).collect()
+```
+
+Storage: L1 quotes+trades ≈ 2–8 GB/day per liquid name in Parquet (cost-model §4) — daily files; the λ̂ panels are MBs. Data-quality checklist: timestamp normalization (SIP vs direct skew), splits (adjust price *and* size), halts (exclude auction prints), DST/half-days, stale quotes (drop locked/crossed NBBO).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier M).** A rolling OLS slope over signed trade panels — arithmetic, not infrastructure. Per cost-model §2 polars does ~10–50M rows/sec on simple ops; a 1,000-trade rolling λ̂ recomputed per minute over 500 symbols is trivial, and tick-level λ̂ for 50 names (~100k events/sec aggregate) fits in 1–5 s polars batches.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | default: batch recompute on bars or 1–5 s snapshots |
+| Rust event loop | full-depth / multi-symbol tick real-time (>100k events/sec sustained) |
+| DuckDB | ad-hoc research over per-symbol daily Parquet files |
+
+- **Throughput:** ingest ~100–500k events/sec (Python, cost-model §2); signal ~1–10M rows/sec. Bottleneck is trade/quote asof alignment, not the regression.
+- **RAM:** one symbol-day of L1 ≈ 0.5–4 GB (cost-model §3); keep rolling windows per symbol, 60 days of bar-level λ̂ (~MBs). 500 symbols × 60 days raw L1 does **not** fit — daily files + streaming.
+- **Engineering: Tier M, 20–60 h** (cost-model §5) → $3,000–9,000 at $150/hr loaded. Chatbot lead (Duck.ai Q-SB4-2, 2026-09-10 — unverified): Kyle λ 25–50 h inside a 315–650 h L1/trade pipeline (bot printed "285–650" — contradicts its own rows). Cost-model tiers take precedence.
+- **SIP adequacy:** Duck.ai lead (labeled, unverified): Kyle λ *usually* honest on SIP — align timestamps, normalize by ADV, prefer midquote changes; direct feeds better for HF λ.
+- **Breaks first at 500 symbols:** the tick-granularity trade/quote asof join (memory bandwidth + cross-venue clock skew).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / Stooq | Daily bars, IEX-only trades | ~$0 | free | no consolidated tape; intraday λ impossible |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP | Consolidated real-time trades + NBBO | ~$30–200/mo | one API, corporate actions, enough for 1-min λ | SIP latency/staleness; no queue truth |
+| Tier 2: Databento (trades + MBP-1/TBBO) | Exchange-timestamped trades + top-of-book | ~$200/mo + usage | honest HF λ, replay | usage metering |
+| Academic: LOBSTER / TAQ (WRDS) | MBO/ITCH replay or TAQ history | ~hundreds/yr academic | ground truth for validation | academic license; not production |
+
+All prices *indicative — verify before budgeting* (cost-model §6). **Verdict: build the estimator, buy the feed.** Your thresholds (participation caps per λ̂ quantile) are the edge — no vendor sells them. **Buy** Databento-grade L1 when HF λ drives live participation; **build** on SIP/Polygon while λ̂ is a daily/1-min variable. Crossover: measured SIP-vs-direct λ̂ divergence above ~10–20% *example — not an institutional standard*.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Honesty first: λ is a **liquidity measurement**, not a strategy. The evidence is about measurement quality and conditioning use — no credible "λ predicts X bps of slippage" literature exists, and none is claimed.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Goyenko–Holden–Trzcinka (2009), JFE 92 | US equities, TAQ + Rule 605 (SEC monthly execution-quality disclosure reports) benchmarks | Amihud "does well measuring price impact" vs HF benchmarks | before-cost (measurement accuracy) | Daily frequency; too coarse for single intraday orders |
+| Collin-Dufresne & Fos (2012, NBER w18451) | US equities | Informed traders trade *more aggressively when measured price impact is lower* | n/a (documents estimator bias) | λ̂ suffers selection bias: measured flow is conditioned on λ̂ itself |
+| Almgren–Chriss (2000) framework | execution literature | Permanent impact γ (linear) separates lasting price moves from temporary liquidity cost η | after-cost (implementation shortfall) | Per-desk calibration; planning input, not forecast |
+
+**Regimes where it fails:** scheduled news (one-sided, uninformative flow), opens/closes and auctions, thin names (a few prints dominate λ̂), and periods where your own flow is a large share of q_t (exclude own fills — self-impact contaminates the estimate).
+
+**Bottom line:** standalone trigger: *zero* edge — λ̂ has no directional content. Filter/sizing input: *real, documented* edge — it ranks where trading is expensive and keeps participation inside an impact budget. Per Duck.ai Q-SB4-3 (labeled chatbot lead): λ is a **local** impact coefficient; impact̂ ≈ λ̂Q is first-order only.
+
+### S10. Failure modes & pitfalls
+
+1. **Unit errors** — regressing on directions (±1) but quoting $/share (the chatbot error in S4). *Mitigation:* assert q in shares; label every λ̂ with units; unit-test on a hand tape.
+2. **Lookahead via quote alignment** — signing with contemporaneous quotes leaks the reaction into d_t. *Mitigation:* lag quotes ~1 s (Lee–Ready); backward asof joins.
+3. **Bid–ask bounce in Δp** — trade-price changes embed ±s/2 bounce, inflating |λ̂|. *Mitigation:* use midquote changes; if only trades exist, note the upward bias.
+4. **Self-impact contamination** — your own fills sit in q_t and push λ̂ up exactly when you trade most. *Mitigation:* flag and exclude own executions from the tape.
+5. **Regime breaks / news** — calm-flow λ̂ misprices headline trading. *Mitigation:* freeze or stress-multiply λ̂ around scheduled events.
+6. **Nonlinearity at size** — impact̂ ≈ λ̂Q underestimates large-order cost. *Mitigation:* cap participation to the linear region; use the square-root variant for large clips.
+7. **Stale quotes on SIP** — delayed NBBO mis-signs trades, attenuating λ̂ toward 0. *Mitigation:* measure SIP-vs-direct λ̂ divergence; upgrade feed past the S8 crossover.
+8. **Overfitting the window** — tuning T to maximize backtested savings is parameter mining. *Mitigation:* fix T from λ̂ stability analysis, not from P&L.
+
+### S11. Visuals
+
+![S010 worked example — synthetic 8-trade tape: Δp vs signed share volume with OLS slope λ̂](images/S010_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(TAQ / Databento trades+TBBO)"] -->|tick trades| ING["Ingest + normalize<br/>(Lee–Ready sign, exchange ts)"]
+    ING -->|signed trade events| SIG["Signal S010<br/>(1–30 min windows, Kyle λ̂ OLS)"]
+    SIG -->|1–30 min λ̂ estimate| GATE{"λ̂ vs toxicity<br/>cap?"}
+    GATE -->|pass: below cap| OUT["Downstream consumer<br/>(T026 participation throttle)"]
+    GATE -->|fail: too toxic| DROP["Stand down / widen quotes"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+*Diagram note: feature compute is folded into SIG — the 1–30 min Kyle λ̂ OLS runs directly on signed trade events, so there is no separate FEAT node (FEAT→SIG fold).*
+
+### S12. Sources
+
+1. Kyle, A. S. (1985). "Continuous Auctions and Insider Trading." *Econometrica*, 53(6), 1315–1335. — the λ model: P(Q) = v₀ + λQ; λ = σ_v/(2σ_ε). https://doi.org/10.2307/1913210 — λ formula as cited: https://github.com/screamer-labs/screamer/blob/HEAD/docs/functions_micro/RollingKyleLambda.md
+2. Goyenko, R. Y., Holden, C. W., & Trzcinka, C. A. (2009). "Do Liquidity Measures Measure Liquidity?" *JFE*, 92(2), 153–181. — Amihud "does well measuring price impact." https://EconPapers.repec.org/article/eeejfinec/v_3a92_3ay_3a2009_3ai_3a2_3ap_3a153-181.htm
+3. Collin-Dufresne, P., & Fos, V. (2012). "Insider Trading, Stochastic Liquidity and Equilibrium Prices." NBER WP 18451. — informed traders trade more when measured impact is low (λ̂ selection bias). https://www.nber.org/system/files/working_papers/w18451/w18451.pdf
+4. Almgren, R., & Chriss, N. (2000). "Optimal Execution of Portfolio Transactions." *Journal of Risk*. — permanent vs temporary impact; λ-family coefficients as execution planning inputs. https://en.wikipedia.org/wiki/Almgren%E2%80%93Chriss_model
+
+Duck.ai answered Q-SB4-1–Q-SB4-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
+
+**Unverified leads** (chatbot-provided, no independent checkable source — do not quote as fact):
+- Duck.ai (GPT-5.6 Luna, 2026-09-10) Q-SB4-1: practical windows (500–10k trades HF; 30–240 min; 20–120 d), Newey–West SEs — *unverified chatbot claim*.
+- Duck.ai Q-SB4-2: L1/trade pipeline 315–650 h (row sums; printed "285–650" contradicts rows), Kyle λ 25–50 h; SIP "usually" adequate — *unverified chatbot claims*.
+- Duck.ai Q-SB4-3: "λ is a local impact coefficient, not a full slippage forecast; no universal 1σ-Amihud → X bps slippage" — *unverified chatbot claim* (consistent with sources above).
+- Grok / Cursor answers to Q-SB4-1–Q-SB4-3: pending (checked 2026-09-10).
+
+---
+## Stage 12/200 — S012: Roll implied effective spread
+
+*Batch SB4 · Signal 12/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Estimates the effective bid–ask spread from transaction prices alone, via the negative lag-1 autocovariance (covariance of each price change with the previous one) that bid–ask bounce induces. |
+| **When it works** | Prices bounce between bid and ask with roughly equal buy/sell pressure, stable spread. |
+| **When it dies** | Trending flow, informed trading, or positive autocovariance: the estimator is undefined and says nothing. |
+| **Build-or-buy in one line** | Build: ten lines of NumPy on any trade tape; nothing to buy. |
+| Provenance | `[D]` — Roll (1984); conventions per Harris (1990), Hasbrouck (2009). Family A — Microstructure & order flow. |
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *SIP* (Securities Information Processor — the official consolidated tape).
+
+Watch a stock trade. Bid 231.40, ask 231.41. A seller hits the bid: print at 231.40. A buyer lifts the ask: 231.41. Another seller: 231.40. If fundamental value never moved, trade prices just *bounce* between 231.40 and 231.41 — consecutive price changes (+0.01, −0.01, +0.01) alternate sign. That negative serial dependence is the fingerprint of the spread.
+
+Roll's (1984) insight: in an efficient market, fundamental value follows a random walk, and the only deviation of *observed* trade prices from a random walk is the bid–ask bounce. So the lag-1 autocovariance of price changes identifies the spread: γ₁ = −s²/4, hence **s = 2√(−γ₁)** — no quotes needed, just a trade tape.
+
+Definitions, since the whole chapter hangs on them:
+
+- **Quoted spread**: ask − bid — what the book *advertises*.
+- **Effective spread**: 2·|trade price − midquote| — what a trader *actually* paid vs fair value; often below quoted (price improvement inside the quotes).
+- **Realized spread**: the dealer's average round-trip revenue; smaller than quoted when adverse selection moves the midquote against the dealer.
+- **Adverse selection**: losses a liquidity provider suffers against better-informed counterparties — the midquote drifts after the trade, shrinking the realized spread.
+
+Roll recovers the *effective* spread — the round-trip cost implied by the bounce — which is why T029 uses it as an edge filter: don't trade unless expected edge exceeds the Roll-implied cost.
+
+**Mental model (3 bullets):**
+- Bounce ⇒ negative autocovariance ⇒ spread. No bounce (one-sided flow) ⇒ no information about the spread.
+- It's a *cost meter*, not a direction signal: it tells you how expensive the name is, never which way it goes.
+- It assumes buys and sells are equally likely and the spread is constant — every violation biases it, and it fails loudly (undefined) rather than quietly.
+
+### S3. The math — exact formula
+
+**Roll model.** Observed price p_t = m_t + (s/2)·I_t, where m_t is the unobserved efficient (mid) price with serially uncorrelated innovations, s is the effective spread, and I_t ∈ {+1, −1} is the trade direction (buy/sell), equally likely and independent of m_t. Then:
+
+$$\Delta p_t = \varepsilon_t + \tfrac{s}{2}(I_t - I_{t-1}),\qquad \mathrm{Cov}(\Delta p_t, \Delta p_{t-1}) = -\frac{s^2}{4}$$
+
+$$\hat{s}_{\text{Roll}} = 2\sqrt{-\hat{\gamma}_1},\qquad \hat{\gamma}_1 = \frac{1}{T-1}\sum_{t=2}^{T}(\Delta p_t - \overline{\Delta p})(\Delta p_{t-1} - \overline{\Delta p})$$
+
+- Δp_t — trade-price change, in **dollars** ($); T = number of price changes in the window.
+- γ̂₁ — sample lag-1 autocovariance of price changes, in **$²**; must be **clearly negative** — if γ̂₁ ≥ 0 the estimator is undefined (S4 rule).
+- ŝ — implied **effective spread**, in **dollars** ($).
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Estimation window | T | 100–5,000 transactions; 1–15 min bars *(chatbot-suggested range, Duck.ai Q-SB4-1 — unverified)* | γ̂₁ dominated by noise; often ≥ 0 | spread assumed constant over too long; regime mixing | 500 trades *example — not an institutional standard* |
+| Sampling | — | tick trades / 1–15 min bars *(chatbot-suggested, unverified)* | tick noise, discreteness | bounce averaged away | 1-min bars *example* |
+| γ̂₁ ≥ 0 rule | — | undefined / floor at 0 / \|·\| | fabricating a spread from noise | — | report undefined; lengthen window *example* |
+
+**Normalization:** ŝ in $ or in **bps** (basis points; ŝ/price × 10,000) for cross-name comparison. Harris (1990) uses 2√|γ̂₁| (always defined); Hasbrouck (2009) floors at 0. These are *choices*, not truths; document yours.
+
+**Causal timing:** ŝ over trades ≤ *t* is known at *t*; a gate based on it applies at *t+1* and later.
+
+**Named variants:**
+1. **Roll–Hasbrouck Gibbs (Bayesian)**: prior on spread and latent trade directions, posterior sampled — always non-negative, exact in small samples; Hasbrouck (2004, 2009).
+2. **Corwin–Schultz (2012)**: spread from daily high/low ratios over 1- and 2-day intervals — needs only OHLC, beats Roll in simulations (S9).
+3. **French–Roll bias correction**: adjusts for the small-sample bias of the moment estimator.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Synthetic 12-trade tape** (prices in $; random seed 12 in the plot script — fully tabulated, reproducible exactly):
+
+| t | p_t | Δp_t |
+|---|---|---|
+| 1 | 100.00 | — |
+| 2 | 100.10 | +0.10 |
+| 3 | 100.10 | 0.00 |
+| 4 | 100.20 | +0.10 |
+| 5 | 100.10 | −0.10 |
+| 6 | 100.00 | −0.10 |
+| 7 | 100.00 | 0.00 |
+| 8 | 99.90 | −0.10 |
+| 9 | 100.00 | +0.10 |
+| 10 | 100.10 | +0.10 |
+| 11 | 99.90 | −0.20 |
+| 12 | 100.00 | +0.10 |
+
+Step-by-step (11 price changes):
+1. ΣΔp_t = **0.00** (starts and ends at 100.00 — it must sum to zero), so Δp̄ = **0** exactly.
+2. Lag-1 cross-products Δp_t·Δp_{t−1} (t = 2…11): 0, 0, −0.01, +0.01, 0, 0, −0.01, +0.01, −0.02, −0.02 → sum = **−0.04**.
+3. γ̂₁ = −0.04/10 = **−0.004** $² (dividing by T−1 = 10 cross-products).
+4. ŝ = 2√(−γ̂₁) = 2√0.004 = 2 × 0.06325 ≈ **$0.126**.
+
+**Correction note:** the Duck.ai draft (Q-SB4-1, 2026-09-10) mis-summed this Δp series as −0.10 (mean −0.00909, γ̂₁ = −0.00402, spread $0.127). All three are wrong: the series sums to 0 (start = end price), so the mean is 0, γ̂₁ = −0.004, and the spread is **$0.126**.
+
+**When γ̂₁ ≥ 0 (the Roll failure rule):** report the spread as **undefined** — do not silently take √|γ̂₁|. Then: (a) lengthen the window; (b) switch to slower sampling (1–5 s or 1–15 min bars — chatbot-rated "usually" honest on SIP, labeled lead); (c) cross-check with Corwin–Schultz or the quoted spread. A positive γ̂₁ with adequate sample usually means trending/informed flow, not a zero spread.
+
+**What to notice:** this toy tape has a suspiciously clean bounce and no fees — real tapes mix bounce with drift, which is why γ̂₁ ≥ 0 happens in practice (about half of Roll's own annual samples; S9). A cost screen, never a backtest input: nothing here is a return.
+
+### S5. Strategies that use this signal
+
+- **T029 — Spread-Estimate Edge Filter** — *primary gate*: trade only when the estimated effective spread (Roll / Corwin–Schultz) is below the per-trade edge; Roll is the cheap first-pass screen.
+- **T028 — Spread-Decomposition Router** — *cost input*: Roll-implied effective spread feeds the router's quoted/effective/realized spread panel alongside S015's decomposition.
+- **T097 — Sub-Hour Microstructure Reversal Scalper** — *timing filter*: reversal entries sized so the harvested bounce exceeds the Roll-implied round-trip cost.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade price p_t | float $ | tick (per trade) | Tier 0–2 | any trade tape; Polygon stocks v3, Databento trades, TAQ |
+| (optional) Trade timestamp | datetime | tick | Tier 1–2 | needed only for window/bar sampling |
+| (cross-check) Daily high/low | float $ | daily | Tier 0 | for Corwin–Schultz fallback |
+
+Collection: the cheapest signal in the book — a trade-price series. `trades` schema from Databento or Polygon; even Stooq daily closes work for a daily-frequency Roll (with the caveat that daily sampling weakens the bounce). Ingest sketch (≤20 lines):
+
+```python
+import polars as pl, numpy as np
+px = pl.scan_parquet("trades_*.parquet").select("ts","price").sort("ts")
+dp = px.with_columns(dp=pl.col("price").diff()).drop_nulls().collect()
+T = len(dp)
+g1 = ((dp["dp"]-dp["dp"].mean())*(dp["dp"].shift(1)-dp["dp"].mean())).sum()/(T-1)
+roll_spread = 2*np.sqrt(-g1) if g1 < 0 else float("nan")  # undefined if >= 0
+print(f"γ̂₁={g1:.6f}  Roll spread={roll_spread}")
+```
+
+Storage: negligible — a trade-price column (500 symbols × 60 days of 1-min bars ≈ 12 MB, cost-model §3). Data-quality: exclude auction prints and halts (they break the bounce), splits/dividends, DST/half-days, bad ticks (drop prints >10% from rolling median — *example*).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier M).** The covariance itself is microseconds of NumPy — but a defensible pipeline (sampling harness, γ̂₁ ≥ 0 rule, Corwin–Schultz cross-check, validation) is what the band prices. Per cost-model §2, numpy vectorized math runs ~50–200M elements/sec; the entire 500-symbol 1-min-bar panel (195k bars/day) computes in milliseconds. The work is in *sampling choices and the γ̂₁ ≥ 0 decision rule*, not compute.
+
+| Stack | When to pick |
+|---|---|
+| Python + NumPy/polars | default: the whole estimator is one vectorized expression |
+| DuckDB | ad-hoc research over daily Parquet trade files |
+
+- **Throughput:** effectively infinite for this signal; bottleneck is data retrieval, not compute.
+- **RAM:** 1 symbol-day of 1-min bars ≈ 0.1 MB (cost-model §3); 500 symbols × 60 days ≈ 12 MB — trivial.
+- **Engineering: Tier M, 20–60 h** (cost-model §5: S001–S020 ex-L2) → $3,000–9,000 at $150/hr loaded-cost estimate. The narrow covariance prototype is a few hours; the band prices the defensible trade-tape pipeline. Chatbot lead (Duck.ai Q-SB4-2, 2026-09-10 — unverified): Roll component 15–30 h inside a 315–650 h L1/trade pipeline (bot printed "285–650" — contradicts its own rows). Cost-model tiers take precedence.
+- **SIP adequacy:** Duck.ai lead (labeled, unverified): Roll is *usually* honest on SIP — use slow sampling (1–5 s or 1–15 min bars) and test sensitivity to the sampling choice. Never treat a SIP-derived Roll as exchange truth at tick granularity.
+- **Breaks first at 500 symbols:** nothing about Roll breaks — but tick-level on 500 names makes the trade-tape ingest (not the estimator) the bottleneck; sample to bars.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX / exchange delayed | Daily bars or IEX trades | ~$0 | free; enough for daily Roll | coarse; weak bounce at daily frequency |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP | Real-time consolidated trades | ~$30–200/mo | full tape for tick Roll | nothing material at this price |
+| Tier 2: Databento trades | Exchange-timestamped trades, replay | ~$200/mo + usage | provenance, replay | overkill for a covariance |
+| Academic: TAQ (WRDS) | Full consolidated history | ~hundreds/yr academic | validation sample | academic license |
+
+All prices *indicative — verify before budgeting* (cost-model §6). **Verdict: build, always.** No vendor product exists — Roll is ten lines of NumPy. Spend the effort on the *sampling and γ̂₁ ≥ 0 rule*; cross-check with Corwin–Schultz (needs only daily high/low) before trusting one estimate. **Buy** a feed only if you lack a trade tape for other signals; never buy data *for* Roll.
+
+### S9. Success ratio / efficacy — documented evidence
+
+Roll is a cost *measurement*; the evidence is about estimator accuracy, not trading profits. No strategy, only a meter.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Hasbrouck (2009), *JF* 64(3) | US equities vs transaction-level estimates | Gibbs (Bayesian Roll) achieves **0.965 correlation** with transaction-level effective costs | before-cost (measurement accuracy) | Daily closes; Gibbs heavier than moment Roll |
+| Corwin–Schultz (2012), *JF* 67(2) | Simulations (per published summaries) | High–low estimates correlate **~0.9** with true spreads; **half the std dev** of Roll's estimator | before-cost (estimator precision) | Simulation-based; assumes high≈buy/low≈sell |
+| Roll (1984) via CEMMAP CWP12/16 | Roll's own annual daily/weekly samples | Positive autocovariance — estimator undefined — in **about half** the cases | n/a (documents failure rate) | Daily/weekly sampling; intraday ticks behave better |
+
+**Regimes where it fails:** one-sided flow (no bounce — γ̂₁ ≥ 0), informed episodes (random-walk assumption breaks), discrete ticks in low-priced names (quantized bounce), after-hours/crossed markets.
+
+**Bottom line:** standalone trigger: *zero* edge (no direction). Cost filter: *documented, honest* edge — it keeps you out of trades whose implied round-trip cost already eats your edge. Prefer Gibbs/Corwin–Schultz over raw moment-Roll on short samples.
+
+### S10. Failure modes & pitfalls
+
+1. **γ̂₁ ≥ 0 — the classic failure** — √|·| or silent flooring fabricates a spread from trend noise. *Mitigation:* report undefined; lengthen window; cross-check (S4).
+2. **Lookahead via window choice** — tuning the window until the spread "looks right" is parameter mining. *Mitigation:* fix sampling from stability analysis, not from downstream P&L.
+3. **Auction prints and halts** — discontinuous prices inject fake autocovariance. *Mitigation:* exclude opens/closes/auction prints and halted periods.
+4. **Tick discreteness** — in low-priced names the bounce is quantized and γ̂₁ is distorted. *Mitigation:* use bps units; prefer midquote-based measures where quotes exist.
+5. **Buys/sells equally likely — false** — real flow clusters; one-sided flow biases ŝ down. *Mitigation:* treat Roll as a lower-bound screen under clustered flow; confirm with quoted spreads.
+6. **Mixing regimes in one window** — calm morning + news afternoon in a single γ̂₁ mixes two spreads. *Mitigation:* short rolling windows; intraday seasonality awareness (wider at open/close).
+7. **Backtest misuse** — "returns net of Roll spread" on a synthetic tape is fabricated realism. *Mitigation:* Roll is a live cost gate; never subtract it from toy P&L.
+8. **Small-sample bias** — the moment estimator is biased in short samples. *Mitigation:* French–Roll correction or the Gibbs estimator for short windows.
+
+### S11. Visuals
+
+![S012 worked example — synthetic 11-change trade-price series with lag-1 autocovariance annotation](images/S012_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(any trade tape: Polygon/TAQ)"] -->|tick trades| ING["Ingest + normalize<br/>(drop auctions/halts, splits)"]
+    ING -->|per-trade clean trade-price series| SIG["Signal S012<br/>(rolling 100–5,000-trade windows, ŝ = 2√(−γ̂₁))"]
+    SIG -->|rolling 100–5,000-trade spread estimate| GATE{"γ̂₁ clearly negative<br/>and ŝ < edge?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T029 edge filter)"]
+    GATE -->|fail| DROP["No trade / lengthen window"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Roll, R. (1984). "A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient Market." *JF*, 39(4), 1127–1139. — ŝ = 2√(−cov); spread from price changes alone. https://repec.udesa.edu.ar/pub/Finanzas/Journals/Journal%20of%20Finance/39/4/2327617.pdf
+2. Harris, L. (1990). "Statistical Properties of the Roll Serial Covariance Bid/Ask Spread Estimator." *JF*, 45(2), 579–590. — positive-autocovariance properties; |·| convention. Author's CV: https://msbfile03.usc.edu/digitalmeasures/lharris/pci/Harris-Larry%20CV-1.pdf
+3. Hasbrouck, J. (2009). "Trading Costs and Returns for U.S. Equities." *JF*, 64(3), 1445–1477. — Gibbs estimate correlates 0.965 with transaction-level estimates. https://pages.stern.nyu.edu/~jhasbrou/Research/GibbsCurrent/HasbrouckJF.pdf
+4. Corwin, S. A., & Schultz, P. (2012). "A Simple Way to Estimate Bid-Ask Spreads from Daily High and Low Prices." *JF*, 67(2), 719–760. — high–low estimator; ~0.9 correlation in simulations, half Roll's std dev. https://afajof.org/issue/volume-67-issue-2/
+5. CEMMAP CWP12/16 — "Simple Nonparametric Estimators for the Bid-Ask Spread in the Roll Model." — Roll's positive-autocovariance problem (≈ half his samples); reviews Harris/Hasbrouck fixes. https://www.cemmap.ac.uk/wp-content/uploads/2020/08/CWP1216.pdf
+
+Duck.ai answered Q-SB4-1–Q-SB4-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
+
+**Unverified leads** (chatbot-provided, no independent checkable source — do not quote as fact):
+- Duck.ai (GPT-5.6 Luna, 2026-09-10) Q-SB4-1: practical windows (100–5,000 transactions; 1–15 min bars), γ̂₁ ≥ 0 handling (undefined / lengthen / corrected estimator) — *unverified chatbot claims* (consistent with Harris/Hasbrouck conventions; kept as labeled leads).
+- Duck.ai Q-SB4-2: Roll component 15–30 h inside a 315–650 h L1/trade pipeline (row sums; printed "285–650" contradicts rows); SIP "usually" honest with slow sampling — *unverified chatbot claims*.
+- Grok / Cursor answers to Q-SB4-1–Q-SB4-3: pending (checked 2026-09-10).
+
+---
+## Stage 15/200 — S015: Spread decomposition — Huang–Stoll
+
+*Batch SB4 · Signal 15/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Splits the traded spread into three costs — adverse selection, inventory, order processing — via a trade-indicator regression on quote midpoints. |
+| **When it works** | Clean signed trades with lag-aligned quotes; the adverse-selection share becomes a slow-moving toxicity gauge for routing and quoting. |
+| **When it dies** | Stale NBBO, mis-signed trades, locked/crossed quotes, short windows — the α/β split is fragile and components blur. |
+| **Build-or-buy in one line** | Build the estimator; buy TAQ-grade quote history — alignment is the whole job. |
+| Provenance | `[D]` — Huang & Stoll (1997); Glosten–Harris (1988) predecessor; Stoll (1989) covariance family. Family A — Microstructure & order flow. |
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *NBBO* (National Best Bid and Offer — the consolidated best bid/ask across exchanges); *SIP* (Securities Information Processor — the official consolidated tape); *HFT* (high-frequency trader).
+
+It's 9:47:03. AAPL's book: bid 231.40 × 800, ask 231.41 × 300 — the **quoted spread** (ask − bid) is $0.01. Three costs hide inside that penny:
+
+- **Adverse selection**: risk of trading against the better informed. After a buy lifts the ask, the **midquote** ((bid+ask)/2) is revised *upward*, permanently. The spread fraction for information risk is α.
+- **Inventory cost**: risk of holding an unwanted position. After absorbing sells, the midquote drifts down to attract buyers — *transitory*, reversing. Its share is β.
+- **Order processing**: the fixed cost of standing ready — systems, capital, attention. Whatever is left: 1 − α − β.
+
+Huang and Stoll's (1997) trick: the three costs leave different footprints in the midquote's response to the *sequence* of trade directions — permanent revision after a buy (adverse selection), decaying revision (inventory), constant trade-price/midquote wedge (order processing). One regression on midquote changes vs current and lagged trade directions separates them.
+
+α is a **toxicity gauge**: high α → informed flow, dangerous to quote into (widen quotes, route defensively); low α → the spread is mostly rent. Consumed by T028 and T083.
+
+**Mental model (3 bullets):**
+- The spread is three costs, not one — only the adverse-selection slice predicts your fills will be followed by adverse price moves.
+- α̂ is a *state* (toxicity regime), not a trigger: high α̂ → stand down or charge more; low α̂ → provide liquidity.
+- The estimator is only as honest as the signing and quote alignment underneath — garbage in, three garbage components out.
+
+### S3. The math — exact formula
+
+**Huang–Stoll (1997) trade-indicator model:**
+
+$$\Delta M_t = \frac{S}{2}\,Q_{t-1} + (\alpha+\beta)\,\frac{S}{2}\,Q_t + e_t$$
+
+- M_t — quote **midpoint** (midquote) at trade *t*, in **$**; ΔM_t in $.
+- Q_t ∈ {+1, −1} — **trade indicator** (+1 buyer-initiated, −1 seller-initiated), dimensionless; Lee–Ready signed (quote rule on *lagged* midquote, tick rule at midquote).
+- S — traded spread (constant within window), in **$**.
+- α — **adverse-selection component**: half-spread fraction compensating information risk (permanent revision).
+- β — **inventory component**: half-spread fraction for inventory-holding risk (transitory revision).
+- 1 − α − β — **order-processing component** (residual); e_t — public-information innovation + noise.
+
+Estimation: **OLS** (ordinary least-squares; or **GMM**, generalized method of moments, with discreteness corrections) of ΔM_t on Q_{t−1}, Q_t gives ĉ₁ = S/2, ĉ₂ = (α+β)(S/2). Splitting α from β needs a second moment — trade-indicator serial correlation: permanent midquote moves identify α, mean-reverting revisions identify β.
+
+**Predecessor — Glosten–Harris (1988):**
+
+$$\Delta p_t = c_0\,\Delta Q_t + c_1\,\Delta Q_t\,V_t + z_0\,Q_t + z_1\,Q_t\,V_t + \varepsilon_t$$
+
+- z-terms = **adverse selection** (permanent), c-terms = **transitory** (order processing + inventory); V_t = trade size. Glosten–Harris splits permanent vs transitory; Huang–Stoll further splits transitory into inventory vs order processing.
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Estimation window | T | 100s–1000s of trades / intraday blocks *(chatbot-suggested, Duck.ai Q-SB4-1 — unverified)* | α/β unidentified, noisy | components assumed constant over regime shifts | 1 trading day *example — not an institutional standard* |
+| Quote lag for signing | — | 0–5 s lag quotes behind trades *(chatbot-suggested — unverified)* | lookahead: quote already reacted | stale quotes mis-sign | 1 s lag *example* |
+
+**Causal timing:** components on trades ≤ *t* describe the toxicity *regime*; usable from *t+1*. Shares move slowly — re-estimate intraday, consume as a slow gauge.
+
+**Named variants:**
+1. **Two-component HS** (α+β pooled vs order processing) — more stable; use when α/β won't identify.
+2. **Glosten–Harris with size interactions** — components as functions of V_t; for block-heavy flow.
+3. **Madhavan–Richardson–Roomans (1997)** — allows correlated order flow; intraday component variation.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Synthetic 8-observation regression sample** (9 underlying trades t = 1…9; seed 15; fully tabulated). ΔM_t = 0.020·Q_{t−1} + 0.010·Q_t + e_t, ΔM in $:
+
+| t | Q_t | Q_{t−1} | ΔM_t ($) | e_t ($) |
+|---|---|---|---|---|
+| 2 | +1 | +1 | +0.032 | +0.002 |
+| 3 | −1 | +1 | +0.008 | −0.002 |
+| 4 | +1 | −1 | −0.009 | +0.001 |
+| 5 | −1 | +1 | +0.009 | −0.001 |
+| 6 | −1 | −1 | −0.028 | +0.002 |
+| 7 | +1 | −1 | −0.012 | −0.002 |
+| 8 | −1 | +1 | +0.011 | +0.001 |
+| 9 | +1 | −1 | −0.011 | −0.001 |
+
+OLS of ΔM on x₁ = Q_{t−1}, x₂ = Q_t (demeaned, sums 0):
+- Σx₁² = Σx₂² = 8, Σx₁x₂ = −4 → (X′X)⁻¹ = [[1/6, 1/12],[1/12, 1/6]].
+- X′y: x₁′y = 0.120, x₂′y = 0.000 (hand-chosen errors orthogonal to x₂ — a property of this constructed tape, not real data).
+- ĉ₁ = 0.120/6 = **0.020** → S/2 = $0.020, so S = **$0.04**.
+- ĉ₂ = 0.120/12 = **0.010** → (α+β) = ĉ₂/ĉ₁ = **0.50**.
+
+Second stage (set by construction to split the pooled 0.50): **α = 0.30**, **β = 0.20**, order processing = **0.50**. Components of the $0.020 half-spread:
+
+| Component | Share | $ of half-spread |
+|---|---|---|
+| Adverse selection (α·S/2) | 30% | $0.006 |
+| Inventory (β·S/2) | 20% | $0.004 |
+| Order processing ((1−α−β)·S/2) | 50% | $0.010 |
+
+Interpretation: half the spread is dealer rent; 30% information risk, 20% inventory risk. α̂ = 0.30 → moderately toxic flow.
+
+**Chatbot cross-check:** the Duck.ai draft's guidance (Q-SB4-1) had **no arithmetic errors** — direction, spread definitions, quote-lag alignment, component split, 60–120 h band; labeled lead.
+
+**What to notice:** the first stage recovers S and α+β, but the α/β *split* is fragile — in real data it hinges on trade-indicator autocorrelation, exactly what stale quotes corrupt. Zero fees, constant spread; nothing is a trading result.
+
+### S5. Strategies that use this signal
+
+- **T028 — Spread-Decomposition Router** — *primary signal*: quoted/effective/realized spreads plus HS shares decide routing — high-α̂ flow routed defensively, low-α̂ worked passively.
+- **T083 — Retail-Flow Internalizer Fade** — *pricing input*: prices liquidity provision off the decomposition — fades retail/odd-lot imbalance only when α̂ says the flow is uninformed.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade price & size | float $, int shares | tick | Tier 1–2 | TAQ / Databento trades; venue odd-lot rules |
+| Bid/ask quotes (BBO) | float $ | tick | Tier 1–2 | must *precede* each trade; lag 1–5 s for Lee–Ready *(chatbot-suggested — unverified)* |
+| Trade direction Q_t | ±1 | tick | derived | quote rule then tick rule; 0 allowed at midquote |
+| Corporate actions | adjustment factors | daily | Tier 0–1 | splits/dividends break ΔM continuity |
+
+Collection: TAQ-grade quotes + trades (Databento `tbbo`+`trades`, or Polygon quotes/trades v3). The critical job is **quote-lag alignment**: sign each trade against the quote that *prevailed before* it — the chatbot lead (Duck.ai Q-SB4-1, labeled) stresses direction, quote-lag alignment, and the component split as make-or-break. Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+tr = pl.scan_parquet("trades_*.parquet").select("ts","price","size").sort("ts")
+qb = pl.scan_parquet("tbbo_*.parquet").select("ts","bid","ask").sort("ts")
+q = qb.with_columns(mid=(pl.col("bid")+pl.col("ask"))/2,
+                    ts_lag=pl.col("ts")+pl.duration(seconds=1))  # lag quotes
+s = tr.join_asof(q, left_on="ts", right_on="ts_lag", strategy="backward")
+s = s.with_columns(Q=pl.when(pl.col("price")>pl.col("mid")).then(1)
+                     .when(pl.col("price")<pl.col("mid")).then(-1).otherwise(0),
+                   dM=pl.col("mid").diff())
+reg = s.with_columns(Qlag=pl.col("Q").shift(1)).drop_nulls()
+# OLS: dM ~ Qlag + Q  ->  c1 = S/2, c2 = (α+β)*S/2
+```
+
+Storage: L1 quotes+trades ≈ 2–8 GB/day per liquid name in Parquet (cost-model §4) — daily files; aligned quote history required, not bars. Data-quality: locked/crossed NBBO (drop), stale quotes (age < 5 s — *example*), halts/auctions (exclude), odd-lot rules (venue-dependent), DST/half-days, tick-size changes.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible (Tier M).** The regression is trivial; the *pipeline* — tick-granularity quote-lag alignment, Lee–Ready signing, robust estimation across hundreds of names — is real data engineering.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | default: batch re-estimation on intraday blocks; fastest to build |
+| Rust event loop | tick-level real-time signing across many symbols |
+| DuckDB | ad-hoc research over per-symbol daily Parquet files |
+
+- **Throughput:** polars asof joins ~1–10M rows/sec (cost-model §2, complex ops); aligning a day of TAQ quotes+trades for 50 names is minutes of batch work. Real-time HS needs incremental signing — Python fine at ≤20 symbols L1, Rust beyond.
+- **RAM:** one symbol-day of L1 ≈ 0.5–4 GB (cost-model §3); working set is a rolling quote+trade panel per symbol. 500 symbols × 60 days raw L1 does **not** fit — per-symbol daily files + streaming.
+- **Engineering: Tier M, 20–60 h** (cost-model §5: S001–S020 ex-L2) → $3,000–9,000 at $150/hr loaded. Chatbot lead (Duck.ai Q-SB4-2, 2026-09-10 — unverified): **60–120 h for a defensible production build**. Cost-model tiers take precedence.
+- **SIP adequacy:** Duck.ai lead (labeled, unverified): HS *mostly* honest on SIP — but stale NBBO, reporting delays, locked/crossed quotes, odd-lot handling bite at short horizons. Validate α̂/β̂ against a direct-feed sample before routing on it.
+- **Breaks first at 500 symbols:** the tick-granularity quote-alignment join (bandwidth + clock skew); α/β identification degrades as quote staleness rises.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: SIP delayed / Stooq | Daily bars, delayed quotes | ~$0 | free | no tick quotes — HS impossible |
+| Tier 1: Polygon / Alpaca SIP | Real-time trades + NBBO | ~$30–200/mo | cheapest viable HS input | stale-NBBO caveats on the α/β split |
+| Tier 2: Databento (trades + TBBO) | Exchange-timestamped, replay | ~$200/mo + usage | honest quote-lag alignment | usage metering |
+| Tier 3: TAQ via WRDS (academic) | Full consolidated history | ~hundreds/yr academic | validation gold standard | academic license; not production |
+
+All prices *indicative — verify before budgeting* (cost-model §6). **Verdict: build the estimator, buy TAQ-grade quotes.** Nobody sells your toxicity thresholds — the α̂ at which *you* stand down is the edge. **Buy** Databento-grade L1 when the decomposition drives routing (T028) or quoting (T083); **build** on SIP while HS is a research gauge. Crossover: SIP-vs-direct α̂ divergence exceeding your toxicity tolerance *example — not an institutional standard*. Hybrid is normal: buy the raw feed, build the analytics.
+
+### S9. Success ratio / efficacy — documented evidence
+
+HS is a spread *measurement*; the evidence concerns component magnitudes and stability — all before-cost.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Huang & Stoll (1997), *RFS* 10(4) | NYSE stocks | "Large order processing, smaller but significant adverse selection and inventory"; shares differ by trade size | before-cost (measurement) | Specialist-era structure; model-dependent |
+| Gregoriou & Rhodes (2017) on HS (1997) | Large NYSE stocks | Two-component: order processing ≈ **88.6%** avg; full split: order processing largest, inventory next, information asymmetry **<10%** | before-cost (measurement) | Large liquid names — adverse selection small *there* |
+| Bleaney & Li (2014), Nottingham DP 14/03 | FX multi-dealer (Reuters D2000-1) | Asymmetric-information component carries the **biggest weight** in FX | before-cost (measurement) | Different structure — shares are regime/venue-dependent |
+
+**Regimes where it fails:** news/jumps (spread not constant; α̂ spikes after), opens/closes (auctions), thin names (too few trades to split α vs β — use two-component), fragmented markets (the "dealer" is a crowd of HFTs). Shares drift with market structure — re-estimate; don't hard-code 1997 shares.
+
+**Bottom line:** standalone trigger: *zero* edge — HS never gives direction. Toxicity gauge: *documented, honest* — α̂ tells routing/quoting how dangerous the flow is. The ordering is the desk-relevant fact — order processing dominates calm large-caps, adverse selection dominates stressed flow.
+
+### S10. Failure modes & pitfalls
+
+1. **Mis-signed trades** — unlagged quotes leak the quote's reaction into Q_t; tick-rule errors cluster when flow is fastest. *Mitigation:* lag quotes 1–5 s; report the signing-failure rate.
+2. **Stale / locked / crossed NBBO** — signing against a stale midquote flips Q_t. *Mitigation:* drop locked/crossed quotes; quote age < 5 s (*example*); direct feeds for routing-grade use.
+3. **α/β non-identification** — in short/calm windows the second-stage moment is noise. *Mitigation:* fall back to two-component (α+β pooled); require minimum trade counts.
+4. **Spread non-constancy** — S assumed constant; violated at opens, closes, news. *Mitigation:* estimate per intraday block; dummy event windows.
+5. **Lookahead in alignment** — any forward tolerance in the trade/quote join leaks. *Mitigation:* strictly backward asof joins.
+6. **Overfitting window/lag** — tuning T and lag to make α̂ "look right" is parameter mining. *Mitigation:* fix from stability analysis (α̂ autocorrelation), not downstream P&L.
+7. **Treating shares as universal** — quoting "α = 10%" from a 1997 large-cap study on a 2026 small-cap is fabricated precision. *Mitigation:* estimate per name/regime (Bleaney & Li 2014).
+8. **Cost-model optimism** — HS measures the *traded* spread's composition; realized cost adds fees, latency, partial fills. *Mitigation:* HS is one input to the cost model, not the whole model.
+
+### S11. Visuals
+
+![S015 worked example — synthetic Huang–Stoll decomposition: 30% adverse selection, 20% inventory, 50% order processing](images/S015_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(TAQ / Databento trades+TBBO)"] -->|tick trades + quotes| ING["Ingest + normalize<br/>(quote-lag align, Lee–Ready)"]
+    ING -->|per-trade ΔM_t, Q_t| SIG["Signal S015<br/>(intraday blocks, HS α̂/β̂/OP)"]
+    SIG -->|per-window OLS estimates (S, α+β)| GATE{"α̂ toxicity<br/>tolerance?"}
+    GATE -->|pass: low α̂| OUT["Downstream consumer<br/>(T028 router / T083 quoter)"]
+    GATE -->|fail: high α̂| DROP["Route defensively / stand down"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Huang, R. D., & Stoll, H. R. (1997). "The Components of the Bid-Ask Spread: A General Approach." *RFS*, 10(4), 995–1034. — three-way trade-indicator decomposition; large order-processing, smaller adverse-selection and inventory components. https://ideas.repec.org/a/oup/rfinst/v10y1997i4p995-1034.html
+2. Glosten, L. R., & Harris, L. E. (1988). "Estimating the Components of the Bid/Ask Spread." *JFE*, 21, 123–142. — seminal trade-indicator model; permanent vs transitory split. https://business.columbia.edu/faculty/research/estimating-components-bidask-spread
+3. Stoll, H. R. (1989). "Inferring the Components of the Bid-Ask Spread." *JF*, 44(1), 115–134. — covariance-based three-component model; NASDAQ/NMS estimates. https://afajof.org/issue/volume-44-issue-1/
+4. Gregoriou, A., & Rhodes, M. (2017). "The Accuracy of Spread Decomposition Models in Capturing Informed Trades." *RBF*. — HS (1997): order processing ≈ 88.6% avg two-component; <10% info asymmetry for large stocks; Stoll (1989): >40%. https://eprints.leedsbeckett.ac.uk/id/eprint/3918/6/Gregoriou%20and%20Rhodes%20RBF%202017.pdf
+5. Bleaney, M., & Li, Z. (2014). "Decomposing the Bid-Ask Spread in Multi-Dealer Markets." Nottingham DP 14/03. — asymmetric-information biggest in FX; shares venue-dependent. http://ideas.repec.org/p/not/notecp/14-03.html
+
+Duck.ai answered Q-SB4-1–Q-SB4-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
+
+**Unverified leads** (chatbot-provided, no independent checkable source — do not quote as fact):
+- Duck.ai (GPT-5.6 Luna, 2026-09-10) Q-SB4-1: implementation guidance — trade direction, spread definitions, quote-lag alignment, component split; 60–120 h defensible implementation — *unverified chatbot claims* (no arithmetic errors; kept as labeled leads).
+- Duck.ai Q-SB4-2: 60–120 h within a 315–650 h L1/trade pipeline (row sums; printed "285–650" contradicts rows); SIP "mostly" adequate with stale-NBBO caveats — *unverified chatbot claims*.
+- Grok / Cursor answers to Q-SB4-1–Q-SB4-3: pending (checked 2026-09-10).
+
+---
+## Stage 17/200 — S017: Hawkes self-excitation intensity of order flow
+
+*Batch SB4 · Signal 17/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Conditional event intensity λ(t) that rises after each trade/quote event (self-excitation) and decays; the buy-minus-sell imbalance forecasts near-term activity bursts. |
+| **When it works** | Liquid names with clustered, algorithmically sliced flow; ms-to-second horizons; as a probabilistic activity/risk forecast. |
+| **When it dies** | Announcements, auctions, halts, regime breaks (nonstationarity); latency beyond a few ms; after spread + fees with marketable orders. |
+| **Build-or-buy in one line** | Build the intensity estimator on a bought L1/trade feed — calibration is the work, not the data. |
+
+Provenance **[D]** · Family A — Microstructure & order flow. Signal chapter 17/100.
+
+> **Mandatory framing (operator-verified):** Hawkes models *document clustering and improve probabilistic forecasts of near-term event/price-move risk versus an unconditional/memoryless baseline* — a **weaker** claim than a fee-adjusted strategy. **There is no general documented result that Hawkes-based signals survive fees.** Significant direction accuracy ≠ positive net PnL if the move is < 1 tick or the spread is crossed. Forecast-improvement evidence and net-PnL evidence are kept in separate rows throughout (§S9).
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *SIP* (Securities Information Processor — the official consolidated tape); *NBBO* (National Best Bid and Offer — the consolidated best bid/ask across exchanges); *MBO* (market-by-order — individual-order messages); *MLE* (maximum likelihood estimation).
+
+**Self-excitation**: an event makes the *next* event more likely for a while. At 9:47:03 a 500-share buy prints, then two more within 80 ms. A memoryless (Poisson) model treats prints as independent; a Hawkes model says the first buy *raised the instantaneous arrival rate* of further buys, decaying away after. Order slicing (S018) and algos reacting to each other's prints produce exactly this clustering.
+
+**Conditional intensity** λ(t) is the expected event rate *right now* given all history. We track λ⁺(t) (buys) and λ⁻(t) (sells); their difference is the signed signal — a λ⁺ spike vs λ⁻ flags a likely burst of buy-side activity and short-run price pressure.
+
+Why this exists: **order splitting** (child orders cluster buys; adverse selection for anyone leaning against them) and **endogenous feedback** (algos reacting to each other's prints). Hawkes separates exogenous baseline flow (μ) from endogenous excited flow (κ) — a market-endogeneity gauge.
+
+**Mental model:** each event injects a decaying pulse of excitation (recent events matter most); the **branching ratio** (fraction of events caused by prior events) measures endogeneity — near 1, nearly unstable; the z-scored imbalance λ⁺−λ⁻ forecasts *flow activity/direction*, not profit after costs.
+
+### S3. The math — exact formula
+
+**Bivariate exponential Hawkes** (buy/sell), the standard order-flow form (operator-verified against the literature; independently confirmed by the multivariate formula in Worrall et al., SORT):
+
+$$\lambda_i(t) = \mu_i + \sum_{j \in \{+,-\}} \int_0^t \phi_{ij}(t-s)\, dN_j(s), \qquad i \in \{+,-\}$$
+
+with exponential kernel $\phi_{ij}(u) = \alpha_{ij} e^{-\beta_{ij} u}\mathbf{1}\{u>0\}$.
+
+- $\lambda_i(t)$ — conditional intensity of side-$i$ events (events/sec); $\mu_i > 0$ — **baseline intensity**, the exogenous rate with no history.
+- $N_j(s)$ — counting process of side-$j$ events; the integral sums kernel contributions of all past events.
+- $\alpha_{ij} \ge 0$ — excitation jump per side-$j$ event; $\beta_{ij} > 0$ — decay rate (1/sec), half-life $h_{ij} = \ln 2 / \beta_{ij}$.
+- Integrated kernel $K_{ij} = \int_0^\infty \phi_{ij}(u)\,du = \alpha_{ij}/\beta_{ij}$ (dimensionless): expected side-$i$ children per side-$j$ event.
+- **Stationarity:** spectral radius $\rho(K) < 1$ (univariate: $\alpha/\beta < 1$); otherwise intensity explodes.
+- **Branching ratio** $n = \rho(K)$ (univariate $n = \alpha/\beta$): fraction of events endogenously triggered. $n \to 1$ = near-critical, cascade-prone.
+
+**Signal:** $\text{imb}_t = \lambda^+_t - \lambda^-_t$, then $z_t = (\text{imb}_t - \bar{\text{imb}})/\sigma_{\text{imb}}$ over a rolling window. Trade rule example: enter in the direction of $z_t$ when $|z_t| > 2$ (*example — not an institutional standard*).
+
+**Discrete-time recursion** (what you actually code on binned data, bin width $\Delta$):
+
+$$\kappa_{t+1} = d \cdot (\kappa_t + \alpha x_t), \qquad \lambda_t = \mu + \kappa_t$$
+
+- $x_t$ — event mark in bin $t$ (count, signed flow, or 0/1); $d = e^{-\beta \Delta}$ — per-bin decay.
+- Causal timing: $\lambda_t$ uses only history through $\kappa_t$; tradable no earlier than bin $t+1$.
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small / too large | Default example |
+|---|---|---|---|---|
+| Baseline intensity | $\mu$ | 0.1–5 events/s per side | misses exogenous flow / never decays to reality | 0.5/bin (*example — not an institutional standard*) |
+| Excitation jump | $\alpha$ | 0.1–2.0 | no burst detection / explosive, violates $\alpha/\beta<1$ | 0.6 (*example*) |
+| Decay rate | $\beta$ | 0.02–70 /s (half-life 10 ms–30 s) | stale signals / no memory | half-life 30 s (*example*) |
+| z threshold | $z^*$ | 1.5–3.0 | whipsaw / never trades | 2.0 (*example — not an institutional standard*) |
+| z window | $W$ | 5–60 min rolling | adapts to noise / lags regimes | 15 min (*example*) |
+
+**Normalization:** z-score on the signed imbalance is standard (raw $\lambda^+-\lambda^-$ scales with activity); rank-normalization is a robust alternative. Empirical kernels are closer to power-law than exponential (source entry), so **named variants**: (1) single exponential (fast, Markovian recursion); (2) sum of 2–3 exponentials (fast + slow decay); (3) nonparametric/power-law kernel (best fit, costlier MLE); (4) trade-only vs full book-event (trades + cancels + limit orders) multivariate Hawkes.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 10-minute tape coarsened to 5-second bins (seed **1717**; `batches/SB4/plot_S017.py` regenerates it). Baseline $\mu=0.5$ events/bin/side, $\alpha=0.6$, half-life 30 s → $d = e^{-\ln 2 \cdot 5/30} \approx 0.8909$. A buy burst is injected in bins 60–71. Table shows bins 60–67; $x_b, x_s$ are buy/sell event counts; $\lambda_b, \lambda_s$ intensities; $z$ the full-sample z-scored imbalance.
+
+| t (s) | buys | sells | $\lambda^b_t$ | $\lambda^s_t$ | $z_t$ |
+|---|---|---|---|---|---|
+| 300 | 9 | 1 | 2.646 | 2.511 | −0.44 |
+| 305 | 4 | 1 | 7.223 | 2.826 | +1.32 |
+| 310 | 4 | 0 | 8.628 | 3.107 | +1.79 |
+| 315 | 7 | 2 | 9.879 | 2.822 | +2.43 |
+| 320 | 0 | 0 | 12.598 | 3.638 | +3.21 |
+| 325 | 2 | 0 | 11.278 | 3.296 | +2.81 |
+| 330 | 3 | 0 | 11.171 | 2.991 | +2.89 |
+| 335 | 2 | 0 | 11.610 | 2.719 | +3.19 |
+
+Hand-check (t=300→305): $\kappa^b_{300}=2.646-0.5=2.146$; with $x_b=9$: $\kappa^b_{305}=0.8909(2.146+5.4)=6.723$ → $\lambda^b_{305}=7.223$ ✓.
+
+
+**What to notice:** buy intensity rises *after* the burst starts (t=300: 9 buys, yet $\lambda^b$=2.65 — the intensity is backward-looking; first events are always a surprise). z crosses +2 at t=315 s (∼15 s irreducible detection lag) and peaks at +3.21 at t=320 s with *zero* events that bin: intensity has memory — the point, and the trap. **Limits:** no fees/spread, perfect classification, hand-injected burst; real MLE calibration on $10^4$–$10^6$ events is fragile near critical branching.
+
+### S5. Strategies that use this signal
+
+- **T023 — Hawkes Burst Scalper — primary entry trigger**: trades self-excitation bursts signed by the buy/sell intensity imbalance $z_t$.
+- *Filter role (in principle):* the activity forecast $\lambda^+ + \lambda^-$ can veto slower signals during excitation bursts (adverse-selection filter) — a toxicity-adjacent use, not a standalone edge.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade timestamps + side | events | sub-second, per trade | Tier 1–2 | Aggressor side via Lee–Ready (S007) or exchange flag |
+| Quote-change events | events | sub-second | Tier 1–2 | For full book-event Hawkes (cancels, limit adds) |
+| Mid-price moves | events | sub-second | Tier 1–2 | Optional 4th process (price × trade Hawkes) |
+
+Collection: Databento MBP-1 or SIP trades+NBBO (trades-only Hawkes is honest on L1); full multivariate book Hawkes needs MBO/ITCH (Tier 3). Ingest sketch (≤20 lines):
+
+```python
+import databento as db, polars as pl
+cli = db.Historical("KEY")
+data = cli.timeseries.get_range(dataset="XNAS.ITCH", schema="trades",
+        symbols=["AAPL"], start="2026-09-09", end="2026-09-10")
+trades = pl.from_pandas(data.to_df())          # ts_event, price, size, side
+trades = trades.sort("ts_event").with_columns(
+    t_bin=(pl.col("ts_event").dt.epoch("s") // 5).alias("bin"))
+binned = trades.group_by("bin").agg(
+    x_b=pl.col("size").filter(pl.col("side") == "ask").sum(),   # buys
+    x_s=pl.col("size").filter(pl.col("side") == "bid").sum())   # sells
+# then apply the kappa recursion from S3 per side
+```
+
+Storage: L1 quotes+trades for a liquid name ≈ 2–8 GB/symbol-day parquet (per `notes/cost-model.md` §4); event timestamps alone are far lighter. Data-quality checklist: exchange timestamp normalization, corporate actions, halts, DST/half-days, stale/locked quotes.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility verdict: feasible (Tier M for L1/trade-level; heavy at full MBO multivariate).** The recursion is O(events) with trivial state (one κ per process) — the online intensity update is a few FLOPs per event, so real-time scoring is trivially feasible. The expensive part is *calibration*: MLE over $10^4$–$10^6$ events with a non-convex likelihood, typically refit on rolling windows.
+
+Throughput (per `notes/cost-model.md` §2): a Python event loop handles ~100–500k events/sec — fine for ≤20 symbols of L1. 50 liquid symbols × 2k events/sec = 100k/sec → Python borderline, Rust comfortable; polars batch recompute each minute is trivial. MLE calibration is the bottleneck (CPU-bound likelihood evaluations), not ingest.
+
+Stack: **Python+polars/numpy** (research, L1 scoring); **Rust** (full-depth real-time, 100+ symbols); **DuckDB** (calibration sweeps).
+
+RAM (per cost-model §3): L1 events ≈ 1–10M/day → ~0.5–4 GB RAM per symbol-day; 50 symbols fit the 77 GB working budget; 60 days × 500 symbols does not — per-symbol daily parquet + streaming. Hawkes state itself is kilobytes.
+
+Engineering time: **Tier M, 20–60 h** (per cost-model §5) for L1/trade-level → $3,000–$9,000 loaded-cost estimate at $150/hr. Full MBO multivariate Hawkes is **Tier H, 60–200 h**. Labeled chatbot lead (Duck.ai, 2026-09-10): Hawkes calibration alone estimated at 80–160 h within an L2 build whose **row sums are 520–1,020 h** (bot's printed "600–1,180" contradicts its rows — use row sums; cost-model takes precedence). **What breaks first:** 500 symbols (Python ingest saturates → Rust) or full-depth history (§4: 10–40 GB/symbol-day L2 — archive externally, keep features local).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / Stooq | Delayed bars | ~$0 | Free prototyping | No sub-second events |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP | Real-time SIP trades + NBBO | ~$30–200/mo | Trades-only Hawkes feasible | SIP latency; no depth/cancel flow |
+| Tier 2: Databento Standard (MBP-1/MBP-10) | Honest L1/L2 event streams | ~$200/mo + usage | True event timestamps; depth for full Hawkes | Usage metering on heavy history |
+| Tier 3: LOBSTER (academic) | MBO/ITCH order-book replay | ~hundreds/yr academic | Calibration-grade feed | Academic license; not production |
+
+All prices *indicative — verify before budgeting*. **Verdict: build the estimator, buy the feed.** Your calibrated $(\mu,\alpha,\beta)$ is the research — no vendor sells it. Buy raw L1/trade events (Tier 1/2); build the recursion + MLE harness. Tier 3 only if the hypothesis needs cancel/queue-conditioned excitation (a Tier-H project).
+
+### S9. Success ratio / efficacy — documented evidence
+
+Separated as mandated: **forecast-improvement evidence** vs **net-PnL evidence**.
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Bacry, Mastromatteo & Muzy (2015), survey | Multi-market review to 2015 | Strong self-/cross-excitation of submissions, cancels, market orders; Hawkes beats memoryless baselines on short-horizon event forecasts | Before cost (forecast only) | Survey, not a trading study; no PnL claim |
+| Filimonov & Sornette (2015) | E-mini S&P futures | Significant Hawkes fits; elevated endogeneity estimates (exact band not verified in retrieved sources) | Before cost | Fit quality, not tradability |
+| Hawkes (1971), Biometrika | Theory | Foundational self-exciting process | n/a | Not a market study |
+| Chatbot lead (Duck.ai, 2026-09-10, Q-SB4-3) | General | "Documents clustering; improves probabilistic forecasts of near-term event/price-move risk vs unconditional/memoryless baseline — weaker claim than a fee-adjusted strategy. **No general documented result on fee survival.**" | n/a — labeled lead | *Unverified chatbot claim* unless independently confirmed; kept as lead |
+| Net-PnL after spread/fees/latency/realistic fills | — | **No documented row in surveyed literature** | After cost | Absence noted per mandatory Q-SB4-3 bottom line |
+
+**Regimes where it fails:** announcements and opens/closes (exogenous intensity swamps the kernel); auctions, halts; volatility-regime changes; feed changes; near-critical branching ($n \to 1\)); trade-only Hawkes missing queue depletion/cancellations/hidden liquidity.
+
+**Honest bottom line:** as a *probabilistic activity/direction forecast* this is a genuine, documented improvement over memoryless baselines — a real feature. As a *standalone trigger* it is an **undemonstrated** edge: significant direction accuracy ≠ positive net PnL if the predicted move is < 1 tick or the spread is crossed. Report **both** OOS forecast improvement **and** net implementation performance after spread/fees/latency/realistic fills; without the second, call it a predictive feature, not a demonstrated edge (Q-SB4-3 bottom line, labeled chatbot source).
+
+### S10. Failure modes & pitfalls
+
+1. **Near-critical branching** — calibrated $n \approx 0.9$+ amplifies noise into phantom bursts. *Mitigation:* regularize; cap $n$ (bot's 0.8–0.95 stability band is a labeled lead); monitor out-of-sample.
+2. **Nonstationarity** — announcements/regime breaks violate constant-$(\mu,\alpha,\beta)$. *Mitigation:* rolling refits; exogenous-event dummies; stand down on scheduled news.
+3. **Lookahead leakage** — revised trade records or future quote alignment in calibration. *Mitigation:* as-traded timestamps; purged/embargoed validation (S088).
+4. **Misclassified trade signs** — error concentrates exactly when flow is most active (labeled chatbot lead, Q-SB4-3), biasing $\lambda^+ - \lambda^-$ during bursts. *Mitigation:* exchange aggressor flags; sensitivity analysis.
+5. **Cost blowup** — burst-chasing with marketable orders pays full spread + adverse selection. *Mitigation:* model net of spread/fees/impact; prefer passive or filter roles.
+6. **Overfitting the kernel** — multi-exponential/power-law kernels fit noise on short windows. *Mitigation:* single-exponential baseline first; information criteria for added kernels.
+7. **Latency illusion** — historical timestamps assume instant reaction; live latency eats the ms-scale edge. *Mitigation:* lag the signal by measured latency; label SIP-based results *simulated only — requires MBO/ITCH* where queue claims are made.
+8. **Microstructure noise vs signal** — flickering quotes inflate event counts without information. *Mitigation:* filter to economically meaningful events; compare trade-only vs full-event specs.
+
+### S11. Visuals
+
+![S017 worked example — synthetic buy/sell Hawkes intensities with burst episode](images/S017_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(Databento MBP-1 / SIP trades)"] -->|L1 trade/quote events| ING["Ingest + normalize\n(exchange ts, halts, splits)"]
+    ING -->|cleaned trade events| FEAT["Feature compute\n(5-s event bins, buy/sell counts)"]
+    FEAT -->|5-s event-count bins| SIG["Signal S017\nHawkes λ⁺−λ⁻ z-score"]
+    SIG -->|per-bin z-score| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T023 burst scalper)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Bacry, E., Mastromatteo, I. & Muzy, J.-F. (2015). "Hawkes processes in finance." *Market Microstructure and Liquidity* (arXiv:1502.04592). https://arxiv.org/abs/1502.04592v2
+2. Filimonov, V. & Sornette, D. (2015). "Apparent criticality and calibration issues in the Hawkes self-excited point process model." arXiv:1308.6756. https://arxiv.org/abs/1308.6756
+3. Worrall, J. et al. "Fifty years later: new directions in Hawkes processes." *SORT* 46(1) — multivariate intensity formula with exponential kernel, independently confirming the S3 standard form. https://www.Idescat.cat/sort/sort461/46.1.1.Worrall-etal.pdf
+4. Hawkes, A. G. (1971). "Spectra of some self-exciting and mutually exciting point processes." *Biometrika*, 58(1), 83–90. (Journal citation; URL not independently verified.)
+5. Bowsher, C. G. (2007). "Modelling security market microstructure with Hawkes processes." *Journal of Econometrics*. (Report citation; URL not independently verified.)
+6. Chatbot source (labeled): Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB4-1–Q-SB4-3; Grok/Cursor answers pending (checked 2026-09-10). Formula sections verified against standard literature; eng-hour/fee-survival points used as *labeled leads*.
+
+**Unverified leads** (chatbot-only): branching-ratio stability band 0.8–0.95; 1–3 exponentials; 10⁴–10⁶ calibration events; kernel half-life ranges.
+
+---
+## Stage 18/200 — S018: Order-sign autocorrelation / sequential trade correlation
+
+*Batch SB4 · Signal 18/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Market-order signs (+1 buy / −1 sell) are strongly positively autocorrelated and long-memory: buys follow buys far beyond chance. |
+| **When it works** | As a flow-predictability input to execution and market-making models; conditioning momentum entries on sign persistence. |
+| **When it dies** | As a standalone price predictor — predictable flow is compensated by liquidity, so prices stay near-unpredictable; dies further under misclassified signs and stale quotes. |
+| **Build-or-buy in one line** | Build on any classified trade feed — it is a few lines of statistics, not a data purchase. |
+
+Provenance **[D]** · Family A — Microstructure & order flow. Signal chapter 18/100.
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *NBBO* (National Best Bid and Offer — the consolidated best bid/ask across exchanges); *SIP* (Securities Information Processor — the official consolidated tape); *co-located* (servers physically at the exchange); *ARFIMA* (autoregressive fractionally integrated moving average); *Hurst exponent* H (≈ 0.5 = random walk; H > 0.5 = persistent/long memory; H < 0.5 = mean-reverting).
+
+Every trade has an **aggressor side**: the trader whose marketable order *initiated* the trade. Label it **+1** if a buyer initiated (a buy market order lifting the ask) and **−1** if a seller initiated. Write down the last 2,000 signs for AAPL at 10:15: `+ + + − + + − − − + + + + …`. If signs were random, the next sign would be a coin flip. It is not: a buy is much more likely to be followed by another buy.
+
+The economic reason is **order splitting**. A fund buying 200,000 shares slices it into hundreds of 300-share child orders executed over the morning. Each child prints +1, so signs cluster. The autocorrelation decays slowly — roughly $C(\tau) \sim \tau^{-\gamma}$, $\gamma \approx 0.5$ — called **long memory**: past signs influence flow for hundreds or thousands of trades, even across days (Lillo & Farmer 2004).
+
+Here is the subtle part: **flow is predictable even when price is not.** When buy signs become more likely, buy orders get *smaller* and buy-side *liquidity* increases — both also long-memory processes. The predictable flow is absorbed by anti-correlated liquidity fluctuations, leaving returns nearly white. So S018 is a superb *flow* forecast and a poor *price* forecast used naively. Its honest uses: (1) execution — lean child orders with persistent flow; (2) market making — persistent one-sided flow is adverse selection, so widen quotes or stand down; (3) conditioning — momentum backed by persistent signs is more likely genuine.
+
+**Mental model:** order splitting clusters signs ($P(\text{buy}|\text{buy})>0.5$ far out); the slow power-law decay ($\gamma\approx0.5$–0.6) is **long memory**; predictable flow ≠ predictable price — monetization needs execution skill.
+
+### S3. The math — exact formula
+
+**Sign autocorrelation function:**
+
+$$C(\tau) = \frac{\mathbb{E}[\varepsilon_t \cdot \varepsilon_{t+\tau}]}{\mathbb{E}[\varepsilon_t^2]}, \qquad \varepsilon_t \in \{+1,-1\}$$
+
+- $\varepsilon_t$ — aggressor sign of trade $t$ (+1 buyer-initiated, −1 seller-initiated), via Lee–Ready quote/tick rule (S007) or exchange aggressor flag.
+- $\tau$ — lag in *trades* (event time). Since $\varepsilon_t^2 = 1$, $C(\tau) = \mathbb{E}[\varepsilon_t \varepsilon_{t+\tau}]$ — agreeing minus disagreeing pair fraction at lag $\tau$.
+- Empirical law: $C(\tau) \sim \tau^{-\gamma}$, $\gamma \approx 0.5$–$0.6$ (Lillo & Farmer: $\alpha \approx 0.6$; Hurst exponent $H = 1 - \gamma/2 \approx 0.7$).
+
+**Sequential-trade (Markov) form** (Easley & O'Hara 1987): the $2 \times 2$ transition matrix $P(\varepsilon_{t+1} \mid \varepsilon_t)$; their original sample gave $P(\text{buy}\mid\text{buy}) \approx 0.49$, $P(\text{sell}\mid\text{sell}) \approx 0.45$ — mild persistence at lag 1, with the long-memory tail revealed only by the full $C(\tau)$.
+
+**ARFIMA variant:** fit a fractionally-integrated model $\text{ARFIMA}(p,d,q)$ to the sign series; the fractional parameter $d = H - 1/2 \approx 0.2$ captures long memory in one number for regime monitoring.
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small / too large | Default example |
+|---|---|---|---|---|
+| Max lag | $\tau_{\max}$ | 20–500 trades | misses the slow tail / noise dominates far lags | 30 trades (*example — not an institutional standard*) |
+| Estimation window | $N$ | 1k–50k trades | noisy $C(\tau)$ / mixes regimes | 2,000 trades (*example*) |
+| Power-law exponent | $\gamma$ | 0.4–0.8 | — (estimated, not chosen) | fit, don't fix (*example*) |
+| Persistence threshold | $C(1)^*$ | 0.1–0.4 | always "persistent" / never triggers | 0.25 (*example — not an institutional standard*) |
+
+**Normalization:** none needed — $C(\tau)$ is already a correlation in $[-1,1]$. Compare across names directly. **Causal timing:** $C(\tau)$ estimated on trades $\le t$; a persistence-conditioned entry at trade $t$ is tradable no earlier than $t+1$.
+
+**Named variants:** (1) raw trade-time $C(\tau)$; (2) volume-weighted sign autocorrelation (weights by $\sqrt{v_t}$); (3) Markov transition-matrix form (lag-1 only, Easley–O'Hara); (4) ARFIMA($d$) long-memory parameter as a single regime statistic.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 2,000-trade tape (seed **1818**; `batches/SB4/plot_S018.py` regenerates it). Signs follow a Markov chain with $P(\varepsilon_{t+1}=\varepsilon_t) = 0.72$ — deliberately simple so the numbers are hand-checkable; real sign series decay more slowly (power law), which the fitted $\hat\gamma$ below mimics over short lags.
+
+| $\tau$ | $C(\tau)$ |
+|---|---|
+| 1 | +0.4207 |
+| 2 | +0.1852 |
+| 3 | +0.0906 |
+| 4 | +0.0621 |
+| 5 | +0.0396 |
+| 6 | +0.0431 |
+| 7 | +0.0246 |
+| 8 | −0.0141 |
+| 9 | −0.0116 |
+| 10 | −0.0111 |
+
+Computation: $C(1) = \frac{1}{1999}\sum_{t=1}^{1999} \varepsilon_t \varepsilon_{t+1} = +0.4207$ (theory for this chain: $2 \times 0.72 - 1 = 0.44$; the sample is within noise ✓). Power-law fit on lags 2–30 gives $\hat\gamma = 0.459$ — inside the empirical 0.4–0.8 band.
+
+
+**What to notice:** $C(1) = +0.42$ is enormous — the next trade's sign is highly predictable. Yet coefficients stay positive-but-shrinking: persistence, not oscillation. **Limits:** this tape is Markov (exponential decay), so the "power-law" fit is only a local description over lags 2–30 — real markets decay genuinely more slowly. No fees, perfect classification, one regime: real tapes mix splitting-driven persistence with news-driven reversals. And the honesty point stands: knowing the next sign is +1 with ~71% probability says nothing about the *price* move — that depends on depth and impact (S010).
+
+### S5. Strategies that use this signal
+
+- **T023 — Hawkes Burst Scalper — supporting input**: T023 consumes S018 alongside S017/S081; sign persistence confirms that an intensity burst is directional flow rather than two-sided noise.
+- *Filter role:* in execution algos, persistent signs in the same direction as your parent order argue for patience (flow is with you); persistent opposing signs are an adverse-selection warning to slow down.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade price, size, timestamp | events | per trade, sub-second | Tier 1–2 | TAQ / Databento trades |
+| NBBO at trade time | events | per trade | Tier 1–2 | For Lee–Ready quote rule (S007) |
+| Aggressor flag | boolean | per trade | Tier 2–3 | Exchange-direct feeds; preferred over classification |
+
+Collection: SIP trades + NBBO suffice for Lee–Ready classification; direct-feed aggressor flags are strictly better. Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+trades = pl.read_parquet("taq_trades_2026-09-09.parquet").sort("ts")
+nbbo = pl.read_parquet("taq_nbbo_2026-09-09.parquet").sort("ts")
+t = trades.join_asof(nbbo, on="ts", strategy="backward", tolerance="1s")
+t = t.with_columns(mid=(pl.col("ask") + pl.col("bid")) / 2)
+t = t.with_columns(eps=pl.when(pl.col("price") > pl.col("mid")).then(1)
+                     .when(pl.col("price") < pl.col("mid")).then(-1)
+                     .otherwise(None).forward_fill())   # quote rule; tick rule at mid
+signs = t["eps"].to_numpy()
+C = {tau: float((signs[:-tau] * signs[tau:]).mean()) for tau in range(1, 31)}
+```
+
+Storage: trades-only is light — a liquid name prints ~10–200 trades/sec busy; one symbol-day of trades ≈ tens of MB parquet (well under the 2–8 GB L1 quotes+trades figure in `notes/cost-model.md` §4). Data-quality checklist: timestamp normalization (SIP vs exchange), trade corrections/cancels, locked/crossed NBBO, odd-lot quote exclusion pre-2013, DST/half-days, corporate actions.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility verdict: trivial.** Computing $C(\tau)$ is a handful of vectorized operations per window — numpy handles millions of trades per second (per `notes/cost-model.md` §2, ~50–200M elements/sec). The real work is sign *classification* quality, not compute.
+
+Throughput: classification + autocorrelation for 500 symbols × ~50k trades/day = 25M trades/day — seconds of numpy per day, trivially real-time. Bottleneck is ingest/parquet I/O, not the statistic. RAM (per cost-model §3): one symbol-day of classified trades ≈ 10–100 MB; 60 days × 500 symbols of *trades only* fits the 77 GB budget; full L1 quotes would not.
+
+Stack options: **Python+polars/numpy** — pick for everything here; **Rust** — unnecessary unless embedded in a co-located execution loop; **DuckDB** — pick for ad-hoc historical screens.
+
+Engineering time: **Tier M, 20–60 h** (per cost-model §5; L1 event pipeline ex-L2) → $3,000–$9,000 loaded-cost estimate at $150/hr — most of it spent on classification validation (quote alignment, tick-rule fallback logic, exchange-flag reconciliation), not the autocorrelation itself. **What breaks first:** scaling to 500 symbols is fine; full OPRA is irrelevant (equity-trade signal); what actually breaks is *classification honesty* at high frequency — SIP timestamps vs direct feeds (label SIP-based sign studies *simulated only — requires MBO/ITCH* where latency claims are made).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX trades | Recent trade prints | ~$0 | Free prototype | Short history; no NBBO archive |
+| Tier 1: Polygon / Alpaca SIP | Full SIP trades + NBBO history | ~$30–200/mo | Everything needed for Lee–Ready | SIP latency; classification error |
+| Tier 2: Databento trades+TBBO | Microsecond-stamped trades, direct | ~$200/mo + usage | Cleaner timestamps; aggressor flags on some schemas | Usage metering |
+| Exchange direct (Tier 3-ish) | ITCH/PITCH with aggressor side | Institutional $$$$ | Ground-truth signs | Cost; licensing |
+
+All prices *indicative — verify before budgeting*. **Verdict: build, on Tier 1 data.** There is nothing to buy — no vendor sells "sign autocorrelation" as a product; the statistic is five lines. Spend the budget on the cleanest trade+quote timestamps you can afford, because classification error is the entire game (see S10). Crossover: buy direct-feed aggressor flags only if sign accuracy becomes the measured bottleneck in a live execution system.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Lillo & Farmer (2004) | LSE, 20 stocks, 1999–2002 | $C(\tau) \sim \tau^{-\alpha}$, $\alpha \approx 0.6$ (range 0.36–0.77), $H \approx 0.7$; holds for market, limit, and cancel orders; persists across days | Before cost (statistical fact) | Flow predictability, not price predictability |
+| Bouchaud, Gefen, Potters & Wyart (2004) | Euronext, 2001–2002 | Power-law sign ACF decay for all stocks; implied $H$ ≈ 0.65–0.9 | Before cost | Same caveat; reviewed via Gould–Porter–Howison thesis |
+| Lillo, Mike & Farmer (2005) | Theory + LSE | Order-splitting model reproduces the empirical $C(\tau)$ when metaorder sizes are Pareto-tailed — causal mechanism for the persistence | Before cost | Model, not a trading result |
+| Chatbot lead (Duck.ai, 2026-09-10, Q-SB4-3) | General | "No single modern instrument-independent [Lee–Ready] accuracy number honestly quotable"; **error concentration**: misclassification clusters exactly when the signal is most active — 85% individual accuracy can still seriously bias HF imbalance | n/a — labeled lead | *Unverified chatbot claim*; used as labeled lead |
+| Net-PnL after spread/fees/latency | — | **No documented row**: predictable flow is compensated by liquidity — *why* the sign edge does not convert to price edge | After cost | Empty by mechanism, not oversight |
+
+**Regimes where it fails:** news-driven tapes (signs mean-revert as positions flip); opens/closes and auctions; any period where classification degrades — fast markets, stale quotes, midpoint prints, odd lots, locked/crossed NBBO (the error-concentration lead above).
+
+**Honest bottom line:** as a *flow-predictability statistic* this is among the best-documented facts in microstructure — a strong feature. As a *standalone price trigger* it is a weak-to-nonexistent edge: the market compensates predictable flow with liquidity, so the monetization path runs through execution and market-making, not directional bets. Report **both** OOS forecast improvement **and** net implementation performance after spread/fees/latency/realistic fills; without the second, call it a predictive feature, not a demonstrated edge (Q-SB4-3 bottom line, labeled chatbot source).
+
+### S10. Failure modes & pitfalls
+
+1. **Error concentration** — misclassification clusters exactly when flow is most active (labeled chatbot lead): the statistic is most biased precisely when you most want it. *Mitigation:* exchange aggressor flags; quote-lag sensitivity analysis; distrust burst readings from classified data.
+2. **Flow ≠ price confusion** — trading predicted signs as predicted prices. *Mitigation:* always pair with an impact/liquidity model (S010); evaluate on price moves, not sign hit-rate.
+3. **Stale-quote classification** — fast markets make the quote rule assign the wrong side. *Mitigation:* lag quotes slightly (the standard Lee–Ready adjustment); tick-rule fallback.
+4. **Midpoint prints** — price = mid carries no quote-rule information; tick rule on stale references misleads. *Mitigation:* track the fraction of tick-rule-resolved trades as a quality metric.
+5. **Regime mixing** — estimating $C(\tau)$ across opens, news, and calm periods blends different dynamics. *Mitigation:* session-segmented estimation; rolling windows.
+6. **Lookahead via corrections** — TAQ corrections applied retroactively change the historical tape. *Mitigation:* use as-traded records for calibration; corrected records only for research marked as such.
+7. **Overfitting $\gamma$** — fitting power laws to 30 noisy lags invites story-telling. *Mitigation:* report $C(1)$ and a few fixed lags as primary statistics; $\hat\gamma$ secondary.
+8. **Crowding irrelevance** — this is a measurement, not a crowded trade; the failure is misapplication, not decay. *Mitigation:* keep it in execution/MM roles where it belongs.
+
+### S11. Visuals
+
+![S018 worked example — synthetic order-sign autocorrelation with power-law fit](images/S018_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(SIP trades + NBBO)"] -->|per-trade prints + NBBO events| ING["Ingest + normalize\n(asof quote join, corrections)"]
+    ING -->|quote-aligned trades| FEAT["Feature compute\n(Lee–Ready sign classification)"]
+    FEAT -->|per-trade classified signs| SIG["Signal S018\nsign autocorrelation C(τ)"]
+    SIG -->|C(τ) curve (lag in trades)| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T023 burst scalper)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Lillo, F. & Farmer, J. D. (2004). "The long memory of the efficient market." *Studies in Nonlinear Dynamics & Econometrics* (arXiv:cond-mat/0311053). https://arxiv.org/abs/cond-mat/0311053v2
+2. Farmer, J. D., Gerig, A., Lillo, F. & Waelbroeck, H. (2010). "How efficiency shapes market impact." NBER Market Microstructure meeting — documents positive serial autocorrelation of signed order flow across London, Paris, New York, and Spanish markets and its compensation by liquidity. http://conference.nber.org/confer/2010/MMf10/Farmer_Gerig_Lillo_Waelbroeck.pdf
+3. Gould, M. D., Porter, M. A. & Howison, S. D. — thesis review of limit order books: Lillo & Farmer (2004) mean $H \approx 0.7$; Bouchaud et al. (2004) power-law sign autocorrelation with $H$ ≈ 0.65–0.9 on Euronext. https://people.maths.ox.ac.uk/porterm/papers/long-memory-published.pdf
+4. INET Oxford (2021). "Prediction on Stock Market Inefficiencies Confirmed" — popular account of Lillo & Farmer (2004) sign-persistence discovery. https://www.inet.ox.ac.uk/news/accuracy-of-2005-financial-economics-model-finally-confirmed
+5. Easley, D. & O'Hara, M. (1987). "Price, trade size, and information in securities markets." *Journal of Financial Economics*. (Report citation; URL not independently verified — not fabricated here.)
+6. Chatbot source (labeled, per question-bank protocol): Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB4-1–Q-SB4-3; Grok/Cursor answers pending (checked 2026-09-10). Lee–Ready/BVC accuracy discussion and the error-concentration point used above as *labeled leads*.
+
+**Unverified leads** (chatbot-only, not independently confirmed): "~80–90% Lee–Ready accuracy in favorable settings"; BVC bar-volume and σ-window ranges; "85% individual accuracy can still bias HF imbalance" (plausible, unconfirmed numerically).
+
+---
+## Stage 20/200 — S020: Retail & odd-lot order imbalance
+
+*Batch SB4 · Signal 20/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Signed order imbalance computed on retail-identifiable flow (sub-penny prints) and on odd-lot (<100-share) trades, which carry a different information mix than institutional flow. |
+| **When it works** | Around attention events and earnings, where retail flow is directional and persistent; as a contrarian or internalizer's adverse-selection gauge. |
+| **When it dies** | Treated as a uniform "dumb money" signal — retail is heterogeneous; after spread/fees on short holds; when odd lots are really algo slices, not people. |
+| **Build-or-buy in one line** | Build the classifier on bought TAQ — the identification logic (BJZZ) is public; the data is the cost. |
+
+Provenance **[D]** · Family A — Microstructure & order flow. Signal chapter 20/100.
+
+> **Mandatory framing (operator-verified):** there is **no blanket "retail = uninformed"** result. Retail flow is *heterogeneous*: liquidity-taking/attention-driven, contrarian, pure noise, and informed around earnings/news/specialized situations. Odd lots are **not** automatically noise — they include algo slices, fractional shares, and (for high-priced stocks) economically large trades. After-cost honesty: high turnover plus short holds means spread crossing, adverse selection, and queue priority eat gross edge; midpoint-marked evaluation with marketable-order implementation overstates results.
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *NBBO* (National Best Bid and Offer — the consolidated best bid/ask across exchanges); *SIP* (Securities Information Processor — the official consolidated tape).
+
+An **odd lot** is any trade for fewer than 100 shares (the traditional **round lot**). Long assumed to be small retail trades and excluded from the consolidated tape (the public trade record), that assumption broke: algos slice orders into sub-100-share pieces, high-priced stocks make 10 shares a $5,000 trade, and fractional shares print odd lots constantly. O'Hara, Yao & Ye (2014): odd lots are ~24% of trades at the median (60%+ in some stocks), contribute ~35% of **price discovery** (how prices incorporate information), and informed traders deliberately use them to avoid detection.
+
+**Retail identification** uses a clever fingerprint. Market makers who **internalize** retail flow — execute it themselves rather than routing to an exchange — typically give tiny **price improvement**: a retail buy at $50.00 executes at $50.001–$50.009 (a *sub-penny* print). Boehmer, Jones, Zhang & Zhang (2021) ("BJZZ") classify trades by sub-penny fraction: (0.6, 1.0] cent → retail buy; (0, 0.4) cent → retail sell (round-penny prints excluded); (0.4, 0.6) excluded as ambiguous. This recovers a retail flow series from public TAQ with no broker feed.
+
+Why predict anything? Three channels, pulling in different directions — which kills the blanket claim. (1) **Attention-driven flow**: retail piles into salient stocks; pressure later reverses — the fade case. (2) **Contrarian liquidity provision**: retail sells strength, buys dips — the *internalizer's* edge. (3) **Informed pockets**: around earnings/news some retail flow is informed, and odd lots can be stealth institutional slices — the follow case. Channel dominance is stock-, event-, and era-specific. Vignette: on an earnings day retail prints −0.28 (selling into the pop) while institutional flow had built +0.18 the day before — that disagreement *is* information.
+
+**Mental model (3 bullets):**
+- Odd lots are a *size* category, not a *trader* category: they mix retail, algo slices, and stealth flow.
+- BJZZ sub-penny fractions identify marketable retail flow in TAQ; the imbalance is (buys − sells)/(buys + sells).
+- Retail is heterogeneous — the signal is conditional (event type, horizon, venue mix), never a uniform "fade the dummies" rule.
+
+### S3. The math — exact formula
+
+**Odd-lot imbalance** (quote-rule classified, 5-minute to daily windows):
+
+$$\text{IMB}^{\text{odd}}_B = \frac{V^{\text{odd,buy}}_B - V^{\text{odd,sell}}_B}{V^{\text{odd,total}}_B}$$
+
+- $B$ — aggregation window (5 min to 1 day).
+- $V^{\text{odd,buy}}_B$ — odd-lot (<100 shares) buy volume in $B$, classified by quote rule (S007) or aggressor flag.
+- Ranges in $[-1, +1]$; 0 = balanced.
+
+**Retail imbalance (BJZZ)**:
+
+$$f_i = 100p_i - \lfloor 100p_i \rfloor = (100p_i) \bmod 1 \in [0,1) \quad \text{(fractional part of the cent component)}$$
+
+$$\text{retail buy if } f_i \in (0.6, 1.0], \quad \text{retail sell if } f_i \in (0, 0.4), \quad \text{exclude } f_i \in (0.4, 0.6)$$
+
+$$\text{IMB}^{\text{retail}}_B = \frac{V^{\text{rb}}_B - V^{\text{rs}}_B}{V^{\text{rb}}_B + V^{\text{rs}}_B}$$
+
+- $p_i$ — trade price; only sub-penny prints are classifiable — round-penny prints are *not* retail by this method (a coverage gap).
+- TRF (Trade Reporting Facility) prints are where internalized retail flow reports.
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small / too large | Default example |
+|---|---|---|---|---|
+| Aggregation window | $B$ | 5 min – 1 day | noise dominates / signal decays, mixes regimes | 1 day (*example — not an institutional standard*) |
+| Odd-lot cutoff | — | <100 shares (SEC redefined for some high-priced names) | misses slices / includes real retail | 100 shares (*example*) |
+| BJZZ buy band | — | (0.6, 1.0] cent | misclassifies / shrinks sample | (0.6, 1.0] (*example*) |
+| BJZZ exclusion band | — | (0.4, 0.6) | ambiguous prints pollute / discards data | (0.4, 0.6) (*example*) |
+| Signal threshold | $z^*$ | 1.5–2.5σ | noise trades / never fires | 2.0σ (*example — not an institutional standard*) |
+
+**Normalization:** z-score within stock and window-type (retail participation varies enormously across names); rank-normalization across the cross-section for portfolio use. **Causal timing:** imbalance over window $B$ ending at $t$ is tradable no earlier than $t+1$; daily retail IMB is a next-day signal at best.
+
+**Named variants:** (1) odd-lot IMB (size-based, quote-rule classified); (2) BJZZ retail IMB (sub-penny identification); (3) odd-lot *retail* IMB (intersection — BJZZ-classified odd lots only); (4) retail *buy* vs *sell* imbalance separately (asymmetric informativeness is documented).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 41-day window around an earnings announcement (day 0), seed **2020** (`batches/SB4/plot_S020.py`). Retail IMB is BJZZ-style daily; institutional IMB is a labeled-flow proxy. Table: days −4…+4.
+
+| Day | Retail IMB | Institutional IMB |
+|---|---|---|
+| −4 | −0.004 | +0.030 |
+| −3 | −0.066 | +0.051 |
+| −2 | −0.083 | +0.051 |
+| −1 | −0.013 | +0.177 |
+| 0 | −0.280 | −0.064 |
+| +1 | −0.041 | −0.092 |
+| +2 | +0.010 | −0.119 |
+| +3 | −0.023 | −0.042 |
+| +4 | −0.060 | +0.000 |
+
+Hand-check the construction (day 0): retail IMB = (buys − sells)/(buys + sells) = −0.280 means sells exceeded buys by 28% of retail volume — e.g. with total 1,000 shares, buys = 360, sells = 640 → (360−640)/1000 = −0.280 ✓. Institutional +0.177 on day −1 with 1,000 shares → buys ≈ 589, sells ≈ 411 ✓.
+
+
+**What to notice:** the two series disagree — institutional imbalance builds quietly *before* the event (+0.177 on day −1, the informed-leakage pattern), while retail spikes *on* the event (−0.280, attention-driven selling into the announcement). Fading retail here bets the day−1 institutional build was the informed move. **Limits:** the "institutional" series is a labeled synthetic proxy; the event-day spike is hand-chosen; no fees; and the example encodes one channel mix (informed institutions, reactive retail) — the mandatory framing warns this mix is *not* universal.
+
+### S5. Strategies that use this signal
+
+- **T024 — Informed-Size Tracker / Retail Fade — primary trigger**: follows stealth medium-size informed flow and fades retail/odd-lot flow — this chapter's signal is the fade leg's input.
+- **T083 — Retail-Flow Internalizer Fade — primary trigger**: provides liquidity fading retail/odd-lot imbalance, priced via spread decomposition (S015) — the internalizer's version of the same flow.
+- *Filter role:* retail-imbalance extremes can veto momentum entries (crowded attention trades reverse) or gate execution (don't cross the spread into one-sided retail flow — adverse selection for the taker).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade price, size, timestamp, exchange/TRF code | events | per trade | Tier 1–2 | TAQ or Databento; TRF flag identifies internalized prints |
+| NBBO at trade time | events | per trade | Tier 1–2 | For odd-lot quote-rule classification |
+| Corporate actions | reference | daily | Tier 0–1 | Splits change the 100-share economics |
+
+Collection: TAQ or Databento; odd-lot trades joined the tape only in December 2013, odd-lot *quotes* long excluded from NBBO — pre-2013 backtests need bias corrections. Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+t = pl.read_parquet("taq_trades_2026-09-09.parquet")
+t = t.with_columns(frac=(pl.col("price") * 100) % 1)          # sub-penny fraction in [0,1)
+retail = t.filter(pl.col("frac") != 0).with_columns(
+    side=pl.when(pl.col("frac") > 0.6).then(1)
+           .when(pl.col("frac") < 0.4).then(-1)
+           .otherwise(None)).drop_nulls("side")                # BJZZ
+odd = t.filter(pl.col("size") < 100)                           # odd lots
+imb = (retail.group_by("symbol").agg(
+    imb_r=(pl.col("size") * pl.col("side")).sum() / pl.col("size").sum()))
+```
+
+Storage: TAQ trades ≈ tens of GB/symbol-year for liquid names; a 500-symbol daily-imbalance panel is megabytes. Per `notes/cost-model.md` §4, full L1 quotes+trades run 2–8 GB/symbol-day — for S020, trades-only suffices. Data-quality checklist: pre-2013 odd-lot tape exclusion; sub-penny rounding conventions; TRF vs exchange attribution; splits (the 100-share cutoff's economics change); DST/half-days; locked/crossed NBBO for the quote rule.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility verdict: feasible (Tier M).** The BJZZ classifier is arithmetic on trade records; daily aggregation over a 500-symbol universe is seconds in polars (per `notes/cost-model.md` §2, ~10–50M rows/sec for simple ops).
+
+Throughput: 500 symbols × ~50k trades/day = 25M records/day — one daily polars batch job, trivially real-time capable on 5-min bars. Bottleneck is data licensing and history depth, not compute. RAM (per cost-model §3): one symbol-day of trades ≈ 10–100 MB; a 500-symbol day fits the 77 GB budget; multi-year TAQ history does not — per-symbol parquet + streaming.
+
+Stack: **Python+polars** for all of it; **DuckDB** for screens; **Rust** unnecessary.
+
+Engineering time: **Tier M, 20–60 h** (per cost-model §5) → $3,000–$9,000 loaded-cost estimate at $150/hr — dominated by identification validation (BJZZ band sensitivity, odd-lot quote-rule alignment, pre-2013 bias handling), not the arithmetic. **What breaks first:** *history* — multi-year TAQ licensing and the pre-2013 odd-lot exclusion; 500 symbols of daily math is fine.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / FINRA | Recent trades; short-interest snapshots | ~$0 | Free prototype | No sub-penny history |
+| Tier 1: Polygon / Alpaca SIP | Full SIP trade history with sub-penny prices | ~$30–200/mo | BJZZ feasible historically | SIP timestamps; redistribution limits |
+| Tier 2: Databento equities | Microsecond trades, clean corporate actions | ~$200/mo + usage | Research-grade identification | Usage metering on deep history |
+| Tier 3: TAQ (institutional) | Academic gold standard | Institutional $$$$ | Publication-grade | Price; access friction |
+
+All prices *indicative — verify before budgeting*. **Verdict: build the classifier, buy Tier 1/2 trade history.** Nobody sells "retail imbalance" as a product — the BJZZ logic is public and short. Buy the cleanest sub-penny history you can afford; TAQ proper is for publication or production-scale internalization, not research.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| O'Hara, Yao & Ye (2014), *Journal of Finance* | US equities, 2008–2013 | Odd lots: median 24% of trades (60%+ in some stocks); ~35% of price discovery; informed traders use odd lots to avoid detection; omission biases imbalance measures | Before cost (observational) | Information content, not net PnL |
+| Boehmer, Jones, Zhang & Zhang (2021), *Journal of Finance* | US equities, 2010–2015 | BJZZ sub-penny identification; median marketable retail trade ≈ $8,000; odd-lot marketable retail ≈ one-third of odd-lot volume | Before cost | Predictive regressions, not fee-adjusted implementation |
+| Barber & Odean (2000), *Journal of Finance* | 66,465 US discount-brokerage households, 1991–1996 | Most-active quintile earns 11.4%/yr vs 17.9% market; average household 16.4%; turnover 75%/yr — trading costs drive the shortfall | **After cost** (net of trading costs) | Portfolio-horizon, not intraday; supports heterogeneity (overconfident active traders lose) rather than uniform informativeness |
+| Chatbot lead (Duck.ai, 2026-09-10, Q-SB4-3) | General | Retail heterogeneous (attention-driven, contrarian, noise, informed around earnings/news); odd lots ≠ noise (algo slices, fractional, high-priced stocks); after-cost: high turnover + short holds → spread/adverse-selection/queue costs eat gross edge; midpoint-marked evaluation with marketable orders overstates | n/a — labeled lead | *Unverified chatbot claim*; kept as labeled lead per protocol |
+
+**Regimes where it fails:** assuming uniform retail informativeness (the mandatory-framing failure); size-only retail definitions that misclassify algo slices in high-priced stocks; meme/zero-commission eras trained and applied elsewhere; news shocks where retail and institutional flow align; pre-2013 backtests ignoring the odd-lot tape exclusion.
+
+**Honest bottom line:** as a *conditional flow descriptor* this is well-documented; as a *standalone directional edge* it is **overfit-prone and spread-vulnerable** — the after-cost evidence (Barber–Odean) cuts against the retail trader, and the predictive evidence is before-cost. Report **both** OOS forecast improvement **and** net implementation performance after spread/fees/latency/realistic fills; without the second, call it a predictive feature, not a demonstrated edge (Q-SB4-3, labeled chatbot source).
+
+### S10. Failure modes & pitfalls
+
+1. **Uniform-retail assumption** — treating all retail flow as dumb (or smart). *Mitigation:* condition on event type, horizon, and venue; never a single sign rule.
+2. **Odd-lot misattribution** — algo slices and fractional shares look "retail" by size. *Mitigation:* prefer BJZZ identification over size-only definitions; flag high-priced stocks.
+3. **Midpoint-marked evaluation** — marking at mid while implementing with marketable orders overstates edge (labeled chatbot lead). *Mitigation:* evaluate at effective spread; simulate marketable fills.
+4. **Turnover cost blowup** — short-hold retail-fade strategies cross the spread repeatedly. *Mitigation:* explicit spread+fee+impact accounting per round trip; lengthen holds or go passive.
+5. **Pre-2013 tape bias** — odd lots absent from the consolidated tape before Dec 2013. *Mitigation:* start backtests after 2013 or model the exclusion.
+6. **Sub-penny coverage gaps** — round-penny prints are unclassifiable by BJZZ; internalization practices change. *Mitigation:* report classifiable fraction; monitor for regime shifts in price-improvement conventions.
+7. **Era overfitting** — training on the zero-commission/meme era and applying elsewhere (labeled chatbot lead). *Mitigation:* multi-era validation; regime indicators.
+8. **Adverse selection for the taker** — fading retail with marketable orders means buying when informed flow may be mixed in. *Mitigation:* internalizer-style passive execution or explicit toxicity filter (S008).
+
+### S11. Visuals
+
+![S020 worked example — synthetic retail vs institutional imbalance around an event](images/S020_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(TAQ trades + TRF flags)"] -->|per-trade prints, sub-penny prices| ING["Ingest + normalize\n(sub-penny, splits, halts)"]
+    ING -->|cleaned trade events| FEAT["Feature compute\n(BJZZ retail / odd-lot IMB)"]
+    FEAT -->|daily imbalance bars| SIG["Signal S020\nretail & odd-lot imbalance"]
+    SIG -->|daily imbalance z-score| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T024 / T083 fade)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. O'Hara, M., Yao, C. & Ye, M. (2014). "What's Not There: Odd Lots and Market Data." *Journal of Finance*, 69(5), 2199–2236. https://ideas.repec.Org/a/bla/jfinan/v69y2014i5p2199-2236.html
+2. Boehmer, E., Jones, C. M., Zhang, X. & Zhang, X. (2021). "Tracking Retail Investor Activity." *Journal of Finance*, 76(5). (Tsinghua-hosted copy consulted for BJZZ method details and sample statistics.) https://www.pbcsf.tsinghua.edu.cn/__local/6/B0/AF/2A35AA5BBB6B2C05786716FA0DF_098DC0E7_107C03.pdf?e=.pdf
+3. Barber, B. M. & Odean, T. (2000). "Trading Is Hazardous to Your Wealth: The Common Stock Investment Performance of Individual Investors." *Journal of Finance*, 55(2), 773–806. https://onlinelibrary.wiley.com/doi/10.1111/0022-1082.00226
+4. Chatbot source (labeled, per question-bank protocol): Duck.ai (GPT-5.6 Luna, 2026-09-10) answered Q-SB4-1–Q-SB4-3; Grok/Cursor answers pending (checked 2026-09-10). Retail-heterogeneity framing, odd-lot caveats, and after-cost warnings used above as *labeled leads*.
+
+**Unverified leads** (chatbot-only, not independently confirmed): precise BJZZ band cutoffs beyond the (0.4,0.6)/(0.6,1.0] structure in the report entry; "marketable retail trades slightly net buying" sample detail; the exact turnover/fee decomposition of retail-fade P&L.
+
+---
+## Stage 47/200 — S047: Bid–ask bounce exploitation
+
+*Batch SB4 · Signal 47/100 · Provenance [D] · Family A — Microstructure & order flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Transaction prices oscillate bid↔ask even when the mid is flat; a print at the ask is likelier followed by one at the bid — a mechanical mean reversion in *trade prices*, not value. |
+| **When it works** | As a spread estimate (Roll) and as timing for passive entries/exits; as a P&L source only for co-located market makers with queue priority. |
+| **When it dies** | As paper-trading alpha: gross edge bounded by the spread; fees, adverse selection, missed fills consume it. |
+| **Build-or-buy in one line** | Build the Roll estimator on any trade feed — ten lines; do not build a bounce-harvesting strategy on SIP data. |
+
+Provenance **[D]** · Family A — Microstructure & order flow. Signal chapter 47/100.
+
+> **Honesty note (mandatory):** bounce harvesting *requires* spread estimates (ties to S012 Roll estimator and S014 spread decomposition), and the **gross edge is bounded by the spread itself** — you cannot earn more than the round-trip spread per share before costs. After costs this is an HFT/market-making feature, not paper-trading alpha (source entry).
+
+### S2. How it works — plain human explanation
+
+**Jargon, defined once:** *co-located* (servers physically located at the exchange data center); *SIP* (Securities Information Processor — the official consolidated tape); *NBBO* (National Best Bid and Offer — the consolidated best bid/ask across exchanges); *MBO* (market-by-order — individual-order messages); *HFT* (high-frequency trader).
+
+The **bid**/ask are the best pay/take prices; the **mid** is their average; the **spread** (ask−bid) is the market maker's gross wage. Watch prints: 50.01, 50.01, 49.99, 50.01, 49.99… — the mid sat at 50.00 throughout, but trades bounced bid↔ask with the aggressor side. That oscillation is the **bid–ask bounce**: pure mechanics, zero information.
+
+Two uses. *Measurement*: Roll (1984) showed the bounce's fingerprint — negative serial covariance in price changes — estimates the **effective spread** (the spread actually paid) from *trade prices alone, no quote feed*. *Trading*: after an ask print, the next print is likelier at the bid — a patient trader "fades" it (sell the ask, buy the bid, pocket the spread). That is bounce harvesting.
+
+Why nearly unharvestable for a small operation? Round trip: sell 100 at the ask 50.01, buy back at the bid 49.99 → gross +$2.00. Subtract: exchange/SEC-style fees, **adverse selection** (sometimes the mid moves — the ask print was informed, the bid never comes back), and **queue priority** (your bid limit order waits behind everyone else). Remains: tenths of a cent per share — co-located market makers (Ho–Stoll), not a laptop strategy. For most readers: *cost estimator and execution timer*, not alpha.
+
+**Mental model:** bounce = trade prices mean-revert bid↔ask while the mid stands still (mechanics, not mispricing); Roll turns its negative serial covariance into a spread estimate from prices alone; gross edge ≤ spread per round trip — net edge is a market-maker's game.
+
+### S3. The math — exact formula
+
+**Roll (1984) data-generating process:**
+
+$$\Delta p_t = \frac{s}{2}\,(Q_t - Q_{t-1}) + u_t$$
+
+- $p_t$ — trade price of trade $t$; $\Delta p_t = p_t - p_{t-1}$.
+- $s$ — effective spread ($, per share).
+- $Q_t \in \{+1,-1\}$ — trade direction (+1 buyer-initiated at ask, −1 seller-initiated at bid); Roll assumes $Q_t$ i.i.d. with $P(Q_t=+1)=1/2$ and independent of the efficient-price innovation $u_t$.
+- $u_t$ — public-information shock (mean zero, serially uncorrelated).
+
+**Estimator:** under these assumptions $\text{Cov}(\Delta p_t, \Delta p_{t-1}) = -s^2/4$, hence
+
+$$\hat s = 2\sqrt{-\hat\gamma_1}, \qquad \hat\gamma_1 = \widehat{\text{Cov}}(\Delta p_t, \Delta p_{t-1})$$
+
+- If $\hat\gamma_1 \ge 0$ the estimator is **undefined** (no bounce, or trending) — report undefined, lengthen the window, or bias-correct (Harris 1990: positive for ~half of securities on daily data).
+- Sample autocovariance: $\hat\gamma_1 = \frac{1}{T-2}\sum_{t=2}^{T-1}(\Delta p_t - \overline{\Delta p})(\Delta p_{t-1} - \overline{\Delta p})$.
+
+**The fade rule:** after a print at the ask ($Q_t = +1$), post/shade toward the bid expecting reversion; after a bid print, the reverse. Expected gross per round trip $\le s$ per share.
+
+**Parameter table:**
+
+| Parameter | Symbol | Typical range | Too small / too large | Default example |
+|---|---|---|---|---|
+| Estimation window | $T$ | 100–5,000 trades (or 1–15 min bars) | noisy/positive $\hat\gamma_1$ / mixes regimes | 500 trades (*example — not an institutional standard*) |
+| Fade holding | $h$ | 1–20 trades | no fill / adverse move | next opposite-side print (*example*) |
+| Participation | — | ≤10% of visible depth | no fills / moves the quote | passive only (*example*) |
+
+**Normalization:** none — $\hat s$ is in price units; compare to quoted spread as a ratio ($\hat s / s_{\text{quoted}}$) for cross-name work. **Causal timing:** $\hat\gamma_1$ over trades $\le t$; a fade entered at $t$ is filled no earlier than $t+1$ — and only if your quote is actually hit (queue honesty).
+
+**Named variants:** (1) Roll on trade prices; (2) Roll on 1–15 min bars; (3) Corwin–Schultz (S013, high-low based); (4) effective/quoted/realized spread decomposition (S014/S015) — the bounce harvester's required companions.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 60-trade tape (seed **4747**; `batches/SB4/plot_S047.py`): mid fixed at $50.00, quoted spread $0.02 (bid 49.99 / ask 50.01), side switches with probability 0.65 (bounce-heavy). First 12 trades:
+
+| Trade | Side | Price ($) |
+|---|---|---|
+| 1 | ask | 50.01 |
+| 2 | ask | 50.01 |
+| 3 | ask | 50.01 |
+| 4 | bid | 49.99 |
+| 5 | ask | 50.01 |
+| 6 | ask | 50.01 |
+| 7 | ask | 50.01 |
+| 8 | bid | 49.99 |
+| 9 | bid | 49.99 |
+| 10 | ask | 50.01 |
+| 11 | bid | 49.99 |
+| 12 | ask | 50.01 |
+
+Roll estimation on the full 60-trade tape: $\Delta p \in \{+0.02, 0, -0.02\}$; first-order serial covariance $\hat\gamma_1 = -0.000138$ → $\hat s = 2\sqrt{0.000138} = \$0.0235$ vs quoted $0.02$ — recovered within ~18% on 60 trades (sampling noise; a demonstration, not a calibration claim). Note the estimator *needs* $\hat\gamma_1 < 0$; a trending tape returns undefined.
+
+**Bounce round-trip P&L decomposition** (per share, example costs — *not* an institutional fee schedule):
+
+| Leg | ¢/share |
+|---|---|
+| Gross (sell ask 50.01, buy bid 49.99) | +2.0 |
+| Exchange + regulatory-style fees | −0.4 |
+| Adverse selection (mid moves against the fade) | −0.8 |
+| Latency / queue (missed or slipped fills) | −0.4 |
+| **Net** | **+0.4** |
+
+
+**What to notice:** the gross edge (+2.0¢) is *exactly* the spread — the theoretical maximum, achieved only with perfect fills at both touches. Even generous example costs leave +0.4¢/share — ~$4 per 1,000-share round trip before the trades where the bid never comes back. **Limits:** flat mid (no adverse moves in the tape — the −0.8¢ is imposed, not observed); no partial fills; no queue-position modeling; SIP-latency-free. Real harvesting lives or dies on queue position and cancels, which this example does not model (*simulated only — requires MBO/ITCH* for any queue claim).
+
+### S5. Strategies that use this signal
+
+- **T097 — Sub-Hour Microstructure Reversal Scalper — primary trigger**: tick-level mean reversion harvesting the bounce with spread estimates (S012).
+- **T011 — Short-Term Reversal + Bounce Timing — primary trigger**: Jegadeesh/Lehmann reversal entered *at the touch* — S047 supplies entry timing, S035 the reversal, S014 the cost gate.
+- **T083 — Retail-Flow Internalizer Fade — execution input**: the internalizer's edge *is* spread capture against retail flow; S047's bounce mechanics and S015's spread decomposition price the fade.
+- *Filter role:* Roll-implied spread as a *veto* — don't run spread-paying strategies when $\hat s$ exceeds the expected edge.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade prices + timestamps | events | per trade | Tier 1 | TAQ / Databento / Polygon — Roll needs only this |
+| NBBO (for the fade, not the estimator) | events | per trade | Tier 1–2 | Fading blind without quotes is just the estimator |
+| Queue/cancel data (for real harvesting) | MBO events | per order | Tier 3 | *Simulated only — requires MBO/ITCH* otherwise |
+
+Collection: the *estimator* is honest on SIP trades; the *harvest* needs direct-feed MBO. Ingest sketch (≤20 lines):
+
+```python
+import polars as pl, numpy as np
+p = pl.read_parquet("trades_2026-09-09.parquet").sort("ts")["price"].to_numpy()
+dp = np.diff(p)
+mu = dp.mean()
+gamma1 = ((dp[1:-1] - mu) * (dp[:-2] - mu)).mean()   # Cov(dp_t, dp_{t-1})
+roll_spread = 2 * np.sqrt(-gamma1) if gamma1 < 0 else np.nan
+print(f"Roll implied spread: {roll_spread:.4f}" if gamma1 < 0
+      else "undefined: non-negative serial covariance")
+```
+
+Storage: trades-only — tens of MB/symbol-day. Data-quality checklist: corrections, out-of-sequence prints, splits, DST/half-days, locked/crossed NBBO.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility verdict: trivial for the estimator; infeasible-locally for real bounce harvesting.** The Roll estimator is O(T) arithmetic — microseconds. Real harvesting needs co-located MBO feeds, queue-position modeling, and cancel logic: a different sport.
+
+Throughput (per `notes/cost-model.md` §2): rolling Roll spreads over 500 symbols × 390 1-min bars — milliseconds in numpy; tick-level rolling estimation across 500 symbols is seconds per day. No bottleneck. RAM (per cost-model §3): trade-price vectors are megabytes; everything fits.
+
+Stack: **Python+numpy** for all estimator work; **Rust** only inside a live MM loop; **DuckDB** for historical spread panels.
+
+Engineering time: **Tier M, 20–60 h** (per cost-model §5) → $3,000–$9,000 loaded-cost estimate at $150/hr — and most of that is the *fade simulator* (fill modeling, queue honesty), not the estimator (an afternoon). A production bounce-harvesting MM system is Tier H+ and co-located — out of scope for local build. **What breaks first:** harvesting on SIP data — no queue visibility makes backtests fictional; label *simulated only — requires MBO/ITCH*.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX | Recent trades | ~$0 | Free prototype | No history depth |
+| Tier 1: Polygon / Alpaca SIP | Full trade history | ~$30–200/mo | Estimator fully feasible | Harvest not honest on SIP |
+| Tier 2: Databento | Microsecond trades + MBP-1 | ~$200/mo + usage | Cleaner estimation windows | Still no queue position |
+| Tier 3: LOBSTER / direct MBO | Order-level replay | ~hundreds/yr academic / institutional $$$$ | The only honest harvest testbed | Cost; complexity |
+
+All prices *indicative — verify before budgeting*. **Verdict: build the estimator on Tier 1; do not "buy" bounce alpha.** No vendor sells harvestable bounce edge — market makers keep it. Buy better data only to improve the *spread estimate* (S012/S014), which gates every other strategy's cost model. Crossover: direct MBO feeds only if you are actually building a quoting system (Tier H, co-located) — otherwise it is an expensive toy.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Roll (1984), *Journal of Finance* | US equities (daily/weekly data) | Spread $= 2\sqrt{-\text{cov}}$; implied spreads related to firm size | Before cost (estimator) | Assumes i.i.d. trade direction, constant spread, flow/value independence — all violated intraday |
+| Harris (1990), *Journal of Finance* | US equities | Roll estimator **severely downward-biased** (Jensen's inequality); serial covariances positive for ~half of securities → estimator undefined; estimates depend on observation interval | Before cost (estimation critique) | Limits the estimator, let alone harvesting |
+| Source entry (report, [D]) | Practitioner consensus | "Live MM bounce capture (queue position, cancels) is proprietary"; "after costs an HFT/MM feature, not paper-trading alpha" | After cost (practitioner verdict) | Qualitative, from the report's own coverage |
+| Chatbot lead (Duck.ai, 2026-09-10, Q-SB4-3) | General | Bounce harvesting requires spread estimates (S012/S014); gross edge bounded by the spread itself; profitability consumed by half-spread, queue, fees, latency, missed fills, adverse selection, impact | After cost framing | *Unverified chatbot claim*; kept as labeled lead |
+| Net-PnL of a local bounce-harvesting strategy | — | **No documented positive row**; the documented direction is negative-to-zero for non-co-located implementations | After cost | Honest cell: harvesting edge is a market-maker's edge |
+
+**Regimes where it fails:** trending tapes (autocovariance ≥ 0 → undefined estimator); wide-spread / illiquid names (bounce exists but fills don't); news-driven directional flow (fade gets run over — adverse selection); locked/crossed markets; tick-constrained stocks (1-tick spread, fiercest queue competition).
+
+**Honest bottom line:** as a *spread estimator* this is genuine and documented — every serious cost model uses Roll-family estimates. As a *standalone trigger* it is a **near-zero net edge** outside co-located market making: gross is capped at the spread, costs are structural. Report **both** OOS forecast improvement **and** net implementation performance after spread/fees/latency/realistic fills; without the second, call it a predictive feature, not a demonstrated edge (Q-SB4-3, labeled chatbot source).
+
+### S10. Failure modes & pitfalls
+
+1. **Gross ≤ spread arithmetic** — forgetting the edge is capped at the round-trip spread. *Mitigation:* always decompose P&L as in S4 before trading.
+2. **Undefined estimator** — $\hat\gamma_1 \ge 0$ on trending tapes; trading anyway. *Mitigation:* report undefined; lengthen window; bias-correct (Harris 1990).
+3. **Adverse selection** — the ask print was informed; the bid never comes back. *Mitigation:* condition fades on toxicity (S008); size for the loss case.
+4. **Queue-position fiction** — backtests assume your bid gets hit; reality queues you behind. *Mitigation:* model queue explicitly; label SIP backtests *simulated only — requires MBO/ITCH*.
+5. **Roll assumption violations** — serially correlated trade direction (S018!) and time-varying spreads break the $-s^2/4$ identity. *Mitigation:* use with S018 awareness; prefer effective-spread measures (S014).
+6. **Latency** — by the time a SIP print reaches you, the bounce already happened. *Mitigation:* passive quoting only; never chase prints.
+7. **Overtrading** — harvesting invites maximum turnover at minimum edge. *Mitigation:* per-trade cost budget; daily loss stop.
+8. **Tick-size trap** — 1-tick-spread stocks look attractive (tiny spread = easy fill) but queue competition is maximal. *Mitigation:* measure realized fill rates, not theoretical edge.
+
+### S11. Visuals
+
+![S047 worked example — synthetic bid-ask bounce tape with round-trip P&L decomposition](images/S047_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(SIP trades + NBBO)"] -->|per-trade prints + NBBO events| ING["Ingest + normalize\n(corrections, splits, halts)"]
+    ING -->|cleaned trade-price series| FEAT["Feature compute\n(price changes, serial cov)"]
+    FEAT -->|per-trade Δp series + Roll ŝ| SIG["Signal S047\nbounce fade / Roll ŝ"]
+    SIG -->|per-trade fade signal / spread veto| GATE{"Cost / toxicity\ngate?"}
+    GATE -->|pass| OUT["Downstream consumer\n(T097 / T011 timing)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Roll, R. (1984). "A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient Market." *Journal of Finance*, 39(4), 1127–1139. https://authors.library.caltech.edu/records/afwsc-6bb61
+2. Harris, L. (1990). "Statistical Properties of the Roll Serial Covariance Bid/Ask Spread Estimator." *Journal of Finance*, 45(2). — severe downward bias; positive serial covariances common; estimator often undefined. https://repec.udesa.edu.ar/pub/Finanzas/Journals/Journal%20of%20Finance/45/2/2328671.pdf
+3. Screamer Labs — `RollSpread` practitioner documentation: $2\sqrt{-\text{cov}(\Delta P_t, \Delta P_{t-1})}$ from trade prices alone; undefined (NaN) when serial covariance is non-negative. https://github.com/screamer-labs/screamer/blob/HEAD/docs/functions_micro/RollSpread.md
+4. Stoll, H. R. (1989). "Inferring the Components of the Bid-Ask Spread: Theory and Empirical Tests." *Journal of Finance*. / Ho, T. & Stoll, H. R. (1981). Dealer inventory models. (Report citations; URLs not independently verified — not fabricated here.)
+5. Chatbot source (labeled, per question-bank protocol): Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB4-1–Q-SB4-3; Grok/Cursor answers pending (checked 2026-09-10). Spread-estimate dependency and gross-edge-bound points used above as *labeled leads*.
+
+**Unverified leads** (chatbot-only, not independently confirmed): Roll window guidance (100–5,000 transactions; 1–15 min bars); "corrected estimator (drift, discreteness, asymmetry)" as remedies for non-negative autocovariance.
 
 ---
 <!-- SIGNAL CHAPTERS APPEND BELOW -->
