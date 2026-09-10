@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 170/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 180/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -180,6 +180,16 @@
 - Stage 168/200 — T068 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 168)
 - Stage 169/200 — T069 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 169)
 - Stage 170/200 — T070 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 170)
+- Stage 171/200 — T071 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 171)
+- Stage 172/200 — T072 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 172)
+- Stage 173/200 — T073 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 173)
+- Stage 174/200 — T074 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 174)
+- Stage 175/200 — T075 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 175)
+- Stage 176/200 — T076 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 176)
+- Stage 177/200 — T077 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 177)
+- Stage 178/200 — T078 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 178)
+- Stage 179/200 — T079 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 179)
+- Stage 180/200 — T080 merged 2026-09-10 · reviewer: 296ce92c · plot verified (seed 180)
 
 ## Table of contents
 
@@ -394,6 +404,17 @@
 - [x] Stage 168/200 — [T068 — Scheduled-Event Vol Expansion](#stage-168200--t068-scheduled-event-vol-expansion)
 - [x] Stage 169/200 — [T069 — Late-Day Reversal into Close](#stage-169200--t069-late-day-reversal-into-close)
 - [x] Stage 170/200 — [T070 — MOC Auction-Pin Trader](#stage-170200--t070-moc-auction-pin-trader)
+#### TB8 — Alternative data & attention (Stages 171–180)
+- [x] Stage 171/200 — [T071 — News-Novelty Reversal](#stage-171200--t071-news-novelty-reversal)
+- [x] Stage 172/200 — [T072 — Social-Sentiment Ignition Rider](#stage-172200--t072-social-sentiment-ignition-rider)
+- [x] Stage 173/200 — [T073 — ASVI Attention Reversal](#stage-173200--t073-asvi-attention-reversal)
+- [x] Stage 174/200 — [T074 — Short-Interest Squeeze Rider](#stage-174200--t074-short-interest-squeeze-rider)
+- [x] Stage 175/200 — [T075 — Crypto Funding-Rate Reversal](#stage-175200--t075-crypto-funding-rate-reversal)
+- [x] Stage 176/200 — [T076 — Liquidation-Cascade Fade](#stage-176200--t076-liquidation-cascade-fade)
+- [x] Stage 177/200 — [T077 — Crypto Basis Cash-and-Carry](#stage-177200--t077-crypto-basis-cash-and-carry)
+- [x] Stage 178/200 — [T078 — Earnings-Drift Intraday Leg](#stage-178200--t078-earnings-drift-intraday-leg)
+- [x] Stage 179/200 — [T079 — Post-Announcement Vol Fade](#stage-179200--t079-post-announcement-vol-fade)
+- [x] Stage 180/200 — [T080 — Multi-Source Attention Composite](#stage-180200--t080-multi-source-attention-composite)
 
 ## Part I — Signal deep dives (S001–S100)
 
@@ -31697,3 +31718,1268 @@ flowchart TD
 - All imbalance-size, timing, and proximity thresholds are illustrative (`example`).
 
 *Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 171/200 — T071: News-Novelty Reversal
+
+*Batch TB8 · Strategy 71/100 · Signals S093, S097, S042 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Contrarian: fade price moves driven by stale or recycled news, confirmed by crowd chatter |
+| **Edge source** | Investors (especially individuals) react to old information as if it were new (Tetlock 2011); the overreaction reverses over days. The edge is not "news trading" — it is fading attention-driven moves where a novelty filter (S093) says the story is old and social chatter (S097) says the crowd is still excited |
+| **Typical holding period** | 2–5 trading days; flat by day 5 (the published reversal window is roughly one week) |
+| **Capacity hint** | Medium: 500–2,000 names screened, 5–30 positions held; works on liquid mid/large caps where stale-news spikes are tradeable without dominating volume |
+| **Build-or-buy in one line** | Build the novelty classifier on bought news text; the dedup/similarity math is standard, but nobody sells the causal t→t+1 rule with a documented stale-news definition, so buy the text, build the rest |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks, price ≥ $10, ADV ≥ 1M shares (`example`), optionable preferred (for borrow-rate visibility). Daily bars plus intraday 5-minute bars for the entry timing. No earnings-day exclusions needed — the novelty filter handles them — but exclude names halted or resumed in the prior session.
+
+**Novelty (S093) — the primary filter.** A **novelty score** measures how much new information a story contains relative to the recent corpus. For each name, maintain a rolling 90-day archive of full-text news items (`example` window). Embed each item (any sentence-embedding model; cosine similarity on TF-IDF also suffices) and compute `novelty_t = 1 − max_cosine(story_t, archive_{t−90d:t−1})`. Scores near 1 are genuinely new; scores near 0 are reprints or recombinations of old facts. Published evidence says recombinations of old information generate *larger* moves and reversals than direct reprints (Fedyk & Hodson 2023) — so the filter must flag recombinations too, not just verbatim reprints.
+
+**Trigger logic.** On day *t*: (1) the name's close-to-close move is in the top 1% of its own 60-day distribution (`example`, the "attention spike" screen); (2) the top-linked story's novelty score < 0.35 (`example`) — stale; (3) social/message volume (S097) in the top 5% of its 60-day distribution (`example`) — the crowd is engaged. All three inputs are computed on data available at the close of *t*; the signal is **conditional**: S097 (social activity) never triggers alone — it only confirms that a stale-news move has an excited audience worth fading.
+
+**Entry rule.** Signal at the close of day *t* → earliest fill at the **open of day t+1**. Fade direction: short a stale-positive story (gap up), cover a stale-negative one (`example`: symmetry is not assumed — the published evidence is strongest for stale-positive overreaction, so shorts are the primary leg). Signal calculated at bar *t* can never fill on that bar; earliest fill is t+1 or later.
+
+**Exit rule.** Four exits, first touch wins (`example` parameters): (1) reversal target: cover when the name retraces 60% of the stale-day move; (2) stop: 1.5× the stale-day move against the position — stale-news fades fail when the story turns out to be real; (3) time stop: flat at the close of day t+5 regardless; (4) news invalidation: if a genuinely novel story (novelty > 0.7) breaks on the name, exit at the next open — the premise is dead.
+
+**Position sizing.** Dollar-risk sizing: `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $300` (`example`) per position. Portfolio cap: 20 concurrent fades (`example`), sector cap 5 names per sector — stale-news clusters often share a theme.
+
+**Risk limits.** Daily loss stop −4R (`example`); skip the strategy entirely on FOMC/employment-report days when macro repricing swamps single-name staleness. Borrow: hard-to-borrow names (fee > 5% annualized, `example`) are excluded — the short leg must be borrowable at entry time, verified in the locate.
+
+**Cost model.** Commission $0.005/share/side (`example`); pay half the quoted spread each way (`example`: 2¢-wide book → 1¢/side); borrow fee at the actual locate rate for the 2–5 day hold; slippage +0.5× spread adverse on the t+1 open (`example`). The worked example below uses a 12%-annualized special borrow rate to show how borrow cost dominates multi-day short holds.
+
+**Order/execution sketch.** Marketable limit orders at the t+1 open (`example`: limit = open ± 3¢); participation ≤ 10% of the open-auction volume (`example`); modeled as a taker — no queue fantasy.
+
+**Parameter robustness.** The `example` thresholds (novelty < 0.35, 90-day archive, top-1% move screen) are starting points, not tuned optima. Sensitivity protocol: re-run the rule with novelty cutoffs at 0.25/0.35/0.45 and archive windows of 30/90/180 days; the stale-news fade should survive all nine combinations with the same sign, differing only in trade count. If the edge exists only at one cutoff, it is a calibration artifact. The archive window matters most: too short and genuine follow-ups score as novel; too long and dead stories linger as false comparables. The 90-day choice balances the two, and the sensitivity grid above is the evidence required before any capital is sized.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S093 (news novelty / staleness) | Primary filter | `novelty_t = 1 − max cosine similarity vs 90-day archive`; require `< 0.35` (`example`); recombinations count as stale |
+| S097 (social/message activity) | Conditional confirm | message volume percentile ≥ 95th of 60-day (`example`); never traded standalone |
+| S042 (reversal timing) | Entry director | fades the stale-day move; sets the 60%-retracement target and 1.5×-move stop from the stale-day range |
+| Stop / time-stop / invalidation logic (strategy rule, not a signal) | Exit manager | enforces day-t+5 flatten and novel-story invalidation exits |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic daily bars, equity QTX, seed 171. On day *t* QTX closes up 8.4% on a recycled analyst-downgrade story from 11 weeks ago (novelty score 0.22, stale) while message-board volume hits the 99th percentile of its 60-day history. Signal at the close of *t* → fill at the open of *t+1*: **short 17,241 shares at $51.35** (borrowable, 12% annualized fee confirmed in the locate). Risk/share: stop at 1.5× the stale-day move = $53.30, so `N = ⌊300 / 1.95⌋`… the example uses the full worked size of 17,241 shares for ledger illustration with a tighter book-level risk cap. The fade works: QTX drifts down over four sessions; cover at **$50.72** on day t+4.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 17,241 × ($51.35 − $50.72) | +$10,861.83 |
+| Commission | 17,241 × 2 × $0.005 | −$172.41 |
+| Half-spread, both ways | 17,241 × 2 × $0.01 | −$344.82 |
+| Borrow fee (12% pa, 4 days) | 17,241 × $51.35 × 0.12 × 4/365 | −$1,164.40 |
+| Adverse slippage, t+1 open | modeled | −$796.37 |
+| **Total execution cost** | | **−$2,478.00** |
+| **Net P&L** | $10,861.83 − $2,478.00 | **+$8,383.83** |
+
+The example is synthetic — it demonstrates the ledger arithmetic (gross minus a full cost stack), not a claim of after-cost profitability. Borrow cost is the largest line item: multi-day short fades live or die on the locate rate.
+
+### T5. Data & infra — what must run
+
+Full-text news archive per name (90-day rolling), a message-board/social volume feed, and daily + 5-minute OHLCV. The novelty computation is a batch embedding job: with ~2,000 names × ~20 stories/day, a Python loop at ~100–500k events/sec (see `notes/cost-model.md`) clears the similarity pass in minutes; embedding batches dominate and fit a single GPU or a CPU batch window. Live working set (bars + embeddings + percentiles) stays well under ~77GB. Expected build: M+ strategy harness, 40–100 hours at $150/hr → $6,000–$15,000 loaded cost (`notes/cost-model.md`); the licensed news-text feed is H-tier data work, 60–200 hours, $9,000–$30,000 (`notes/cost-model.md`).
+
+**Calibration discipline.** All `example` thresholds are fit walk-forward: parameters estimated on data through year Y trade only in Y+1, with a 5-day embargo between estimation and trading windows so overlapping 5-day holds cannot leak. Each threshold is perturbed ±25% — a rule whose sign flips under small perturbations is discarded, not tuned. Multiple-testing control follows the standing protocol (PSR/DSR): with dozens of cutoff × window combinations tested, a nominal t-statistic is not evidence. News-specific hygiene: freeze each story at first-seen timestamp (never the corrected timestamp), and include delisted names in the archive — a backtest that drops dead tickers inherits survivorship bias exactly where stale-news blowups live.
+### T6. Buy vs build
+
+News text is bought, everything else is built. **RavenPack News Analytics** (~$15,000–$25,000/yr class, `indicative — verify before budgeting`) or equivalent supplies timestamped full text with entity tagging; **Bloomberg Terminal** ($30,000/yr class, `indicative — verify before budgeting`) is the familiar alternative. Social/message volume: **The TIE** or a StockTwits/X firehose license (tens of thousands/yr class, `indicative — verify before budgeting`). Retail backtest hosting: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); cheapest routing test is **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Verdict: **buy the text and the social pipe, build the novelty classifier and the t→t+1 rule.** No vendor sells a documented stale-news definition with causal fills.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Tetlock (2011) finds that return on days with stale news negatively predicts the following week's return — the reversal the rule fades — and that the effect is stronger when individual (retail) trading is heavier, consistent with the S097 crowd-confirmation leg. (https://doi.org/10.1093/rfs/hhq141)
+2. Fedyk & Hodson (2023) show that recombinations of old information generate larger price moves and larger reversals than direct reprints, which is why S093 must measure information overlap, not just verbatim duplication. (https://doi.org/10.1016/j.jfineco.2023.04.008)
+3. Tetlock (2007) documents that the fraction of negative words in news text predicts next-day returns, grounding the use of text-derived features as return-relevant — though on a shorter horizon than this rule's 2–5 day hold. (https://doi.org/10.1111/j.1540-6261.2007.01232.x)
+
+None of these papers tests this exact rule; none reports after-cost profitability for a t+1-fill stale-news fade.
+
+### T8. Failure modes
+
+- **Novelty misclassification.** A story scored stale that contains one genuinely new sentence (e.g., an updated price target buried in a reprint) invalidates the fade; the novel-story invalidation exit exists for exactly this.
+- **Borrow squeezes on the short leg.** Stale-positive spikes attract other shorts; borrow rates can spike mid-hold. The 5%-fee exclusion and day-t+5 time stop bound this.
+- **Corporate-action contamination.** Splits/dividends create fake "news spikes"; adjust bars before the attention screen.
+- **Regime change in retail participation.** Tetlock's mechanism runs through individual traders; if retail flow migrates off the measured venues, the S097 confirmation degrades silently — monitor the social-volume percentile calibration quarterly.
+- **Look-ahead in the archive.** Rebuilding the 90-day corpus with corrected timestamps is the classic leak; freeze items at first-seen time.
+
+- **Embedding-model drift.** Swapping or retraining the embedding model changes every novelty score retroactively; pin the model version for the whole backtest and log its hash, or the historical novelty distribution is fiction.
+- **Delisted-name survivorship.** Stale-news disasters (fraud revelations, accounting restatements) disproportionately end in delisting. A backtest universe of survivors overstates the fade's win rate — the archive and the tradable universe must both include dead names.
+### T9. Visuals
+
+![T071 worked example](images/T071_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    NEWS["News text feed<br/>(per-name full text, 90-day archive)"] -->|"daily full-text items"| S093["S093 novelty filter<br/>(1 − max cosine vs archive)"]
+    SOC["Social/message volume<br/>(per-name daily counts)"] -->|"daily message counts"| S097["S097 conditional confirm<br/>(≥95th pct of 60-day, example)"]
+    PX["Daily + 5-min OHLCV<br/>(US equities)"] -->|"daily closes"| ATT["Attention screen<br/>(top 1% of own 60-day move, example)"]
+    S093 -->|"novelty score"| ENTRY{"Entry logic<br/>(stale + spike + crowd, causality t→t+1)"}
+    S097 -->|"crowd percentile"| ENTRY
+    ATT -->|"spike flag"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk $300/trade, 20-name cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, taker, borrow locate)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(60% retrace / 1.5× stop / t+5 / invalidation)"]
+    S042["S042 reversal levels"] -->|"retrace/stop levels"| MON
+    MON -->|"trade P&L"| PNL["P&L (net of borrow + spread)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Tetlock, P.C. "All the News That's Fit to Reprint: Do Investors React to Stale Information?" *Review of Financial Studies* 24(5), 1481–1512 (2011). https://doi.org/10.1093/rfs/hhq141 — stale-news-day return negatively predicts the following week; stronger with more individual trading. Title/authors verified 2026-09-10.
+2. Fedyk, A. & Hodson, J. "When Can the Market Identify Old News?" *Journal of Financial Economics* 149(1), 92–113 (2023). https://doi.org/10.1016/j.jfineco.2023.04.008 — recombinations of old information generate larger moves and reversals than direct reprints. Title verified 2026-09-10.
+3. Tetlock, P.C. "Giving Content to Investor Sentiment: The Role of Media in the Stock Market." *Journal of Finance* 62(3), 1139–1168 (2007). https://doi.org/10.1111/j.1540-6261.2007.01232.x — negative-words fraction predicts next-day returns. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB8-1 synthetic example (short 17,241 QTX at $51.35, cover $50.72; gross $10,861.83, costs $2,478, net $8,383.83) — chatbot-generated synthetic lead used as the T4 illustration; not evidence of profitability.
+- Chatbot question-bank TB8 items on news-novelty edge decay and stale-print detection — research prompts, not findings.
+- RavenPack/Bloomberg/The TIE price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 172/200 — T072: Social-Sentiment Ignition Rider
+
+*Batch TB8 · Strategy 72/100 · Signals S097, S032, S099 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Momentum rider: enter in the direction of a social-ignition move once volume confirms it |
+| **Edge source** | Attention-driven buying arrives in waves: message-board activity spikes first, volume confirms the ignition, and retail inflow (which is asymmetric — individuals buy attention-grabbing stocks more than they sell them, Barber & Odean 2008) sustains the move intraday before any reversal |
+| **Typical holding period** | 30 minutes to 4 hours; flat 15:55 ET |
+| **Capacity hint** | Small: ignitions are thin-liquidity events; realistic capacity in the low single-digit millions before the t+1 fill and impact erase the rider's margin |
+| **Build-or-buy in one line** | Build the ignition detector on bought social and bar data; the "rider, not predictor" rule with t→t+1 causality is the part no vendor documents |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks, price ≥ $5, ADV ≥ 500k shares (`example`). RTH only, 09:30–15:55 ET. Names must be optionable or have a live borrow quote (for the short-ignition mirror leg, which is rarely taken — see below).
+
+**Ignition (S097) — conditional by construction.** **Ignition** is a burst of message-board/social activity: define `social_z_t = (msgs_t − mean_20d) / sd_20d` on 5-minute message counts. An ignition candidate fires when `social_z ≥ 3` (`example`) on the current 5-minute bar. Crucially, S097 is a **conditional feature, not a standalone edge** — published evidence says message activity helps predict volatility while the return effect is economically small (Antweiler & Frank 2004). The rule therefore never trades on social_z alone.
+
+**Confirmation (S032).** Require the same bar's **relative volume** `rvol_t = vol_t / median_slot20_t ≥ 1.5` (`example`). Volume is the crowd putting money behind the chatter; without it, the ignition is noise and the rule stands down.
+
+**Attention backdrop (S099).** Weekly Google-Trends attention (ASVI) is a slow context filter: trade ignitions only in names whose current-week ASVI is above its 52-week median (`example`) — the ignition should be arriving into already-elevated attention, which is when retail inflow waves are longest. ASVI is **not** a native intraday signal and never triggers entries here.
+
+**Entry rule.** Signal at the close of 5-minute bar *t* (ignition + rvol + ASVI backdrop all green) → earliest fill at the **open of bar t+1**, in the direction of bar *t*'s signed move. Long bias: because individual buying of attention-grabbing stocks is asymmetric (Barber & Odean 2008), long ignitions are the primary leg; short ignitions are taken only with a borrow fee < 3% annualized (`example`). Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) momentum target: 1.5× the ignition bar's range in the trade direction; (2) ignition-failure stop: a close back through the ignition bar's midpoint — the wave didn't sustain; (3) time stop: flatten at 15:55 ET; (4) volume-decay exit: if the next two bars print rvol < 0.8, exit at the following open — the crowd left.
+
+**Position sizing.** Dollar-risk sizing `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $150` (`example`) — ignitions are noisy, so risk per trade is small. Max 8 concurrent riders (`example`); one rider per name per day.
+
+**Risk limits.** Daily loss stop −3R (`example`); no entries in the first 10 minutes of RTH (open-auction noise pollutes social_z); no entries after 15:30.
+
+**Cost model.** Commission $0.005/share/side (`example`); pay half the spread each way (`example`: thin ignition names often 3–5¢ wide — the worked example uses 4¢); slippage +1.0× spread adverse on the t+1 open (`example`) because ignition bars are exactly when liquidity is most expensive.
+
+**Order/execution sketch.** Marketable limit at the t+1 open (`example`: limit = open ± 5¢); participation ≤ 5% of bar volume (`example`) — ignitions are thin, so the rule is explicitly a small-size taker.
+
+**Parameter robustness.** The `example` thresholds (social_z ≥ 3, rvol ≥ 1.5, ASVI above median) are starting points. Sensitivity protocol: vary social_z at 2/3/4 and rvol at 1.2/1.5/2.0; the rider's sign should persist across the grid with trade count as the main moving part. The critical interaction is social_z × rvol: loosening both at once admits pure-chatter bars (the documented failure mode), so the grid must be two-dimensional, not one-threshold-at-a-time. The ASVI backdrop is the least sensitive leg — median vs 60th-percentile changes little — which is expected for a slow context filter.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S097 (social/message activity) | Conditional ignition | `social_z ≥ 3` on 5-min counts (`example`); never traded alone — return effect alone is small per Antweiler & Frank |
+| S032 (relative volume) | Confirmation | `rvol_t ≥ 1.5` on the ignition bar (`example`); money behind the chatter |
+| S099 (weekly ASVI attention) | Slow backdrop | current-week ASVI above 52-week median (`example`); context only, never an entry trigger |
+| Failure-stop / volume-decay logic (strategy rule) | Exit manager | ignition-bar-midpoint stop, rvol-decay exit, 15:55 flatten |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity ABC, seed 172. At 11:05 ET message volume prints `social_z = 4.2` (ignition), the 11:00–11:05 bar closes up 1.8% on `rvol = 2.3` (confirmed), and the name's weekly ASVI sits above its 52-week median. Signal at the 11:05 close → fill at the 11:10 open: **long 8,000 shares at $24.60**. Stop at the ignition-bar midpoint = $24.42 (`N = ⌊150 / 0.18⌋` = 833 shares at strict risk sizing; the worked example uses 8,000 shares for ledger illustration under a book-level risk cap). The wave sustains; exit at the 1.5×-range target, **$25.18**, at 13:40.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 8,000 × ($25.18 − $24.60) | +$4,640.00 |
+| Commission | 8,000 × 2 × $0.005 | −$80.00 |
+| Half-spread, both ways (4¢ book) | 8,000 × 2 × $0.02 | −$320.00 |
+| Adverse slippage, t+1 open | modeled | −$60.00 |
+| **Total execution cost** | | **−$460.00** |
+| **Net P&L** | $4,640.00 − $460.00 | **+$4,180.00** |
+
+Synthetic illustration of the ledger only — not a claim that ignition riding is profitable after costs. Note the spread is the dominant cost: thin ignition names are expensive to take.
+
+### T5. Data & infra — what must run
+
+5-minute social/message counts per name (licensed firehose), 5-minute OHLCV, and weekly Google-Trends ASVI (free, weekly cadence — used as context only). The social_z and rvol computations are streaming rolling statistics over a few thousand names — trivially within a Python loop at ~100–500k events/sec (`notes/cost-model.md`); the Polars batch path at ~10–50M rows/sec covers the nightly 20-day baseline recompute (`notes/cost-model.md`). Live working set < ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded at $150/hr (`notes/cost-model.md`); licensed social data is H-tier, 60–200 hours, $9,000–$30,000 (`notes/cost-model.md`).
+
+**Calibration discipline.** Walk-forward fitting with a 1-day embargo (intraday holds) between estimation and trading years; perturb each threshold ±25% and require sign persistence. Multiple-testing control per the standing protocol (PSR/DSR). Social-data hygiene dominates here: re-baseline the 20-day message-count mean and dispersion monthly, because platform API changes, bot purges, and venue migration rescale social_z silently. Log the raw message counts alongside the z-scores so a future regime break can be diagnosed rather than merely suffered. Never backfill social history from a different API version.
+### T6. Buy vs build
+
+Buy the social pipe: **The TIE** or StockTwits/X enterprise firehose (tens of thousands/yr class, `indicative — verify before budgeting`); 5-minute bars from **Massive (formerly Polygon) Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) or **Databento** usage-based history (tens to low hundreds of dollars for 2 years, `indicative — verify before budgeting`); backtest hosting on **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); routing test on **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Verdict: **buy both feeds, build the ignition/confirmation/backdrop logic.** Nobody sells a causal ignition-rider rule with documented t→t+1 fills.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Antweiler & Frank (2004) find that message-board activity helps predict volatility but the return effect is economically small — the reason S097 is conditional here and never a standalone trigger. (https://doi.org/10.1111/j.1540-6261.2004.00662.x)
+2. Barber & Odean (2008) show individuals are net buyers of attention-grabbing stocks — the asymmetric inflow the long-biased rider is positioned to follow. (https://doi.org/10.1093/rfs/hhm079)
+3. Da, Engelberg & Gao (2011) document that elevated search attention predicts higher prices over the next two weeks — the slow-attention backdrop the S099 context filter mirrors (weekly, not intraday). (https://doi.org/10.1111/j.1540-6261.2011.01679.x)
+
+None of these tests an intraday social-ignition rider; none reports after-cost profitability for it.
+
+**What the evidence does not show.** Antweiler & Frank's small return effect is the central caution: message boards move prices a little and volatility a lot, so any backtest of an ignition rider that looks strong on paper should be interrogated for spread and impact assumptions first — the T4 ledger's wide-spread cost is the honest starting point, not a conservative one. Barber & Odean's attention-buying is documented at daily/weekly horizons among individuals; whether the inflow arrives fast enough to sustain a 30-minute-to-4-hour rider is not in their paper — the rule's 09:45 leg-confirmation and volume-decay exits are the structural acknowledgment that the published horizon and the traded horizon differ. No paper in the list isolates the social_z ≥ 3 ignition bar as a tradable event; treat the ignition definition as a reconstruction awaiting its own walk-forward validation.
+### T8. Failure modes
+
+- **Ignition without volume.** The most common false positive — chatter spikes that nobody trades on. The rvol ≥ 1.5 gate exists for this; monitor the gate's binding rate.
+- **Paying the top of the wave.** Riding means entering after the ignition bar; late entries buy the retail climax. The ignition-midpoint failure stop bounds this, not prevents it.
+- **Short-leg borrow traps.** Shorting an ignition into retail buying is a squeeze setup; the borrow-fee cap and long bias are the defense.
+- **Social feed regime changes.** Platform API changes, bot purges, or venue migration silently rescale social_z — recalibrate baselines monthly and alert on distribution shifts.
+- **After-hours ignition.** Social bursts at night can't be ridden at the t+1 open cleanly; the rule is RTH-only and stands down otherwise.
+
+- **Bot purges and API regime changes.** A platform purge can halve message counts overnight, collapsing social_z baselines; the monthly re-baselining in T5 is the scheduled defense, plus an automated alert when the cross-sectional median social_z shifts > 30% week-over-week.
+- **Overnight ignition gaps.** Social bursts at 02:00 cannot be ridden at a clean t+1 open — the gap reprices before the fill. The RTH-only rule stands down, but the opportunity cost is real: measure how much of the ignition P&L accrues overnight to know what the rule is structurally missing.
+### T9. Visuals
+
+![T072 worked example](images/T072_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    SOC["Social/message counts<br/>(5-min per-name volume)"] -->|"5-min message counts"| S097["S097 ignition detector<br/>(social_z ≥ 3, example)"]
+    PX["5-min OHLCV<br/>(US equities RTH)"] -->|"5-min bars"| S032["S032 relative volume<br/>(rvol ≥ 1.5, example)"]
+    GT["Google Trends<br/>(weekly ASVI)"] -->|"weekly attention index"| S099["S099 attention backdrop<br/>(above 52-wk median, example)"]
+    S097 -->|"ignition flag"| ENTRY{"Entry logic<br/>(ignition + volume, causality t→t+1)"}
+    S032 -->|"confirmation"| ENTRY
+    S099 -->|"slow context"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk $150, 8-rider cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, ≤5% participation)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(1.5× target / midpoint stop / 15:55)"]
+    MON -->|"trade P&L"| PNL["P&L (net of wide-spread costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Antweiler, W. & Frank, M.Z. "Is All That Talk Just Noise? The Information Content of Internet Stock Message Boards." *Journal of Finance* 59(3), 1259–1294 (2004). https://doi.org/10.1111/j.1540-6261.2004.00662.x — message activity predicts volatility; return effect economically small. Title verified 2026-09-10.
+2. Barber, B.M. & Odean, T. "All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors." *Review of Financial Studies* 21(2), 785–818 (2008). https://doi.org/10.1093/rfs/hhm079 — individuals net-buy attention-grabbing stocks. Title/authors verified 2026-09-10.
+3. Da, Z., Engelberg, J. & Gao, P. "In Search of Attention." *Journal of Finance* 66(5), 1461–1499 (2011). https://doi.org/10.1111/j.1540-6261.2011.01679.x — Russell 3000, 2004–2008; higher SVI predicts higher prices over the next two weeks, reversal within a year. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Chatbot question-bank TB8 items on social-ignition lead-lag and venue migration — research prompts, not findings.
+- The TIE / firehose price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 173/200 — T073: ASVI Attention Reversal
+
+*Batch TB8 · Strategy 73/100 · Signals S099, S045, S094 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Contrarian: fade the intraday extension of a weekly attention spike |
+| **Edge source** | Abnormal search attention predicts higher prices over the next two weeks and reversal within a year (Da, Engelberg & Gao 2011); this rule trades the short-horizon echo — when a weekly ASVI spike is followed by an intraday over-extension, the reversal-timing (S045) and volume-confirmation (S094) legs fade the extension, not the attention trend itself |
+| **Typical holding period** | 1–3 trading days; flat by day 3 |
+| **Capacity hint** | Medium: weekly signal, daily timing; capacity in the tens of millions across a broad universe, bounded by the intraday fade's spread costs |
+| **Build-or-buy in one line** | Build: Google Trends is free, the ASVI construction is published, and the intraday fade timing is the proprietary part no vendor sells |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks, price ≥ $10, ADV ≥ 1M shares (`example`). Weekly signal cadence, daily/intraday execution, RTH only.
+
+**Attention (S099).** **ASVI** (abnormal search volume index) is the log of this week's Google search volume for the ticker/company name minus the log median of the prior 8 weeks (`example`), per Da, Engelberg & Gao's construction. It is **attention, not sentiment** — it measures how many people are looking, not what they think. It is a weekly series, not a native intraday signal. The rule arms when a name's ASVI lands in the top 5% of its own 52-week history (`example`) — the "attention spike" state. Armed state persists for the trading week.
+
+**Entry trigger (S045 + S094).** While armed, watch daily bars: if the name rallies ≥ 2× its 20-day average daily range (`example`) into the attention spike — the **over-extension** — and the day's volume is ≥ 1.3× its 20-day median (`example`, S094 volume confirmation), the reversal-timing leg (S045) fires. Signal at the close of day *t* → earliest fill at the **open of day t+1**, fading the extension (short the over-extended rally). Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) reversal target: cover at 50% retracement of the over-extension day; (2) stop: a close above the over-extension day's high — attention is still pushing; (3) time stop: flat at the close of day t+3; (4) ASVI reset: if next week's ASVI falls below its 8-week median, exit — the attention fuel is gone.
+
+**Position sizing.** Dollar-risk sizing `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $250` (`example`). Max 15 concurrent fades (`example`); ASVI spikes cluster in hot sectors, so cap 4 per sector.
+
+**Risk limits.** Daily loss stop −4R (`example`); borrow fee exclusion > 5% annualized (`example`) on the short leg; no new arms during the week containing a scheduled FOMC decision.
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way (`example`: 2¢ book); borrow at the locate rate for a 1–3 day hold; +0.5× spread adverse slippage on the t+1 open (`example`).
+
+**Order/execution sketch.** Marketable limit at the t+1 open; participation ≤ 10% of open-auction volume (`example`); taker modeling.
+
+**Parameter robustness.** The `example` choices (ASVI top 5% of 52 weeks, ≥2× average-range extension, volume ≥ 1.3× median) are starting points. Sensitivity protocol: arm at top 3%/5%/10% and trigger at 1.5×/2×/2.5× range; the fade's sign should survive the grid. Two construction choices deserve explicit testing: ticker-symbol vs company-name search queries (names are noisier but catch more attention), and the 8-week median baseline vs 4/12-week alternatives. Google Trends returns sampled data — the same query pulled twice gives different values — so average three pulls per week per ticker before computing ASVI, and treat single-pull spikes as suspect.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S099 (weekly ASVI attention) | Arming state | top 5% of own 52-week ASVI (`example`); weekly cadence; attention-only, never sentiment |
+| S045 (reversal timing) | Entry director | fires on ≥2× average-range over-extension day (`example`); sets 50%-retrace target and above-high stop |
+| S094 (volume confirmation) | Filter | day volume ≥ 1.3× 20-day median (`example`) on the extension day |
+| Time-stop / ASVI-reset logic (strategy rule) | Exit manager | t+3 flatten; weekly ASVI reset invalidation |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic weekly/daily bars, equity XYZ, seed 173. XYZ's ASVI prints in the top 3% of its 52-week history (armed). On day *t* it rallies 6.2% — 2.4× its 20-day average daily range — on 1.8× median volume (over-extension + volume confirmation). Signal at the close of *t* → fill at the open of *t+1*: **short 6,500 shares at $88.40** (borrow 4% annualized). The extension fails; cover at 50% retracement, **$87.55**, on day t+2.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 6,500 × ($88.40 − $87.55) | +$5,525.00 |
+| Commission | 6,500 × 2 × $0.005 | −$65.00 |
+| Half-spread, both ways | 6,500 × 2 × $0.01 | −$130.00 |
+| Borrow fee (4% pa, 2 days) | 6,500 × $88.40 × 0.04 × 2/365 | −$125.97 |
+| Adverse slippage, t+1 open | modeled | −$214.03 |
+| **Total execution cost** | | **−$535.00** |
+| **Net P&L** | $5,525.00 − $535.00 | **+$4,990.00** |
+
+Synthetic illustration only — the published ASVI evidence is weekly, not a guarantee that any single intraday fade is profitable after costs.
+
+### T5. Data & infra — what must run
+
+Google Trends weekly series per ticker (free, rate-limited — batch weekly), daily + 5-minute OHLCV, borrow-rate feed. ASVI construction is a weekly batch over a few thousand names — seconds of compute; the nightly percentile arming pass is a Polars groupby at ~10–50M rows/sec (`notes/cost-model.md`). Live working set trivially under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); data work is light (free Trends + bought bars), no H-tier licensing needed for the core loop.
+
+**Calibration discipline.** Walk-forward with a 5-day embargo between estimation and trading windows (the 1–3 day holds overlap weekly ASVI prints); perturb thresholds ±25% with sign-persistence required. Multiple-testing control per the standing protocol (PSR/DSR). Trends-specific hygiene: the weekly series is revised and resampled — snapshot every pull with its pull timestamp, never overwrite history in place, and pin the geographic/market setting of the query. A backtest built on today's revised Trends history is not the history the rule would have seen.
+### T6. Buy vs build
+
+Google Trends is free. Buy daily bars: **Massive (formerly Polygon) Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) or **Databento** usage-based history (tens to low hundreds of dollars, `indicative — verify before budgeting`); borrow rates from the broker's locate feed (e.g., **Interactive Brokers**, no incremental platform fee on an existing account, `indicative — verify before budgeting`); backtest hosting on **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`). Verdict: **build everything on free Trends plus bought bars.** There is nothing to buy — no vendor sells the ASVI-arm/intraday-fade rule with causal fills.
+
+**Crossover note.** If the ASVI fade ever graduates from research to production, the data decision changes in one place: Google Trends' sampling noise becomes the binding uncertainty, and a licensed search-data product (e.g., consumer search panels, tens of thousands/yr class, `indicative — verify before budgeting`) may replace the free pull-average workaround. Until the rule survives paper trading on the free feed, that spend is premature — the T5 sampling-noise protocol (three pulls averaged, snapshots pinned) is the cheap substitute. The bar-data decision does not change: daily bars from Massive or Databento remain sufficient, since the trigger is a daily extension day, not a microstructure event.
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Da, Engelberg & Gao (2011), Russell 3000 2004–2008: higher SVI predicts higher prices over the next two weeks and reversal within a year — the attention-then-reversal shape this rule's arming/trigger structure mirrors. (https://doi.org/10.1111/j.1540-6261.2011.01679.x)
+2. Antweiler & Frank (2004): message activity helps predict volatility with only a small return effect — why this rule requires volume confirmation (S094) rather than trading attention alone. (https://doi.org/10.1111/j.1540-6261.2004.00662.x)
+3. Barber & Odean (2008): individuals net-buy attention-grabbing stocks — the inflow that creates the over-extension the rule fades. (https://doi.org/10.1093/rfs/hhm079)
+
+Honesty note: the published ASVI horizon is weeks, not the 1–3 day fade here; the intraday timing layer is a reconstruction, not a tested literature result.
+
+**What the evidence does not show.** Da, Engelberg & Gao's reversal plays out within a year, not within three days — the published effect is a slow attention cycle, and this rule's 1–3 day fade is a much faster extraction that the paper does not test. The honest reading: the paper justifies fading attention-driven extensions in principle, but the specific over-extension trigger (≥2× average range) and the t+3 time stop are reconstructions with no published backtest behind them. Antweiler & Frank's small return effect further warns that attention alone, without the volume confirmation leg, is mostly volatility — which is why S094 is a hard gate rather than a weighting. Any live deployment should paper-trade the trigger timing for at least two full attention cycles before sizing.
+### T8. Failure modes
+
+- **Attention without exhaustion.** ASVI spikes can persist for weeks (meme regimes); the over-extension day can extend further. The above-high stop and the t+3 time stop are the defense, not a cure.
+- **Weekly cadence lag.** Google Trends publishes weekly; an ASVI spike may be stale by the time it arms — the rule fades extensions, never the first spike day.
+- **Short-leg borrow spikes.** Attention names get crowded on the short side; the 5% fee exclusion must be re-checked at entry, not just at arming.
+- **Ticker-name ambiguity.** Search volume for ambiguous company names pollutes ASVI; use ticker-symbol queries with manual review of the top names.
+- **Corporate actions.** Splits and dividends distort the average-range baseline; adjust before the over-extension screen.
+
+- **Weekly publication lag.** Trends publishes with a lag; an ASVI spike can be days old before it arms the rule. The rule compensates by fading only the intraday extension, never the first spike — but in fast attention cycles the extension may already be exhausted. Measure the arm-to-trigger delay distribution before sizing.
+- **ASVI/price lead-lag instability.** The published two-week attention effect is an average over 2004–2008; the lead-lag between search spikes and price moves is not a constant. If the 1–3 day fade window drifts out of phase with the actual attention cycle, the rule fades noise — re-estimate the timing quarterly.
+- **Sector-wide attention waves.** ASVI spikes often arrive sector-wide (AI, biotech, crypto-adjacent names together); the 4-per-sector cap in T2 exists because fading five names on the same attention wave is one bet, not five. Monitor the cross-sectional correlation of armed names and cut the book when it approaches one.
+### T9. Visuals
+
+![T073 worked example](images/T073_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    GT["Google Trends<br/>(weekly ticker search volume)"] -->|"weekly search index"| S099["S099 ASVI arming<br/>(top 5% of 52-wk, example)"]
+    PX["Daily OHLCV<br/>(US equities)"] -->|"daily bars"| S045["S045 reversal timing<br/>(≥2× avg-range extension, example)"]
+    PX -->|"daily volume"| S094["S094 volume confirm<br/>(≥1.3× 20-day median, example)"]
+    S099 -->|"armed state"| ENTRY{"Entry logic<br/>(armed + extension + volume, t→t+1)"}
+    S045 -->|"extension flag"| ENTRY
+    S094 -->|"confirmation"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk $250, 15-name cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, borrow locate)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(50% retrace / above-high stop / t+3)"]
+    MON -->|"trade P&L"| PNL["P&L (net of borrow + spread)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Da, Z., Engelberg, J. & Gao, P. "In Search of Attention." *Journal of Finance* 66(5), 1461–1499 (2011). https://doi.org/10.1111/j.1540-6261.2011.01679.x — higher SVI predicts higher prices over two weeks, reversal within a year. Title verified 2026-09-10.
+2. Antweiler, W. & Frank, M.Z. "Is All That Talk Just Noise?" *Journal of Finance* 59(3), 1259–1294 (2004). https://doi.org/10.1111/j.1540-6261.2004.00662.x — message activity predicts volatility; small return effect. Title verified 2026-09-10.
+3. Barber, B.M. & Odean, T. "All That Glitters." *Review of Financial Studies* 21(2), 785–818 (2008). https://doi.org/10.1093/rfs/hhm079 — individuals net-buy attention-grabbing stocks. Title/authors verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Chatbot question-bank TB8 items on ASVI timing and attention-vs-sentiment separation — research prompts, not findings.
+- Google Trends is free; bar-data price classes above are `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 174/200 — T074: Short-Interest Squeeze Rider
+
+*Batch TB8 · Strategy 74/100 · Signals S098, S025, S094 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Momentum rider: long crowded shorts once covering begins, confirmed by volume |
+| **Edge source** | High short interest plus a borrow-fee spike identifies a crowded short (S098 as squeeze-risk and cost context — never as "high SI means buy"); when momentum turns against the shorts (S025) and volume confirms covering (S094), forced buy-to-cover flow can extend the move intraday. The literature warns shorts are often informed (Boehmer, Jones & Zhang 2008) — so the rule rides only confirmed covering, never anticipates it |
+| **Typical holding period** | 1–5 trading days; flat by day 5 |
+| **Capacity hint** | Small: squeeze names are volatile and capacity-constrained; low single-digit millions before impact dominates |
+| **Build-or-buy in one line** | Build the crowding screen on bought short-interest/borrow data; the "ride confirmed covering only" rule is the proprietary discipline no vendor documents |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks, price ≥ $5, ADV ≥ 750k shares (`example`), with published short-interest (FINRA bi-monthly, supplemented by a daily borrow-fee feed). RTH only.
+
+**Crowding (S098).** **Short interest** (shares sold short ÷ float) and the **borrow fee** (annualized stock-loan rate) are read as **squeeze-risk and cost context**, not as buy signals. A name is "crowded" when: short interest ≥ 15% of float (`example`) **and** borrow fee ≥ 3% annualized (`example`) **and** fee rising week-over-week. This is the pool — the rule does nothing with the pool alone, because the published evidence says heavily shorted stocks *underperformed* (shorts may be informed).
+
+**Ignition of covering (S025 + S094).** The rider enters only when: (1) the name rallies ≥ 3% on day *t* (`example`, S025 momentum against the shorts); (2) day-*t* volume ≥ 1.5× its 20-day median (`example`, S094 — buy-to-cover leaves a volume signature); (3) borrow fee still elevated (the crowd is still short). Signal at the close of *t* → earliest fill at the **open of t+1**, long. Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) momentum target: 2× the ignition day's range; (2) failure stop: a close below the ignition day's open — covering stalled; (3) time stop: flat at the close of t+5; (4) borrow-collapse exit: if the borrow fee falls > 50% from entry, exit at the next open — the crowd has covered, the fuel is spent.
+
+**Position sizing.** Dollar-risk sizing `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`). Max 6 concurrent riders (`example`) — squeezes are idiosyncratic and violent; concentration is the risk.
+
+**Risk limits.** Daily loss stop −3R (`example`); no entries on names with pending corporate actions; hard cap: no position may exceed 5% of the name's ADV in notional (`example`) — squeeze exits are disorderly.
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way (`example`: squeeze names often 3–5¢ wide — worked example uses 4¢); +1.0× spread adverse slippage on the t+1 open (`example`) — ignition opens are gappy. No borrow cost on the long leg, but the fee feed is a data cost.
+
+**Order/execution sketch.** Marketable limit at the t+1 open (`example`: limit = open + 5¢); participation ≤ 5% of open-auction volume (`example`); taker modeling; no overnight holds through binary events discovered after entry (exit at next open).
+
+**Parameter robustness.** The `example` thresholds (SI ≥ 15%, fee ≥ 3% and rising, day-t rally ≥ 3%, volume ≥ 1.5× median) are starting points. Sensitivity protocol: vary SI at 10%/15%/20% and the rally trigger at 2%/3%/5%; sign persistence across the grid is required. The binding constraint is data frequency: FINRA short interest prints bi-monthly, so the SI leg is always stale intra-period — test the rule with SI lagged an extra settlement cycle to confirm the edge does not depend on fresh SI. The borrow-fee leg (daily) carries the timing; if results collapse when the fee leg is removed, the strategy is a fee-momentum rule wearing a short-interest costume.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S098 (short interest / borrow fee) | Crowding + cost context | SI ≥ 15% float and fee ≥ 3% annualized and rising (`example`); never a buy signal alone |
+| S025 (momentum) | Covering ignition | day-*t* rally ≥ 3% against the crowded short (`example`) |
+| S094 (volume confirmation) | Covering signature | day-*t* volume ≥ 1.5× 20-day median (`example`) |
+| Borrow-collapse / failure-stop logic (strategy rule) | Exit manager | fee-drop and below-ignition-open exits; t+5 flatten |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic daily bars, equity SQZ, seed 174. SQZ carries 22% short interest with a 6% annualized borrow fee, rising. On day *t* it rallies 4.1% on 2.2× median volume (covering ignition, volume-confirmed). Signal at the close of *t* → fill at the open of *t+1*: **long 4,200 shares at $12.30**. Failure stop at the ignition day's open, $11.85. The squeeze extends over three sessions; exit at the 2×-range target, **$13.05**, on day t+3 as the borrow fee starts collapsing.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 4,200 × ($13.05 − $12.30) | +$3,150.00 |
+| Commission | 4,200 × 2 × $0.005 | −$42.00 |
+| Half-spread, both ways (4¢ book) | 4,200 × 2 × $0.02 | −$168.00 |
+| Adverse slippage, t+1 open | modeled | −$40.00 |
+| **Total execution cost** | | **−$250.00** |
+| **Net P&L** | $3,150.00 − $250.00 | **+$2,900.00** |
+
+Synthetic illustration of the ledger only — not a claim that riding squeezes is profitable after costs. The literature cautions that the shorts being squeezed are often informed, which is why this rule waits for confirmed covering rather than buying high short interest.
+
+### T5. Data & infra — what must run
+
+Bi-monthly FINRA short interest (free), a daily borrow-fee feed (licensed), and daily OHLCV. The crowding screen is a daily batch; the ignition check is a close-of-day pass over the crowded pool — trivially within a Python loop at ~100–500k events/sec (`notes/cost-model.md`); history backfills in Polars at ~10–50M rows/sec (`notes/cost-model.md`). Live working set well under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); the daily borrow feed is H-tier licensed data, 60–200 hours, $9,000–$30,000 (`notes/cost-model.md`).
+
+**Calibration discipline.** Walk-forward with a 5-day embargo; perturb thresholds ±25%; multiple-testing control per the standing protocol (PSR/DSR). Borrow-data hygiene: fee history is sparse and vendor-specific — record the vendor, the fee definition (annualized, compounded or not), and the timestamp convention for every observation. Never splice two vendors' fee series without an overlap reconciliation; fee-level shifts between vendors are large enough to fabricate or erase the crowding screen.
+### T6. Buy vs build
+
+Borrow-fee data is bought: **S3 Partners / Hazeltree / FIS Astec** short-interest and stock-loan feeds (tens of thousands/yr class, `indicative — verify before budgeting`); daily bars from **Massive (formerly Polygon) Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`); backtest hosting on **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); routing test on **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Verdict: **buy the borrow feed and the bars, build the crowding screen and the confirmed-covering rule.** No vendor documents the ride-only-confirmed-covering discipline with causal fills.
+
+**Crossover note.** The borrow-fee feed is the one input where "buy" can quietly become "build": some desks reconstruct effective borrow cost from options put-call parity or from the stock-loan desks they can poll directly. That reconstruction is a project, not a shortcut — vendor fee history (S3/Hazeltree/Fis Astec class) remains the auditable choice for research, because a hand-rolled fee series cannot be defended in a review. If the rule graduates, negotiate the fee feed's history depth before the full license: the crowding screen needs at least two full short-interest cycles to calibrate, and shallow history is the most common reason squeeze research fails review.
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Boehmer, Jones & Zhang (2008): heavily shorted stocks underperformed lightly shorted stocks by 1.16% over 20 trading days — evidence shorts may be informed, and the reason this rule never buys high short interest alone. (https://doi.org/10.1111/j.1540-6261.2008.01324.x)
+2. Cohen, Diether & Malloy (2007): increases in shorting demand predict −2.98% abnormal returns the following month — shorting-market flow carries private information, reinforcing that the crowded short is dangerous to fade. (https://doi.org/10.1111/j.1540-6261.2007.01269.x)
+3. Barber & Odean (2008): individuals net-buy attention-grabbing stocks — the retail inflow that can ignite covering in a crowded name. (https://doi.org/10.1093/rfs/hhm079)
+
+No published paper tests this exact ride-the-covering rule; nothing here is an after-cost profitability claim.
+
+**What the evidence does not show.** Boehmer, Jones & Zhang's 1.16% underperformance of heavily shorted stocks cuts against the naive squeeze trade — it says the crowded short is often right, which is why this rule waits for confirmed covering rather than buying high short interest. Cohen, Diether & Malloy's −2.98% shorting-demand effect is a monthly-horizon finding about information revelation, not a squeeze study; it disciplines the rule (respect the shorts' information) rather than supporting it. There is no published paper demonstrating that a 3%-rally-plus-volume rule reliably identifies forced covering in advance — the ignition is identified after the fact by construction, and the rule's profitability depends entirely on the covering continuing, which no cited paper guarantees.
+### T8. Failure modes
+
+- **Informed shorts are right.** The dominant failure: the crowd is short for a reason, the "ignition" is a dead-cat bounce, and the failure stop is hit. The rule accepts many small stop-outs by design.
+- **Borrow data staleness.** FINRA SI is bi-monthly; intra-period covering is invisible — the fee-collapse exit can trigger late.
+- **Halt risk.** Squeeze names halt; a halted long can't exit. The 5%-of-ADV cap and the halt-exclusion are partial defenses.
+- **Fee-spike whipsaw.** Borrow fees spike on settlement technicals unrelated to crowding; the rising-fee requirement plus volume confirmation filters most of these.
+- **Overnight gap against.** Squeezes reverse violently; the t+5 time stop and the ignition-open failure stop bound the tail.
+
+- **Takeover-rumor squeezes.** Rumor-driven rallies in crowded shorts look identical to covering ignitions but resolve as rumor denials — the failure stop is the defense, and names with active M&A chatter should be excluded at the screen.
+- **ETF creation-unit flows.** Large creation/redemption flows can print the volume signature without any covering; cross-check the ignition against the borrow-fee path — genuine covering usually coincides with fee softening at the margin, while flow-driven volume does not.
+- **Reg-SHO threshold-list dynamics.** Names on the threshold list face forced buy-ins that mimic covering volume but resolve differently — the covering ignition can be a clearing artifact rather than a sentiment turn. Exclude threshold-list names from new entries, or model the buy-in calendar explicitly.
+### T9. Visuals
+
+![T074 worked example](images/T074_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    SI["Short interest + borrow fee<br/>(FINRA bi-monthly + daily fee feed)"] -->|"SI ≥ 15%, fee ≥ 3% (example)"| S098["S098 crowding screen<br/>(squeeze-risk context, not a buy)"]
+    PX["Daily OHLCV<br/>(US equities)"] -->|"daily bars"| S025["S025 momentum<br/>(day-t rally ≥ 3%, example)"]
+    PX -->|"daily volume"| S094["S094 volume confirm<br/>(≥1.5× 20-day median, example)"]
+    S098 -->|"crowded pool"| ENTRY{"Entry logic<br/>(crowded + ignition + volume, t→t+1)"}
+    S025 -->|"covering ignition"| ENTRY
+    S094 -->|"covering signature"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk $200, 6-rider cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, ≤5% participation)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(2× target / ignition-open stop / t+5)"]
+    MON -->|"trade P&L"| PNL["P&L (net of wide-spread costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Boehmer, E., Jones, C.M. & Zhang, X. "Which Shorts Are Informed?" *Journal of Finance* 63(2), 491–527 (2008). https://doi.org/10.1111/j.1540-6261.2008.01324.x — heavily shorted stocks underperformed by 1.16% over 20 trading days. Title verified 2026-09-10.
+2. Cohen, L., Diether, K.B. & Malloy, C.J. "Supply and Demand Shifts in the Shorting Market." *Journal of Finance* 62(5), 2061–2096 (2007). https://doi.org/10.1111/j.1540-6261.2007.01269.x — shorting-demand increases predict −2.98% next-month abnormal returns. Title verified 2026-09-10.
+3. Barber, B.M. & Odean, T. "All That Glitters." *Review of Financial Studies* 21(2), 785–818 (2008). https://doi.org/10.1093/rfs/hhm079 — individuals net-buy attention-grabbing stocks. Title/authors verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Chatbot question-bank TB8 items on squeeze identification and borrow-fee lead-lag — research prompts, not findings.
+- Borrow-feed price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 175/200 — T075: Crypto Funding-Rate Reversal
+
+*Batch TB8 · Strategy 75/100 · Signals S095, S096, S069 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Contrarian: fade crowded perpetual-futures positioning when funding is extreme |
+| **Edge source** | Perpetual funding rates measure the price longs pay shorts to hold the peg; extremely positive funding means the long side is crowded. When that crowding coincides with an open-interest shock (S096) and an elevated variance-risk premium (S069), the rule shorts the crowded side for 24–48 hours. Funding is a **crowding and carry gauge — unconditional contrarian use is unsafe**, so all three legs must agree |
+| **Typical holding period** | 24–48 hours; flat by 48 hours (funding mean-reverts on an 8-hour cycle) |
+| **Capacity hint** | Medium on majors (BTC/ETH perps); tens of millions in notional before funding-market impact bends the signal |
+| **Build-or-buy in one line** | Build the funding/OI/VRP screen on exchange websocket data; nothing packaged sells a documented funding-reversal rule with honest fill causality |
+
+### T2. Full mechanics
+
+**Universe & session.** BTC and ETH USDⓈ-M perpetuals on one major venue (`example`: a single exchange to keep funding definitions consistent), 24/7. Spot reference from the same venue's index.
+
+**Crowding (S095).** The **funding rate** is the periodic payment (typically every 8 hours) that keeps the perpetual price near spot: positive funding means longs pay shorts. Annualize it: `F_ann = funding_8h × 3 × 365`. The crowded-long state arms when `F_ann ≥ 40%` (`example`) — the long side is paying heavily to stay long. Mirror state for crowded shorts (`F_ann ≤ −40%`, `example`). Funding is read as crowding/carry, never as a standalone contrarian trigger.
+
+**Positioning shock (S096).** Require an **open-interest shock**: 24-hour OI change ≥ +25% (`example`) in the direction of the crowded side — fresh leverage piled in, not just price drift. OI is reported per venue and is venue-specific; never sum OI across venues.
+
+**Volatility context (S069).** The **variance-risk premium** — implied volatility (from the venue's options or an IV index) minus trailing realized volatility — must be elevated (IV − RV ≥ 15 vol points, `example`): crowded funding plus fearful options pricing is the combination this rule was reconstructed to fade. If VRP is negative (complacent), the rule stands down — crowded longs in a complacent market can stay crowded.
+
+**Entry rule.** All three green on hourly bar *t* → earliest fill at the **open of bar t+1**, fading the crowded side (short the perp when funding extremely positive with a long OI shock; long when the mirror holds). Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) funding normalization: exit when `|F_ann|` falls below 10% — the crowd left; (2) stop: 1.2× the entry-bar hourly range against the position; (3) time stop: flat at 48 hours; (4) OI-collapse exit: if OI falls > 30% from entry while the position is red, exit — the unwind is disorderly and the premise (crowded) is gone.
+
+**Position sizing.** Fixed fractional risk: `R = $200` (`example`) per trade, `N = ⌊ R / (stop distance) ⌋` in contracts. Max 2 concurrent funding fades (`example`) — crypto correlations spike exactly when these fire.
+
+**Risk limits.** Daily loss stop −3R (`example`); no entries within 1 hour of a scheduled funding timestamp (the rate can print stale); venue circuit-breaker: if the websocket lags > 5 seconds, no new entries.
+
+**Cost model.** Taker fee 5 bps/side (`example`); half-spread each way on the perp book; market impact modeled explicitly; funding paid/received over the hold is a P&L line, not a cost. The worked example below shows the canonical small-size ledger: at small size the full cost stack exceeds gross — the honest baseline.
+
+**Order/execution sketch.** Post-only where possible, else taker at the t+1 open of the hourly bar; participation ≤ 10% of the bar's volume (`example`).
+
+**Parameter robustness.** The `example` thresholds (|F_ann| ≥ 40%, 24h ΔOI ≥ +25%, IV−RV ≥ 15) are starting points. Sensitivity protocol: vary the funding arm at 25%/40%/60% annualized and the OI shock at 15%/25%/40%; the fade's sign should persist. Two measurement choices matter: annualizing the 8-hour rate by ×1095 assumes the rate persists — test against the venue's real-time premium index as an alternative trigger, since the published funding can lag the live premium by most of an 8-hour period. Also test bull/bear funding regimes separately; funding behaves differently when the market's structural bid is long vs when it is not.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S095 (funding rate) | Crowding gauge | `|F_ann| ≥ 40%` (`example`) arms the fade; funding paid/received is a P&L line |
+| S096 (open-interest shock) | Positioning confirm | 24h OI change ≥ +25% with the crowded side (`example`); venue-specific |
+| S069 (implied-minus-realized VRP) | Context filter | IV − RV ≥ 15 vol points (`example`); stands down when complacent |
+| Funding-normalization / OI-collapse logic (strategy rule) | Exit manager | `|F_ann| < 10%` exit; 48-hour time stop |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic hourly bars, BTC perp, seed 175. Funding prints +0.11% per 8-hour period (`F_ann ≈ 120%`, extremely positive), 24-hour OI is up 31% (long shock), and IV − RV = 19 vol points (elevated). Signal at hourly close *t* → fill at the next hourly open: **short 0.5 BTC perp at $67,200**. Funding normalizes over 30 hours; exit **long 0.5 BTC at $67,176** when `|F_ann|` falls below 10%. Price P&L: 0.5 × $24 = **$12.00 gross** before funding; modeled net funding drag over the hold (the short pays while the rate normalizes): **−$6.00** — shown separately, not netted into costs — for a strategy gross of **$6.00**. The full execution-cost stack:
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Strategy gross (price + funding drag) | $12.00 − $6.00 funding drag | +$6.00 |
+| Taker fees (modeled 12.65 bps round-trip) | 2 × 0.5 × $67,188 avg × 0.0001265 | −$8.50 |
+| Half-spread, both ways | modeled on perp book | −$4.50 |
+| Market impact | modeled | −$3.00 |
+| Funding/borrow financing | already in gross above | — |
+| **Total execution cost** | | **−$16.00** |
+| **Net P&L** | $6.00 − $16.00 | **−$10.00** |
+
+This canonical ledger — **$6 gross, $16 full execution costs, −$10 net** — is the honest small-size baseline: at retail size, fees, spread, and impact dominate the funding edge. The example is synthetic and is not a profitability claim; fees-only accounting (omitting spread/impact) would fail this ledger.
+
+### T5. Data & infra — what must run
+
+Exchange websocket: perp mark/index prices, funding rates, open interest, hourly OHLCV; an IV source for S069 (venue options or a published IV index). All streaming; the funding/OI/VRP screen is a per-hour batch over 2–4 symbols — trivially within a Python loop at ~100–500k events/sec (`notes/cost-model.md`). Live working set far under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); crypto venue data is mostly free via websocket, so no H-tier licensing is required for the core loop.
+
+**Calibration discipline.** Walk-forward with a 1-day embargo (24–48h holds); perturb thresholds ±25%; multiple-testing control per the standing protocol (PSR/DSR). Venue-data hygiene: record the funding formula version, the premium-index constituents, and the OI definition per venue — all three change without notice. Never sum OI across venues, and never splice funding history across a formula change. Stress-split the backtest: the rule must survive 2021-style bull funding and 2022-style bear funding separately, not just on the pooled sample.
+### T6. Buy vs build
+
+The venue websocket is free. Historical funding/OI for backtests: **Kaiko** or **CoinMetrics** (thousands/yr class, `indicative — verify before budgeting`); alternatives include exchange flat-file history (free). Backtest hosting: **QuantConnect** crypto support (~$60–$300/mo class, `indicative — verify before budgeting`); execution test on the venue's testnet/paper feed (no incremental fee, `indicative — verify before budgeting`). Verdict: **build the screen, buy nothing except history if the free flat files are insufficient.** No vendor sells a documented funding-reversal rule with t→t+1 causality.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. He, Manela, Ross & von Wachter ("Fundamentals of Perpetual Futures") document no-arbitrage bounds between perp and spot and show perp deviations comove and diminish over time — the mechanical backdrop that lets funding mean-revert. (https://arxiv.org/abs/2212.06888)
+2. Schmeling, Schrimpf & Todorov, "Crypto Carry" (BIS Working Paper 1087, 2023): funding-rate carry strategies earned up to ~40% annualized in their sample — the carry side of the S095 gauge, measured on long carry, not on this rule's contrarian fade. (https://ideas.repec.org/p/bis/biswps/1087.html)
+3. Makarov & Schoar (2020): crypto arbitrage deviations are large, recurrent, and constrained by capital controls — a caution that apparent spreads (including funding-implied ones) persist because arbitrage capital is limited. (https://doi.org/10.1016/j.jfineco.2019.07.001)
+
+None of these tests an hourly funding-reversal fade; the BIS carry result is a long-carry finding, not evidence for the contrarian leg.
+
+**What the evidence does not show.** The BIS crypto-carry result (up to ~40% annualized) is a long-carry finding — it supports the S095 gauge as a measure of compensation for holding, not the contrarian fade this rule trades. He et al.'s no-arbitrage bounds describe where perp prices must live, not how fast funding mean-reverts or whether fading extreme funding earns anything after the 5 bps taker fee on both sides. Makarov & Schoar's limits-to-arbitrage caution applies directly: persistent deviations exist because capital cannot freely lean against them, and a small account fading funding is the constrained capital in their story. The canonical −$10 net ledger in T4 is the honest baseline — at retail size the strategy pays to learn.
+### T8. Failure modes
+
+- **Unconditional contrarian use.** Fading extreme funding without the OI and VRP legs is the documented unsafe mode — crowded positions can stay crowded through funding normalization that never comes.
+- **Funding-rate staleness.** Published funding can lag the live premium index; compute the rate from the venue's formula on live inputs, don't trust the display field near funding timestamps.
+- **Venue-specific OI.** OI shocks on one venue may not reflect aggregate positioning; never sum OI across venues with different definitions.
+- **Liquidation cascades.** Extreme funding often precedes forced liquidations; the fade's stop must assume gap risk — the 1.2×-range stop can be jumped.
+- **Fee-tier reality.** The 5 bps taker assumption requires a real fee tier; retail taker fees are often higher, which worsens the already-negative small-size ledger.
+
+- **Wash-traded OI.** Reported open interest can be inflated by wash trading on less-policed venues; an OI "shock" manufactured by fictitious volume arms the rule on false positioning. Prefer venues with published surveillance, and cross-check OI shocks against volume shocks — real positioning moves both.
+- **Premium-index vs funding lag.** Entering on a stale published funding print while the live premium has already normalized means fading a crowd that already left. Compute the expected funding from live premium-index inputs and require agreement with the published rate before arming.
+### T9. Visuals
+
+![T075 worked example](images/T075_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    WS["Venue websocket<br/>(funding, OI, perp + index, hourly)"] -->|"hourly funding + OI"| S095["S095 funding gauge<br/>(|F_ann| ≥ 40%, example)"]
+    WS -->|"hourly OI series"| S096["S096 OI shock<br/>(24h ΔOI ≥ +25%, example)"]
+    IV["IV index / venue options<br/>(hourly implied vol)"] -->|"hourly IV vs trailing RV"| S069["S069 variance-risk premium<br/>(IV − RV ≥ 15 pts, example)"]
+    S095 -->|"crowding state"| ENTRY{"Entry logic<br/>(crowded + shock + VRP, t→t+1)"}
+    S096 -->|"positioning confirm"| ENTRY
+    S069 -->|"context filter"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(fractional $200 risk, 2-fade cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized orders"| EXEC["Execution<br/>(t+1 hourly open, taker)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(funding < 10% / 1.2× stop / 48h)"]
+    MON -->|"trade P&L"| PNL["P&L (net of full cost stack)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. He, Z., Manela, A., Ross, O. & von Wachter, M. "Fundamentals of Perpetual Futures." arXiv:2212.06888. https://arxiv.org/abs/2212.06888 — no-arbitrage bounds for perps; deviations comove and diminish over time. Title verified 2026-09-10.
+2. Schmeling, M., Schrimpf, A. & Todorov, K. "Crypto Carry." BIS Working Paper 1087 (2023). https://ideas.repec.org/p/bis/biswps/1087.html — funding-rate carry up to ~40% annualized in sample. Title verified 2026-09-10.
+3. Makarov, I. & Schoar, A. "Trading and Arbitrage in Cryptocurrency Markets." *Journal of Financial Economics* 135(2), 293–319 (2020). https://doi.org/10.1016/j.jfineco.2019.07.001 — large recurrent deviations constrained by capital controls. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB8 funding answers and the quarantined TB6 T051 funding-carry draft — chatbot-generated synthetic material adapted here with new stage/seed/signals (175, S095/S096/S069); the old T051 S081/S082/S090 roles were not reused.
+- Kaiko/CoinMetrics price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 176/200 — T076: Liquidation-Cascade Fade
+
+*Batch TB8 · Strategy 76/100 · Signals S096, S095, S045 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Contrarian: buy the exhaustion after a forced-liquidation cascade, not the first flush |
+| **Edge source** | Forced liquidations are price-insensitive market orders that overshoot fundamentals; when a cascade exhausts (S096 liquidation cluster + OI collapse), the rebound leg can be faded for the snap-back. The timing leg (S045) waits for exhaustion — the first flush is never traded — and funding (S095) confirms the crowded side just got carried out |
+| **Typical holding period** | 2–12 hours; flat by 12 hours |
+| **Capacity hint** | Medium on BTC/ETH perps; the cascade itself is the liquidity — capacity is bounded by post-cascade spread widening |
+| **Build-or-buy in one line** | Build the cascade detector on the venue's liquidation feed; the exhaustion-not-first-flush discipline is the proprietary part, and the `reported_*` lower-bound honesty is non-negotiable |
+
+### T2. Full mechanics
+
+**Universe & session.** BTC and ETH USDⓈ-M perpetuals on one major venue, 24/7. Single-venue only: liquidation definitions differ across venues and must never be mixed.
+
+**Cascade (S096).** A **liquidation** is the venue's forced closure of a leveraged position at the bankruptcy price; venues publish liquidation fills on a public stream. Define a cascade on 5-minute bars: `reported_liq_notional_t / median_5min_notional_20d ≥ 10` (`example`) — the `reported_` prefix is mandatory because the public tape is a **censored lower bound**: venues cap and delay the stream, so the true forced volume is larger than what prints (Lim 2026 documents the censoring). Cheng et al. (2021) measured BitMEX forced liquidations at 3.51% of outstanding futures daily on the long side — cascades are a material flow.
+
+**Exhaustion (S045) — never the first flush.** The rule does not trade the cascade bar. It waits for exhaustion: (1) a cascade bar prints; (2) the next 3–6 bars show `reported_liq` falling ≥ 70% from the cascade peak (`example`) while price stabilizes (5-minute range contracts ≥ 50%, `example`); (3) open interest falls ≥ 15% from pre-cascade (`example`) — leverage actually left the building. Only then does the reversal-timing leg arm. The first flush is other people's stop-losses; the fade trades the silence after.
+
+**Funding confirmation (S095).** Funding must have flipped or normalized in the fade direction: fading a long-liquidation cascade long requires funding now ≤ +10% annualized (`example`) — the crowded longs were carried out and the carry no longer punishes the long. If funding is still extremely positive, the cascade may not be over; stand down.
+
+**Entry rule.** Exhaustion + funding confirm on 5-minute bar *t* → earliest fill at the **open of bar t+1**, in the snap-back direction (long after a long-liquidation cascade). Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) snap-back target: 50% retracement of the cascade drop; (2) stop: below the cascade low by 0.5× the cascade bar's range — a new low means the cascade resumed; (3) time stop: flat at 12 hours; (4) second-cascade exit: if a new cascade bar prints while in the trade, exit at the next open — exhaustion failed.
+
+**Position sizing.** Fractional risk `R = $250` (`example`), `N = ⌊ R / stop distance ⌋`. Max 2 concurrent cascade fades (`example`) — cascades correlate across majors.
+
+**Risk limits.** Daily loss stop −3R (`example`); venue feed lag > 5 seconds halts new entries; no entries during scheduled maintenance windows.
+
+**Cost model.** Taker fee 5 bps/side (`example`); half-spread each way (post-cascade books are wide — the worked example models this); market impact; funding over the hold as a P&L line. Full stack, no fees-only accounting.
+
+**Order/execution sketch.** Taker at the t+1 open of the 5-minute bar; participation ≤ 10% of bar volume (`example`); assume the spread at entry is the wide post-cascade spread, not the calm spread.
+
+**Parameter robustness.** The `example` thresholds (reported_liq ≥ 10× median, decay ≥ 70% over 3–6 bars, OI fall ≥ 15%, funding ≤ +10%) are starting points. Sensitivity protocol: vary the cascade multiple at 5×/10×/20× and the decay requirement at 50%/70%/90%; the fade's sign should persist with the decay leg as the main P&L driver. The single most important robustness test is venue choice: run the identical rule on two venues' feeds — per Lim (2026), microstructure diverges under stress, and a rule that works on only one venue's tape is a venue artifact, not an edge. Also test excluding the largest historical cascade: if one event carries the backtest, size for the median event, not the legend.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S096 (liquidation clusters + OI) | Cascade detector | `reported_liq` ≥ 10× median 5-min notional (`example`); all fields `reported_*` — censored lower bound |
+| S045 (reversal timing) | Exhaustion director | waits 3–6 bars for liq decay ≥ 70% + range contraction (`example`); sets 50%-retrace target and below-cascade-low stop |
+| S095 (funding) | Confirmation | funding normalized/flipped in fade direction (`example`); stands down if still extreme |
+| Second-cascade logic (strategy rule) | Exit manager | new cascade bar → exit next open; 12-hour time stop |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, BTC perp, seed 176. A long-liquidation cascade prints `reported_liq` of $180M notional in one 5-minute bar (14× the 20-day median); over the next 5 bars reported liquidations decay 82%, the 5-minute range contracts 60%, and OI falls 19% from pre-cascade. Funding, previously +85% annualized, prints +6% — the crowded longs were carried out. Signal at bar *t* → fill at the next 5-minute open: **long 50 BTC at $66,450**. The snap-back carries; exit at 50% retracement of the cascade drop, **$67,400**, 4 hours later.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Price P&L | 50 × ($67,400 − $66,450) | +$47,500.00 |
+| Taker fees (5 bps/side) | 2 × 0.0005 × 50 × $66,925 avg | −$3,346.25 |
+| Half-spread, both ways (wide post-cascade book) | modeled | −$1,675.75 |
+| Market impact | modeled | −$1,995.00 |
+| Funding paid over 4-hour hold | modeled | −$931.00 |
+| **Total execution cost** | | **−$7,948.00** |
+| **Net P&L** | $47,500.00 − $7,948.00 | **+$39,552.00** |
+
+Adapted from the chatbot's synthetic 50-BTC cascade example (grok-answers.md) with the full cost stack made explicit — fees, wide post-cascade spread, impact, and funding — rather than the fees-only treatment. Synthetic illustration only; the `reported_liq` figure is a censored lower bound, so the real cascade was larger than the $180M that printed.
+
+### T5. Data & infra — what must run
+
+Venue websocket: liquidation stream, OI, funding, 5-minute OHLCV. The cascade detector is a streaming threshold over per-venue data; history for calibration from exchange flat files (free) or **Kaiko**/**CoinMetrics** (thousands/yr class, `indicative — verify before budgeting`). Compute: per-5-minute batch over 2–4 symbols, trivially within a Python loop at ~100–500k events/sec (`notes/cost-model.md`). Live working set far under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`).
+
+**Calibration discipline.** Walk-forward with a 1-day embargo; perturb thresholds ±25%; multiple-testing control per the standing protocol (PSR/DSR). Liquidation-data hygiene is the whole game: store every field with the `reported_` prefix, log the venue's stream caps and delay policy, and never impute the censored portion. Rehearse the feed-gap procedure — during real cascades the websocket is most likely to lag exactly when the rule needs it — and define the halt-new-entries trigger (5-second lag) as a tested code path, not a comment.
+### T6. Buy vs build
+
+The liquidation stream is free on the venue websocket. History: exchange flat files (free) or Kaiko/CoinMetrics (thousands/yr class, `indicative — verify before budgeting`). Backtest hosting: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); execution test on the venue testnet (no incremental fee, `indicative — verify before budgeting`). Verdict: **build the cascade/exhaustion logic on free venue data; buy history only if free flat files are insufficient.** No vendor sells an exhaustion-timed cascade fade with documented `reported_*` honesty.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Cheng, Deng, Wang & Yu (2021): on BitMEX, forced liquidations averaged 3.51% of outstanding futures daily on the long side (1.89% short), and liquidated traders averaged ~60× leverage — the flow this rule fades is large and hyper-leveraged. (https://arxiv.org/abs/2102.04591)
+2. Lim (2026): public CEX liquidation volumes are structural lower bounds — the Binance stream caps observations — and the October 2025 stress event showed extreme depth collapse with cross-venue divergence; the fade must therefore be single-venue and sized for the censored tape. (https://doi.org/10.21203/rs.3.rs-9459584/v1)
+3. Makarov & Schoar (2020): crypto arbitrage deviations are large and recurrent but constrained by capital controls — the caution that apparent dislocations persist because capital cannot freely lean against them. (https://doi.org/10.1016/j.jfineco.2019.07.001)
+
+None of these tests a 5-minute exhaustion-timed cascade fade; nothing here is an after-cost profitability claim.
+
+**What the evidence does not show.** Cheng et al.'s liquidation statistics describe the size of the flow, not its tradability — knowing that 3.51% of open interest liquidates daily does not tell you the snap-back is capturable after wide post-cascade spreads and 5 bps taker fees. Lim's lower-bound finding is a data-quality warning, not an edge: the censored tape means backtests understate both the cascade and the chaos, and the exhaustion logic is calibrated on the censored series. Makarov & Schoar's capital-controls story reminds that the deepest dislocations occur where arbitrage capital cannot reach — a single-venue fade is inside that constraint, not outside it. The T4 ledger's $7,948 cost stack on a $47,500 gross move is the realistic shape: costs take roughly a sixth even in the good case.
+### T8. Failure modes
+
+- **Trading the first flush.** The documented fatal error — entering into the cascade instead of after exhaustion. The 3–6 bar decay requirement is the guardrail.
+- **Censored tape.** `reported_liq` understates the true cascade; an "exhaustion" read on capped data can precede the real flush. The OI-fall requirement (a harder-to-censor quantity) is the cross-check.
+- **Second cascades.** Cascades cluster; the second-cascade exit accepts the whipsaw as a cost of doing business.
+- **Cross-venue divergence.** Per Lim (2026), venues diverge under stress; a single-venue fade can be run over by another venue's flow. Single-venue discipline is the mitigation, not a cure.
+- **Spread blowout.** Post-cascade books widen 10–50×; the worked example's wide-spread cost is the normal case, not a stress case.
+
+- **API rate-limit gaps during cascades.** Venues throttle exactly when volatility peaks; a throttled liquidation stream prints a false "decay" that the exhaustion logic misreads as the all-clear. The OI-fall cross-check (a separate endpoint) is the defense — require both before arming.
+- **Insurance-fund socialization.** When the insurance fund absorbs a cascade, the price path differs from a pure liquidation-driven flush — the snap-back may not come. There is no clean filter; the second-cascade/new-low exits are the acceptance of this risk.
+### T9. Visuals
+
+![T076 worked example](images/T076_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    WS["Venue liquidation stream<br/>(5-min reported_liq, OI, funding)"] -->|"5-min reported_liq notional"| S096["S096 cascade detector<br/>(≥10× median notional, example)"]
+    WS -->|"5-min OI series"| OI["OI collapse check<br/>(≥15% fall, example)"]
+    WS -->|"hourly funding"| S095["S095 funding confirm<br/>(normalized in fade direction, example)"]
+    S096 -->|"cascade bar"| EXH{"S045 exhaustion logic<br/>(liq decay ≥70%, 3–6 bars, example)"}
+    OI -->|"leverage left"| EXH
+    EXH -->|"exhaustion flag"| ENTRY{"Entry logic<br/>(exhaustion + funding, t→t+1)"}
+    S095 -->|"confirmation"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(fractional $250 risk, 2-fade cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized orders"| EXEC["Execution<br/>(t+1 5-min open, taker, wide spread)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(50% retrace / cascade-low stop / 12h)"]
+    MON -->|"trade P&L"| PNL["P&L (net of full cost stack)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style EXH fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Cheng, J., Deng, S., Wang, X. & Yu, Y. "Liquidation, Leverage and Optimal Margin in Bitcoin Futures Markets." arXiv:2102.04591. https://arxiv.org/abs/2102.04591 — BitMEX forced liquidations 3.51% long / 1.89% short of outstanding futures daily; liquidated traders ~60× leverage. Title verified 2026-09-10.
+2. Lim, B. "Same Shock, Same Assets, Different Microstructure…" Research Square preprint (2026). https://doi.org/10.21203/rs.3.rs-9459584/v1 — public CEX liquidation volumes are structural lower bounds; Oct 2025 stress showed depth collapse and cross-venue divergence. Title verified 2026-09-10.
+3. Makarov, I. & Schoar, A. "Trading and Arbitrage in Cryptocurrency Markets." *Journal of Financial Economics* 135(2), 293–319 (2020). https://doi.org/10.1016/j.jfineco.2019.07.001 — large recurrent deviations constrained by capital controls. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB8 cascade example (50 BTC long $66,450 → $67,400; price P&L $47,500, fees $2,658, impact $1,994, funding $930.30, net $41,917.70) and the quarantined TB6 T052 cascade draft — chatbot-generated synthetic material adapted here with new stage/seed/signals (176, S096/S095/S045); the T4 ledger above replaces the fees-only treatment with the full cost stack.
+- Kaiko/CoinMetrics price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 177/200 — T077: Crypto Basis Cash-and-Carry
+
+*Batch TB8 · Strategy 77/100 · Signals S095, S057, S014 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Carry: long spot / short perpetual, harvesting basis convergence plus funding |
+| **Edge source** | The perpetual-spot **basis** (cost of carry, S057) mean-reverts as expiry-less perps are pulled to the index; when the annualized basis exceeds all-in costs, the hedged pair earns the carry. Funding (S095) is the carry gauge — the short perp collects it when positive — and spread/adverse-selection accounting (S014) decides whether the quoted basis is actually attainable |
+| **Typical holding period** | 7–30 days; unwind when the basis normalizes |
+| **Capacity hint** | Large on majors: the trade is balance-sheet intensive but low-turnover; capacity in the tens of millions before borrow/capital constraints bind |
+| **Build-or-buy in one line** | Build the basis monitor and hedge-ratio engine on venue data; the full fee/spread/impact/funding/borrow accounting is the part that makes or breaks it — buy nothing but history |
+
+### T2. Full mechanics
+
+**Universe & session.** BTC and ETH spot vs USDⓈ-M perpetual on the **same venue** (`example`) — same-venue or tightly hedged only. Cross-exchange cash-and-carry is a different strategy (transfer risk, capital controls per Makarov & Schoar 2020) and is out of scope here. 24/7.
+
+**Basis (S057).** The **basis** is `(perp − spot) / spot`, annualized by the expected holding period: `B_ann = basis × 365 / hold_days`. This is the cost-of-carry convergence the pair harvests: perps have no expiry, but the funding mechanism pulls them toward the index, so an elevated positive basis decays as longs pay shorts. The trade arms when `B_ann ≥ hurdle`, where the hurdle is the all-in round-trip cost plus a margin (`example`: hurdle = 12% annualized).
+
+**Carry gauge (S095).** The funding rate is the running yield of the short-perp leg: with positive funding, the short collects every 8 hours. The rule requires expected funding over the hold (extrapolated from the current rate with a decay haircut, `example`: 50% haircut) to cover at least the borrow/capital cost of the spot leg. Funding is a carry gauge here, not a contrarian signal — the directional use from T075 does not apply.
+
+**Attainability (S014).** Quoted basis is not tradable basis. **S014** decomposes the round-trip friction: quoted half-spread on both legs, effective spread vs mid, and the adverse-selection component (permanent impact). The rule computes `attainable_basis = quoted_basis − 2 × (half-spread_spot + half-spread_perp) − impact_estimate` and arms only if the attainable basis clears the hurdle. If the book is thin, the screen stays dark no matter how wide the quote prints.
+
+**Entry rule.** Attainable basis ≥ hurdle on hourly bar *t* → fill both legs at the **open of bar t+1** (`example`: simultaneous IOC orders, hedge ratio 1.0 by notional). Signal calculated at bar *t* can never fill on that bar; the two legs must fill within the same bar or the pair is cancelled.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) convergence: unwind when attainable basis falls below 2% annualized; (2) funding flip: if funding turns negative beyond −5% annualized, unwind — the carry reversed; (3) time stop: unwind at 30 days regardless; (4) de-peg/venue risk: if spot-perp divergence exceeds 3× the entry basis intraday, unwind — the hedge broke.
+
+**Position sizing.** Balance-sheet sizing: notional per pair = min(available margin / 3, 2% of the venue's hourly volume, `example`) — the trade is inventory, and unwind liquidity is the binding constraint. Max 4 concurrent pairs (`example`).
+
+**Risk limits.** Venue exposure cap (no more than 25% of book NAV on one venue, `example`); stablecoin-collateral haircut; no entries during venue maintenance; daily mark of the basis P&L vs the funding collected — divergence between the two is an early warning.
+
+**Cost model.** The full stack, always: taker fees on 4 legs (entry + exit, spot + perp), half-spread on all 4 legs, market impact on entry and exit, funding paid/received over the hold as a P&L line, and spot-financing/borrow cost if the spot leg is margined. Fees-only accounting fails this strategy — the worked example shows why.
+
+**Order/execution sketch.** IOC limit orders on both legs at the t+1 open; if either leg fills < 90% within the bar, cancel the remainder and flatten the filled leg immediately (unhedged basis inventory is not this strategy).
+
+**Parameter robustness.** The `example` choices (12% hurdle, 50% funding haircut, 1.0 notional hedge ratio, 30-day max hold) are starting points. Sensitivity protocol: vary the hurdle at 8%/12%/16% and the funding haircut at 25%/50%/75%; the carry should survive with trade count as the moving part. Test the hedge ratio explicitly: 1.0 by notional is the textbook choice, but during stress the perp can deviate from spot faster than funding compensates — a beta-adjusted ratio estimated on trailing co-movement is the alternative to test. The hurdle must always exceed the measured 4-leg friction by a margin, not just the fee schedule — re-measure S014 frictions quarterly because books thin out over time.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S057 (cost-of-carry basis) | Primary trigger | attainable annualized basis ≥ 12% hurdle (`example`) |
+| S095 (funding rate) | Carry gauge | extrapolated funding (50% haircut, `example`) must cover spot financing; negative flip → unwind |
+| S014 (spread / adverse selection) | Attainability filter | quoted-minus-friction basis; effective-spread and impact decomposition |
+| Convergence / de-peg logic (strategy rule) | Exit manager | < 2% basis unwind; 3× divergence emergency unwind; 30-day time stop |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic hourly bars, BTC spot vs perp on one venue, seed 177. Spot $67,200, perp $67,650 — quoted basis $450 (0.67%), expected 30-day hold → `B_ann ≈ 8.1%`… the worked example uses a wider print: spot $67,200, perp $67,920, quoted basis $720 (1.07%), 30-day hold → `B_ann ≈ 13.1%` ≥ 12% hurdle. After S014 friction (both books 0.02% half-spread, impact estimate $120), attainable basis ≈ 12.4% — armed. Funding +0.03%/8h (longs pay shorts). Signal at bar *t* → fill at t+1 open: **long 10 BTC spot at $67,200, short 10 BTC perp at $67,920**. Over 30 days the basis converges to $50 and funding is collected. Unwind both legs.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Basis convergence P&L | 10 × ($720 − $50 − drift adj.) | +$4,000.00 |
+| Funding received (short perp, 30 days) | modeled, net of flips | +$2,100.00 |
+| **Strategy gross** | | **+$6,100.00** |
+| Taker fees, 4 legs (5 bps) | 4 × 0.0005 × 10 × $67,560 avg | −$1,351.20 |
+| Half-spread, 4 legs | modeled on both books | −$540.00 |
+| Market impact, entry + exit | modeled | −$480.00 |
+| Spot financing (margin, 30 days) | modeled | −$378.80 |
+| **Total execution cost** | | **−$2,750.00** |
+| **Net P&L** | $6,100.00 − $2,750.00 | **+$3,350.00** |
+
+Full fee/spread/impact/funding/borrow accounting — the fees alone ($1,351) understate the true $2,750 stack by more than half. Synthetic illustration only; not a profitability claim. Inventory risk during the 30-day hold (basis can widen before converging) is the unmodeled tail.
+
+### T5. Data & infra — what must run
+
+Venue websocket: spot and perp order books (L2), funding rates, hourly OHLCV. The basis monitor is a per-minute computation over 2–4 pairs — trivially within a Python loop at ~100–500k events/sec (`notes/cost-model.md`); S014 spread decomposition needs L2 snapshots, stored in Polars at ~10–50M rows/sec (`notes/cost-model.md`). Live working set under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); venue data is free via websocket.
+
+**Calibration discipline.** Walk-forward with a 5-day embargo; perturb the hurdle and haircut ±25%; multiple-testing control per the standing protocol (PSR/DSR). Basis-data hygiene: snapshot both L2 books at each decision bar (the attainable-basis computation must be reproducible), log the funding formula version, and verify the venue's historical basis series against a second source per Alexander & Dakos (2020) before trusting any backtest. Never backtest the basis on mark prices while assuming spot execution — use the tradable book on both legs.
+### T6. Buy vs build
+
+Venue data is free. History for backtests: exchange flat files (free) or **Kaiko**/**CoinMetrics** (thousands/yr class, `indicative — verify before budgeting`); data-quality cross-checks informed by Alexander & Dakos (2020) — verify the venue's historical basis series against a second source before trusting the backtest. Backtest hosting: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); execution test on the venue testnet (no incremental fee, `indicative — verify before budgeting`). Verdict: **build the monitor, hedge engine, and full cost accounting; buy nothing but history if needed.** No vendor sells a same-venue basis harvester with documented attainable-basis logic.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Makarov & Schoar (2020): crypto price deviations are large and recurrent, constrained by capital controls — the same-venue restriction here is the direct response: avoid the cross-border frictions they document. (https://doi.org/10.1016/j.jfineco.2019.07.001)
+2. He, Manela, Ross & von Wachter: perp no-arbitrage bounds with spot; deviations comove and diminish over time — the convergence mechanism the basis leg relies on. (https://arxiv.org/abs/2212.06888)
+3. Alexander & Dakos (2020): critical data-quality warnings for crypto research — survivorship, exchange selection, and cleaning choices can manufacture apparent edge; the attainable-basis filter and second-source verification are the operational answer. (https://doi.org/10.1080/14697688.2019.1641347)
+
+None of these tests this exact 30-day same-venue carry rule; nothing here is an after-cost profitability claim.
+
+### T8. Failure modes
+
+- **Basis widening before convergence.** The classic carry-trade drawdown: funding spikes can push the basis wider for weeks. The 25%-NAV venue cap and the 30-day time stop bound it.
+- **Funding sign flips.** The carry can reverse mid-hold; the −5% funding-flip unwind accepts the whipsaw.
+- **Venue risk.** Same-venue concentration is the strategy's central risk — hacks, freezes, or clawbacks hit both legs' collateral. The venue cap is the only real defense.
+- **Unwind liquidity.** The exit assumes the basis is still attainable in size; in stress, the S014 filter that armed the trade will refuse the unwind — the de-peg exit then fires at whatever the book offers.
+- **Stablecoin depeg.** If the quote currency (USDT/USDC) depegs, both legs' notional is mismeasured; monitor the stablecoin peg as a kill-switch input.
+
+- **Auto-deleveraging (ADL).** In extreme moves the venue can auto-delever the profitable perp leg — the short that was hedging the spot disappears and the "hedged" pair becomes naked long spot into a falling market. Monitor the ADL queue position; there is no hedge for the hedge being removed.
+- **Spot withdrawal freezes.** The convergence thesis assumes the spot leg can be moved or sold; withdrawal freezes trap the inventory while the perp leg keeps marking. The 25%-NAV venue cap bounds the damage; it does not prevent it.
+### T9. Visuals
+
+![T077 worked example](images/T077_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    WS["Venue L2 books + funding<br/>(spot & perp, same venue, per-minute)"] -->|"per-minute L2 snapshots"| S014["S014 spread decomposition<br/>(quoted/effective/adverse selection)"]
+    WS -->|"hourly spot & perp marks"| S057["S057 basis monitor<br/>(attainable B_ann ≥ 12%, example)"]
+    WS -->|"8-hour funding rate"| S095["S095 carry gauge<br/>(extrapolated, 50% haircut, example)"]
+    S014 -->|"friction estimate"| ENTRY{"Entry logic<br/>(attainable basis ≥ hurdle, t→t+1)"}
+    S057 -->|"quoted basis"| ENTRY
+    S095 -->|"carry covers financing"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(margin/3, 4-pair cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"paired IOC orders"| EXEC["Execution<br/>(t+1 open, both legs same bar)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(<2% unwind / funding flip / 30d)"]
+    MON -->|"trade P&L"| PNL["P&L (net of full 4-leg stack)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Makarov, I. & Schoar, A. "Trading and Arbitrage in Cryptocurrency Markets." *Journal of Financial Economics* 135(2), 293–319 (2020). https://doi.org/10.1016/j.jfineco.2019.07.001 — large recurrent deviations constrained by capital controls. Title verified 2026-09-10.
+2. He, Z., Manela, A., Ross, O. & von Wachter, M. "Fundamentals of Perpetual Futures." arXiv:2212.06888. https://arxiv.org/abs/2212.06888 — perp no-arbitrage bounds; deviations diminish over time. Title verified 2026-09-10.
+3. Alexander, C. & Dakos, M. "A Critical Investigation of Cryptocurrency Data and Analysis." *Quantitative Finance* 20(2), 173–188 (2020). https://doi.org/10.1080/14697688.2019.1641347 — data-quality warnings for crypto research. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Quarantined TB6 T051/T053 basis-carry drafts — adapted here with new stage/seed/signals (177, S095/S057/S014) as same-venue cash-and-carry; the old S081/S082/S090 roles were not reused.
+- Kaiko/CoinMetrics price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 178/200 — T078: Earnings-Drift Intraday Leg
+
+*Batch TB8 · Strategy 78/100 · Signals S100, S025, S091 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Momentum: ride the intraday continuation of an earnings surprise, 09:45–15:55 |
+| **Edge source** | Post-earnings-announcement drift (PEAD) is one of the oldest documented anomalies — prices underreact to earnings news and drift in the surprise direction for weeks (Bernard & Thomas 1989; Foster, Olsen & Shevlin 1984). This rule trades only the first intraday leg of that drift, entering after the open-auction noise clears, with exact announcement timestamps (S100), momentum confirmation (S025), and machine-readable news reaction (S091) |
+| **Typical holding period** | One session: enter ≥ 09:45 ET, flat 15:55 ET |
+| **Capacity hint** | Medium: earnings days are the highest-volume days of the quarter; capacity in the tens of millions across the reporting calendar |
+| **Build-or-buy in one line** | Build the timestamp-anchored drift leg on bought earnings and news data; the literature supports multi-day drift, so the intraday-only leg is the reconstructed (and weaker-evidenced) part — size it accordingly |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks announcing earnings, price ≥ $10, ADV ≥ 1M shares (`example`). Announcements must have **exact timestamps** — exchange filing time or newswire timestamp to the minute; date-only announcement records are unusable (the rule needs to know whether the news broke before the open or during the session). RTH only, 09:45–15:55 ET.
+
+**Surprise (S100).** **SUE** (standardized unexpected earnings) = (actual − consensus) / dispersion, with the announcement timestamp attached. The rule arms on |SUE| ≥ 1.5 (`example`) — a genuine surprise, not a whisper miss. S100's discipline is the timestamp: pre-open announcements trade the 09:45 leg; announcements during the session are skipped that day (the rule is a next-session leg, not a headline-chaser).
+
+**News reaction (S091).** Machine-readable news reaction must agree in sign with the SUE: the newswire sentiment score on the announcement story must be directionally consistent (`example`: sentiment z-score same sign as SUE). If the machines read the story against the numbers, the rule stands down — disagreement means the "surprise" is ambiguous.
+
+**Momentum confirmation (S025).** At 09:45 ET, the name's move from the open must be in the surprise direction and ≥ 0.5× its average first-30-minute range (`example`) — the drift leg has started; the rule rides it, it doesn't predict it.
+
+**Entry rule.** All three green at the 09:45 5-minute close → earliest fill at the **open of the next 5-minute bar** (09:50), in the surprise direction. Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) drift target: 1.0× the 09:30–09:45 range in the trade direction; (2) reversal stop: a 5-minute close back through the 09:45 price against the position — the leg failed; (3) time stop: flat 15:55 ET; (4) news contradiction: a material newswire correction or guidance cut reverses the premise — exit at the next open.
+
+**Position sizing.** Dollar-risk sizing `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $250` (`example`). Max 10 concurrent drift legs (`example`) — earnings cluster by week.
+
+**Risk limits.** Daily loss stop −4R (`example`); no entries when the name's pre-market volume already exceeds 3× its average (the move may be exhausted); skip if the bid-ask spread at 09:45 exceeds 5¢ (`example`) — illiquid earnings opens are untradable.
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way on the wide earnings-day book; market impact modeled explicitly — earnings opens are the year's most expensive fills, and the worked example's impact line shows it.
+
+**Order/execution sketch.** Marketable limit at the 09:50 open (`example`: limit = open ± 5¢); participation ≤ 10% of bar volume (`example`); taker modeling.
+
+**Parameter robustness.** The `example` thresholds (|SUE| ≥ 1.5, sentiment agreement, 09:45 leg ≥ 0.5× average range) are starting points. Sensitivity protocol: vary SUE at 1.0/1.5/2.0 and the leg-confirm at 0.3×/0.5×/0.8×; the drift leg's sign should persist. The timestamp hierarchy deserves its own test: exchange filing time vs newswire time vs vendor timestamp — run the rule on each and require agreement, because a few minutes of timestamp error at the open is the difference between riding the leg and buying the top. Also test Friday announcers separately per DellaVigna & Pollet (2009): the inattention effect means Friday legs behave differently.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S100 (SUE + exact timestamps) | Surprise + causality anchor | `|SUE| ≥ 1.5` (`example`); minute-level timestamps; pre-open only |
+| S091 (machine news reaction) | Sign agreement | sentiment z-score same sign as SUE (`example`); disagreement → stand down |
+| S025 (momentum) | Leg confirmation | 09:45 move in surprise direction ≥ 0.5× avg first-30-min range (`example`) |
+| Reversal-stop / time-stop logic (strategy rule) | Exit manager | 09:45-price reversal stop; 1.0×-range target; 15:55 flatten |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity ERN, seed 178. ERN reports pre-open: SUE +2.1 (beat), newswire sentiment strongly positive (agreement), timestamp 07:30 ET. At 09:45 ERN is up 1.1% from the open — 0.8× its average first-30-minute range, in the surprise direction (leg confirmed). Signal at the 09:45 close → fill at the 09:50 open: **long 25,000 shares at $40.80**. The drift leg carries through the session; exit at the 1.0×-range target, **$41.42**, at 14:20.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 25,000 × ($41.42 − $40.80) | +$15,500.00 |
+| Commission | 25,000 × 2 × $0.005 | −$250.00 |
+| Half-spread, both ways (wide earnings book) | modeled | −$750.00 |
+| Market impact (earnings-day fills) | modeled | −$4,712.00 |
+| **Total execution cost** | | **−$5,712.00** |
+| **Net P&L** | $15,500.00 − $5,712.00 | **+$9,788.00** |
+
+Adapted from the chatbot's synthetic earnings example (grok-answers.md) with market impact made explicit — earnings-day impact ($4,712) dwarfs commissions, which is the honest cost picture. Synthetic illustration only. Honesty note: the literature supports multi-day PEAD, not a guaranteed 09:45–15:55 edge; Chordia et al. (2009) found transaction costs consumed 70–100% of paper PEAD profits, concentrated in illiquid names.
+
+### T5. Data & infra — what must run
+
+Earnings actuals/consensus/timestamps (licensed: IBES/Refinitiv or Estimize-class), machine-readable newswire (licensed), 5-minute OHLCV. The SUE screen is a daily batch over the reporting calendar; the 09:45 check is a streaming rule over announcers — trivially within a Python loop at ~100–500k events/sec (`notes/cost-model.md`); SUE history backfills in Polars at ~10–50M rows/sec (`notes/cost-model.md`). Live working set under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); earnings + newswire data is H-tier, 60–200 hours, $9,000–$30,000 (`notes/cost-model.md`).
+
+**Calibration discipline.** Walk-forward by earnings season (not calendar year — the reporting calendar is the natural season) with a 5-day embargo; perturb thresholds ±25%; multiple-testing control per the standing protocol (PSR/DSR). Earnings-data hygiene: store the consensus vintage (pre-announcement, not revised), the earliest verifiable timestamp and its source, and the actuals as first-reported (restatements are a separate event). A backtest on revised actuals and corrected timestamps measures a rule that never existed.
+### T6. Buy vs build
+
+Buy the inputs: **Refinitiv IBES** or **FactSet** earnings data (tens of thousands/yr class, `indicative — verify before budgeting`); machine-readable news from **RavenPack** (~$15,000–$25,000/yr class, `indicative — verify before budgeting`) or **Bloomberg** ($30,000/yr class, `indicative — verify before budgeting`); 5-minute bars from **Massive (formerly Polygon)** (~$199/mo, `indicative — verify before budgeting`); backtest hosting on **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); routing test on **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Verdict: **buy the earnings timestamps and the news reaction; build the intraday leg.** Nobody sells a 09:45-leg rule with documented t→t+1 causality.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Bernard & Thomas (1989) documented post-earnings-announcement drift — prices underreact to earnings news and drift in the surprise direction. (Summary of findings via https://en.wikipedia.org/wiki/Post%E2%80%93earnings-announcement_drift — verify the original *Journal of Accounting Research* paper before citing page-level claims.)
+2. DellaVigna & Pollet (2009): Friday earnings announcements saw 15% lower immediate response and 70% higher delayed response — inattention shapes the drift's timing, which is why this rule waits for the leg to confirm rather than buying the print. (https://doi.org/10.1111/j.1540-6261.2009.01447.x)
+3. Chordia, Goyal, Sadka, Sadka & Shivakumar (2009): PEAD was concentrated in illiquid stocks, and transaction costs consumed 70–100% of paper profits — the cost warning that sizes this rule's ambition. (https://ideas.repec.org/a/taf/ufajxx/v65y2009i4p18-32.html)
+
+Honesty note: the literature supports multi-day drift, not a guaranteed 09:45–15:55 intraday edge; the intraday leg is a reconstruction.
+
+**What the evidence does not show.** The PEAD literature (Bernard & Thomas; Foster, Olsen & Shevlin) documents drift over weeks, not a 09:45–15:55 intraday leg — the multi-day drift is the evidence, the single-session extraction is the reconstruction, and the two should never be conflated in a pitch. DellaVigna & Pollet's Friday-inattention result refines the timing story but does not endorse intraday riding. Chordia et al.'s 70–100% cost-consumption finding is the binding constraint: it was measured on the slower multi-day drift, and the intraday leg turns over faster with wider earnings-day spreads, so its cost ratio is plausibly worse. The T4 ledger's $4,712 impact line is the honest center of this strategy — everything else is commentary.
+### T8. Failure modes
+
+- **Timestamp error.** A mis-timestamped announcement (wire delay vs filing time) puts the rule on the wrong side of the news; use the earliest verifiable timestamp and skip ambiguous cases.
+- **Guidance vs EPS disagreement.** An EPS beat with a guidance cut reads positive on SUE and negative on S091 — the agreement filter catches most of these; the rest hit the reversal stop.
+- **Pre-market exhaustion.** When the entire drift happens pre-market, the 09:45 leg is the top; the 3× pre-market volume filter screens these.
+- **Impact underestimation.** Earnings-day impact is the dominant cost and the hardest to model; the worked example's $4,712 impact line is a normal-case estimate, not a worst case.
+- **Friday inattention.** Per DellaVigna & Pollet, Friday announcers drift differently; consider a Friday-specific parameter set or exclusion.
+
+- **Whisper-number divergence.** When the whisper number differs from consensus, SUE mismeasures the surprise — the market reacts to the whisper, the rule to the print. The S091 agreement filter catches the worst cases; the rest are accepted as model error.
+- **After-close guidance revisions.** A beat at 16:05 followed by a guidance cut on the call flips the sign overnight; the rule only trades pre-open announcements precisely to avoid holding through this, and any name that guides during the session exits at the next open.
+### T9. Visuals
+
+![T078 worked example](images/T078_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    ERN["Earnings feed<br/>(actuals, consensus, minute timestamps)"] -->|"SUE + exact timestamp"| S100["S100 surprise screen<br/>(|SUE| ≥ 1.5, pre-open, example)"]
+    WIRE["Machine newswire<br/>(announcement sentiment)"] -->|"sentiment z-score"| S091["S091 news reaction<br/>(same sign as SUE, example)"]
+    PX["5-min OHLCV<br/>(earnings-day RTH)"] -->|"09:30–09:45 move"| S025["S025 leg confirm<br/>(≥0.5× avg range, example)"]
+    S100 -->|"surprise armed"| ENTRY{"Entry logic<br/>(surprise + agreement + leg, t→t+1)"}
+    S091 -->|"sign agreement"| ENTRY
+    S025 -->|"leg confirmed"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk $250, 10-leg cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(09:50 open fill, taker)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(1.0× target / 09:45 reversal stop / 15:55)"]
+    MON -->|"trade P&L"| PNL["P&L (net of earnings-day impact)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Bernard, V.L. & Thomas, J.K. "Post-Earnings-Announcement Drift: Delayed Price Response or Risk Premium?" *Journal of Accounting Research* 27 (1989), 1–36. https://doi.org/10.2307/2491062 — drift in the surprise direction. DOI identifier verified via Crossref 2026-09-10; findings also summarized at https://en.wikipedia.org/wiki/Post%E2%80%93earnings-announcement_drift (secondary summary link only — does not resolve to the paper).
+2. DellaVigna, S. & Pollet, J.M. "Investor Inattention and Friday Earnings Announcements." *Journal of Finance* 64(2), 709–749 (2009). https://doi.org/10.1111/j.1540-6261.2009.01447.x — Friday announcements: 15% lower immediate, 70% higher delayed response. Title verified 2026-09-10.
+3. Chordia, T., Goyal, A., Sadka, G., Sadka, R. & Shivakumar, L. "Liquidity and the Post-Earnings-Announcement Drift." *Financial Analysts Journal* 65(4), 18–32 (2009). https://ideas.repec.org/a/taf/ufajxx/v65y2009i4p18-32.html — PEAD concentrated in illiquid stocks; costs consumed 70–100% of paper profits. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB8 earnings example (25,000 ERN long $40.80 → $41.42; gross $15,500, costs $5,712, net $9,788) — chatbot-generated synthetic lead adapted as the T4 illustration with impact decomposed; not evidence of profitability.
+- Chatbot question-bank TB8 items on PEAD intraday decomposition — research prompts, not findings.
+- Vendor price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 179/200 — T079: Post-Announcement Vol Fade
+
+*Batch TB8 · Strategy 79/100 · Signals S100, S070, S064 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Volatility contrarian: sell the post-announcement implied-volatility premium once the news is out |
+| **Edge source** | Options price in an announcement-day move; after the news breaks, implied volatility typically collapses ("vol crush") faster than realized volatility justifies. The rule compares the straddle-implied move (S070) against jump-robust realized variance (S064) — selling the straddle only when implied exceeds the jump-robust estimate by a margin — with exact announcement timestamps (S100) defining the window |
+| **Typical holding period** | 1–3 trading days after the announcement; exit by day 3 |
+| **Capacity hint** | Medium: single-name options are wide but the edge is per-name; capacity in the low tens of millions across the earnings calendar |
+| **Build-or-buy in one line** | Build the implied-vs-jump-robust comparator on bought options and earnings data; the timestamp-anchored vol-fade rule with causal fills is not sold anywhere |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks with liquid listed options (bid-ask on the front-week straddle ≤ 10% of mid, `example`), price ≥ $20, announcing earnings with exact timestamps (S100). Announcements must be pre-open or post-close — the rule never holds through the announcement itself; it trades the aftermath.
+
+**Implied move (S070).** The **straddle-implied move** is the front-week at-the-money straddle mid-price divided by the underlying price — the market's forecast of the move through the near expiry. Measure it at the close *before* the announcement (`example`: the last liquid print) and again at the first tradable print *after* the announcement.
+
+**Jump-robust realized variance (S064).** **Realized variance** from intraday returns overstates true diffusive volatility when the announcement itself is a jump. S064 uses **jump-robust** estimators — **bipower variation (BV)**, which is robust to jumps, and the **Lee–Mykland** jump test to flag and exclude the announcement jump — to estimate the diffusive variance that should price the straddle after the news is out. Define terms at first use: *bipower variation* sums products of adjacent absolute returns, so a single jump contaminates only its neighbors and the estimator stays consistent for the continuous component; the *Lee–Mykland test* flags returns too large to be diffusive.
+
+**Entry rule.** After the announcement, on the first 5-minute bar *t* where both legs are quotable: sell the front-week ATM straddle if `implied_move_t > 1.4 × jump_robust_move_t` (`example`) — implied is pricing 40% more move than the jump-robust estimate justifies. Signal at bar *t* → earliest fill at the **open of bar t+1**. Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) decay target: buy back at 50% of the entry credit; (2) stop: buy back at 2× the entry credit — the market is repricing, not overpricing; (3) time stop: close at day t+3 regardless; (4) second-news exit: any new material announcement on the name → buy back at the next open.
+
+**Position sizing.** Premium-based: contracts = `⌊ R / (2 × entry_credit_per_share × 100) ⌋` with `R = $300` (`example`) — the 2×-credit stop defines the risk. Max 8 concurrent straddle fades (`example`); earnings cluster, and vol events correlate.
+
+**Risk limits.** Daily loss stop −3R (`example`); no entries when the post-announcement book is one-sided (no two-sided straddle quote within the 10% width bound); underlying hard-borrow names excluded (assignment/dividend risk on the call leg).
+
+**Cost model.** Options commission $0.65/contract/side (`example`); pay half the straddle spread each way — the dominant cost, modeled explicitly; slippage on the t+1 fill. The worked example shows the spread as the largest line.
+
+**Order/execution sketch.** Limit orders at the straddle mid minus/plus half-spread at the t+1 open (`example`); modeled as a taker on both legs; no legging — the straddle trades as a package or not at all.
+
+**Parameter robustness.** The `example` choices (implied > 1.4× jump-robust, front-week ATM straddle, 50%-credit target, 2×-credit stop) are starting points. Sensitivity protocol: vary the premium ratio at 1.2×/1.4×/1.6× and the target at 30%/50%/70% of credit; sign persistence required. Test the straddle tenor explicitly: front-week has the most crush but the widest spreads — second-week straddles are the calmer alternative and the comparison belongs in the research log. The Lee–Mykland jump threshold itself is a parameter: run the estimator at two significance levels and confirm the 1.4× test fires on the same names.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S100 (exact announcement timestamps) | Window anchor | defines the pre/post measurement bars; pre-open or post-close announcements only |
+| S070 (straddle-implied vs realized) | Mispricing gauge | `implied > 1.4 × jump-robust` (`example`) triggers the sale |
+| S064 (jump-robust RV: BV, Lee–Mykland) | Fair-value estimate | bipower variation + Lee–Mykland jump exclusion; the denominator of the 1.4× test |
+| Decay-target / 2×-credit stop logic (strategy rule) | Exit manager | 50%-credit target; 2×-credit stop; t+3 flatten |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic options/equity bars, equity VOL, seed 179. VOL announces post-close Tuesday with an exact timestamp. Wednesday's first quotable 5-minute bar: front-week ATM straddle mid $3.20 (implied move 6.4% on a $50 stock); jump-robust estimate from Wednesday's diffusive bars (announcement jump excluded via Lee–Mykland) implies a 3.9% move — ratio 1.64× ≥ 1.4× (`example`), armed. Signal at bar *t* → fill at the next 5-minute open: **sell 100 straddles at $3.20** (contract multiplier 100). Implied decays; **buy back 100 straddles at $2.45** on day t+2.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 100 × ($3.20 − $2.45) × 100 | +$7,500.00 |
+| Commission | 200 contracts × $0.65 | −$130.00 |
+| Half-spread, both ways (straddle 10¢ wide) | 100 × $0.10 × 100 | −$1,000.00 |
+| Adverse slippage, t+1 fill | modeled | −$300.00 |
+| **Total execution cost** | | **−$1,430.00** |
+| **Net P&L** | $7,500.00 − $1,430.00 | **+$6,070.00** |
+
+Synthetic illustration only — not a claim that post-announcement vol fading is profitable after costs. The straddle spread ($1,000) is the dominant cost: single-name options friction is the strategy's tax.
+
+### T5. Data & infra — what must run
+
+Options quotes (NBBO-level, licensed: OPRA via **Databento** or **Massive**), earnings timestamps (licensed), 5-minute underlying OHLCV for the BV/Lee–Mykland computation. The jump-robust estimation is a per-name intraday batch — seconds in Polars at ~10–50M rows/sec (`notes/cost-model.md`); the live screen is a per-5-minute check over announcers, within a Python loop at ~100–500k events/sec (`notes/cost-model.md`). Live working set under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); options + earnings data is H-tier, 60–200 hours, $9,000–$30,000 (`notes/cost-model.md`).
+
+**Calibration discipline.** Walk-forward by earnings season with a 3-day embargo; perturb the premium ratio and target ±25%; multiple-testing control per the standing protocol (PSR/DSR). Options-data hygiene: use NBBO quotes (not trades) for the implied-move computation, timestamp the straddle mid and the underlying print to the same bar, and store the dividend/rate inputs to the vol calculation. Split the backtest by vol regime — the crush behaves differently when market-wide vol is high — and require the edge in both.
+### T6. Buy vs build
+
+Buy the data: OPRA options history from **Databento** (usage-based, thousands/yr class, `indicative — verify before budgeting`) or **Massive (formerly Polygon) Options** (~$199/mo class for standard tiers, `indicative — verify before budgeting`); earnings timestamps from **Refinitiv IBES**/**FactSet** (tens of thousands/yr class, `indicative — verify before budgeting`); backtest hosting on **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); routing test on **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Verdict: **buy the options prints and the timestamps; build the implied-vs-jump-robust comparator and the causal rule.** No vendor sells it.
+
+**Crossover note.** The options-data decision has a real fork: OPRA history from Databento (usage-based) versus a bundled Massive options feed. For this rule the fork resolves on quote depth — the implied-move computation needs NBBO quotes, not just trades, and the cheaper trade-only histories are unusable for the 1.4x test. Verify before buying that the history includes millisecond-stamped quotes with size; a surprising number of "options history" products are trade prints with end-of-day quotes. The backtest also needs the underlying's 5-minute bars from the same day to run the Lee-Mykland estimator — mismatched timestamps between the options and equity feeds are the classic silent killer.
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Chordia et al. (2009): PEAD concentrated in illiquid stocks; transaction costs consumed 70–100% of paper profits — the friction warning applies doubly to options-based PEAD expressions. (https://ideas.repec.org/a/taf/ufajxx/v65y2009i4p18-32.html)
+2. DellaVigna & Pollet (2009): Friday announcements show 15% lower immediate and 70% higher delayed response — the timing structure that makes post-announcement (not pre-announcement) positioning the testable leg. (https://doi.org/10.1111/j.1540-6261.2009.01447.x)
+3. Tetlock (2007): news-text sentiment predicts next-day returns — the text-reaction channel that the S100/S070 window is built around, on a shorter horizon than the original finding. (https://doi.org/10.1111/j.1540-6261.2007.01232.x)
+
+Honesty note: no published paper tests this exact straddle-fade rule; the jump-robust estimators are standard econometrics, not evidence of edge.
+
+**What the evidence does not show.** No cited paper tests selling post-announcement straddles against a jump-robust fair value — the 1.4× premium test, the BV/Lee–Mykland machinery, and the 50%-credit target are a reconstructed volatility trade, not a literature result. Chordia et al.'s cost warning applies with extra force to options: their 70–100% figure was for stock-based PEAD, and single-name options spreads are wider in relative terms, as the T4 ledger's $1,000 spread line shows. DellaVigna & Pollet's delayed-response finding describes the underlying's drift, not the straddle's decay — the link from "prices underreact" to "implied vol overprices the aftermath" is the rule's own inference. Short straddles carry gap risk that no backtest spread assumption can fully capture.
+### T8. Failure modes
+
+- **The 2×-credit stop.** Vol can re-expand on guidance revisions or macro shocks; short straddles have unbounded tails and the stop is a market order into a widening book.
+- **Jump misclassification.** If the Lee–Mykland test fails to exclude the announcement jump, the "jump-robust" estimate is contaminated and the 1.4× test misfires — validate the estimator on known announcement days before trading.
+- **Pin risk and dividends.** Holding short options through ex-div dates or into expiry pins creates assignment risk; the t+3 time stop and the front-week-only rule bound this.
+- **One-sided books.** Post-announcement options books can go one-sided; the two-sided-quote requirement keeps the rule out of untradable prints.
+- **Correlation across announcers.** Earnings cluster by week and sector; the 8-name cap and the daily loss stop are the portfolio defense.
+
+- **Announcement-date misclassification.** Earnings dates move; a straddle sold for "post-announcement" crush while the announcement is actually still ahead is a naked short-vol position into the event. Verify the timestamp against two sources before arming — the S100 window is only as good as its calendar.
+- **Market-wide circuit breakers.** A macro halt during the hold freezes the underlying while the straddle's implied vol reprices on reopen — the 2×-credit stop becomes a suggestion. The 8-name cap and the daily loss stop are the portfolio-level acceptance of this tail.
+### T9. Visuals
+
+![T079 worked example](images/T079_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    ERN["Earnings timestamps<br/>(exact, pre/post-close only)"] -->|"announcement window"| S100["S100 window anchor<br/>(pre/post measurement bars)"]
+    OPT["OPRA straddle quotes<br/>(front-week ATM, 5-min)"] -->|"straddle mid / underlying"| S070["S070 implied move<br/>(implied > 1.4× robust, example)"]
+    PX["5-min underlying OHLCV<br/>(post-announcement)"] -->|"intraday returns"| S064["S064 jump-robust RV<br/>(BV + Lee–Mykland)"]
+    S100 -->|"window defined"| ENTRY{"Entry logic<br/>(implied premium + window, t→t+1)"}
+    S070 -->|"mispricing gauge"| ENTRY
+    S064 -->|"fair-value denominator"| ENTRY
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(premium-based $300 risk, 8-fade cap, example)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"package limit orders"| EXEC["Execution<br/>(t+1 open, straddle package, taker)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(50% target / 2× stop / t+3)"]
+    MON -->|"trade P&L"| PNL["P&L (net of straddle-spread costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Chordia, T., Goyal, A., Sadka, G., Sadka, R. & Shivakumar, L. "Liquidity and the Post-Earnings-Announcement Drift." *Financial Analysts Journal* 65(4), 18–32 (2009). https://ideas.repec.org/a/taf/ufajxx/v65y2009i4p18-32.html — costs consumed 70–100% of paper PEAD profits. Title verified 2026-09-10.
+2. DellaVigna, S. & Pollet, J.M. "Investor Inattention and Friday Earnings Announcements." *Journal of Finance* 64(2), 709–749 (2009). https://doi.org/10.1111/j.1540-6261.2009.01447.x — delayed response to Friday announcements. Title verified 2026-09-10.
+3. Tetlock, P.C. "Giving Content to Investor Sentiment." *Journal of Finance* 62(3), 1139–1168 (2007). https://doi.org/10.1111/j.1540-6261.2007.01232.x — news-text sentiment predicts next-day returns. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Chatbot question-bank TB8 items on vol-crush timing and jump-robust estimator choice — research prompts, not findings.
+- OPRA/earnings price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 180/200 — T080: Multi-Source Attention Composite
+
+*Batch TB8 · Strategy 80/100 · Signals S099, S097, S093 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Contrarian: fade attention spikes only when three independent attention measures agree the crowd is excited about old news |
+| **Edge source** | Each attention proxy is weak alone — weekly search attention (S099) is slow, social chatter (S097) has a small return effect (Antweiler & Frank 2004), and news volume without a novelty check is noise. The composite requires all three to agree: elevated search attention, excited social chatter, *and* a stale-news verdict (S093). The intersection is rarer and more tradeable than any single leg, and it fades the same overreaction Tetlock (2011) documents |
+| **Typical holding period** | 2–5 trading days; flat by day 5 |
+| **Capacity hint** | Medium: the composite fires less often than any single leg, so per-trade size can be larger; capacity in the tens of millions |
+| **Build-or-buy in one line** | Build the composite on bought news/social data plus free Trends; the agreement logic and its calibration are the proprietary part |
+
+### T2. Full mechanics
+
+**Universe & session.** US common stocks, price ≥ $10, ADV ≥ 1M shares (`example`). Daily signal cadence (the composite's slowest input, S099, is weekly), RTH execution.
+
+**The three legs.** (1) **S099 — search attention:** weekly ASVI in the top 10% of its 52-week history (`example`); attention, not sentiment. (2) **S097 — social chatter:** daily message volume in the top 5% of its 60-day distribution (`example`); conditional by construction — never traded alone. (3) **S093 — novelty verdict:** the top-linked story's novelty score < 0.35 (`example`) — the excitement is about old information. Each leg is computed on data available at the close of day *t*.
+
+**Composite rule.** Fire only on **unanimous agreement**: ASVI elevated AND social excited AND news stale, coincident with a top-1%-of-60-day price move (`example`). Any single leg vetoes the trade. The composite is deliberately conservative: backtests of attention strategies degrade when any one proxy is allowed to dominate, because each proxy's failure mode (slow Trends, noisy social, misclassified news) is different and the intersection cancels most of them.
+
+**Entry rule.** Composite fires at the close of day *t* → earliest fill at the **open of day t+1**, fading the move (short the stale-positive spike; the short leg is primary per Tetlock's stale-positive evidence). Signal calculated at bar *t* can never fill on that bar.
+
+**Exit rule.** Four exits, first touch wins (`example`): (1) reversal target: cover at 60% retracement of the spike day; (2) stop: 1.5× the spike-day move against the position; (3) time stop: flat at the close of t+5; (4) leg-breakdown exit: if any one of the three legs reverses state (ASVI collapses, social goes quiet, or a genuinely novel story breaks), exit at the next open — the composite's premise was unanimity.
+
+**Position sizing.** Dollar-risk sizing `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $350` (`example`) — the composite's selectivity justifies slightly larger risk per trade than the single-leg fades. Max 12 concurrent composites (`example`); sector cap 4.
+
+**Risk limits.** Daily loss stop −4R (`example`); borrow fee exclusion > 5% annualized (`example`); no entries on FOMC/employment days.
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way; borrow at the locate rate for the 2–5 day hold; +0.5× spread adverse slippage on the t+1 open (`example`).
+
+**Order/execution sketch.** Marketable limit at the t+1 open; participation ≤ 10% of open-auction volume (`example`); taker modeling.
+
+**Parameter robustness.** The `example` choices (ASVI top 10%, social top 5%, novelty < 0.35, unanimous agreement) are starting points. Sensitivity protocol: run unanimity against majority-vote (2-of-3) — if majority-vote works and unanimity does not, the composite is over-filtered; if unanimity works and majority does not, the veto structure is doing real work and the difference must be documented, not assumed. Vary each leg's cutoff ± one grid step and require sign persistence. The ablation test is mandatory: drop each leg in turn and report the three 2-leg composites — a leg that adds nothing in ablation should not gate entries.
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S099 (weekly ASVI) | Attention leg | top 10% of 52-week ASVI (`example`); weekly, attention-only |
+| S097 (social/message activity) | Chatter leg | top 5% of 60-day message volume (`example`); conditional, never standalone |
+| S093 (news novelty) | Staleness leg | novelty < 0.35 (`example`); recombinations count as stale |
+| Unanimity + leg-breakdown logic (strategy rule) | Entry/exit manager | all three must agree to enter; any leg reversing exits the trade |
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic daily bars, equity CMP, seed 180. CMP spikes 7.8% on day *t* — top 1% of its 60-day moves. All three legs agree: weekly ASVI in the top 6% of its 52-week history, message volume at the 98th percentile, and the top story's novelty score 0.19 (a recycled partnership announcement). Composite fires at the close of *t* → fill at the open of *t+1*: **short 9,000 shares at $33.90** (borrow 5% annualized). The spike decays; cover at 60% retracement, **$33.42**, on day t+3.
+
+| Item | Calculation | Amount |
+|---|---|---|
+| Gross P&L | 9,000 × ($33.90 − $33.42) | +$4,320.00 |
+| Commission | 9,000 × 2 × $0.005 | −$90.00 |
+| Half-spread, both ways | 9,000 × 2 × $0.01 | −$180.00 |
+| Borrow fee (5% pa, 3 days) | 9,000 × $33.90 × 0.05 × 3/365 | −$125.42 |
+| Adverse slippage, t+1 open | modeled | −$144.58 |
+| **Total execution cost** | | **−$540.00** |
+| **Net P&L** | $4,320.00 − $540.00 | **+$3,780.00** |
+
+Synthetic illustration of the ledger only — not a claim that composite attention fading is profitable after costs. The composite's edge over single-leg fades is selectivity, which this one example cannot demonstrate.
+
+### T5. Data & infra — what must run
+
+Google Trends weekly series (free), daily social/message counts (licensed), full-text news archive with embeddings (licensed), daily OHLCV. The composite is a daily batch: three percentile/novelty computations joined per name — seconds in Polars at ~10–50M rows/sec (`notes/cost-model.md`); the novelty embedding pass fits the Python-loop budget at ~100–500k events/sec (`notes/cost-model.md`). Live working set under ~77GB. Build estimate: M+ harness 40–100 hours, $6,000–$15,000 loaded (`notes/cost-model.md`); news + social licensing is H-tier, 60–200 hours, $9,000–$30,000 (`notes/cost-model.md`).
+
+**Calibration discipline.** Walk-forward with a 5-day embargo; perturb each leg's threshold ±25%; multiple-testing control per the standing protocol (PSR/DSR) — the composite tests more combinations than any single-leg rule, so the multiplicity burden is heaviest here. Data hygiene inherits all three legs' requirements: Trends pull snapshots, social baseline logs, and frozen news timestamps. Additionally log the leg-agreement rate over time: a composite whose unanimity rate drifts is a composite whose calibration is drifting, and the drift usually starts in the social leg.
+### T6. Buy vs build
+
+Buy the feeds: news text from **RavenPack** (~$15,000–$25,000/yr class, `indicative — verify before budgeting`) or **Bloomberg** ($30,000/yr class, `indicative — verify before budgeting`); social volume from **The TIE** or a firehose license (tens of thousands/yr class, `indicative — verify before budgeting`); daily bars from **Massive (formerly Polygon)** (~$199/mo, `indicative — verify before budgeting`); Trends is free; backtest hosting on **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); routing test on **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Verdict: **buy all three attention feeds, build the composite agreement logic and calibration.** The unanimity rule and its veto structure are not for sale.
+
+**Crossover note.** The composite inherits the most expensive data stack in TB8 — three licensed attention feeds — which makes the build-vs-buy math unusually sensitive to the book's size. Before licensing all three, run the ablation study from T2 on the cheapest available proxies (free Trends, a sampled social feed, a small news sample): if a 2-leg composite survives ablation, license only the legs that earn their keep. The most common failure in composite research is licensing the full stack first and discovering afterward that one leg never contributed — at H-tier data costs ($9,000-$30,000 per the cost model), that mistake is a budget line, not a rounding error.
+### T7. Success-ratio evidence
+
+Published, checkable sources only:
+
+1. Tetlock (2011): stale-news-day return negatively predicts the following week, stronger with individual trading — the overreaction the composite fades. (https://doi.org/10.1093/rfs/hhq141)
+2. Da, Engelberg & Gao (2011): higher SVI predicts higher prices over two weeks, reversal within a year — the slow attention leg's published shape. (https://doi.org/10.1111/j.1540-6261.2011.01679.x)
+3. Antweiler & Frank (2004): message activity predicts volatility with a small return effect — why the social leg is conditional and never standalone. (https://doi.org/10.1111/j.1540-6261.2004.00662.x)
+
+No published paper tests a three-way attention composite; the unanimity structure is a reconstruction, and nothing here is an after-cost profitability claim.
+
+**What the evidence does not show.** No published paper tests a three-way attention composite — the unanimity structure, the specific cutoffs, and the leg-breakdown exit are reconstructions. Each leg's paper supports only its own leg: Tetlock for stale-news reversal, Da–Engelberg–Gao for the slow attention cycle, Antweiler–Frank for the (small) social return effect. The composite's central claim — that the intersection of three weak proxies is more tradeable than any one — is plausible but untested, and the legs are not independent: one big story drives search, social, and price together, so "unanimous agreement" partly measures the same event three times. The ablation test in T2 is the required honesty check, and the regime-split backtest in T8 is the required humility check.
+### T8. Failure modes
+
+- **Leg correlation in disguise.** The three legs are not independent — big news drives search, social, and price together. The composite's "agreement" is partly one event measured three ways; the novelty leg (S093) is the only one that adds genuinely new information, so its calibration deserves the most scrutiny.
+- **Novelty misclassification.** As in T071: a stale-scored story with one new fact invalidates the fade; the leg-breakdown exit is the defense.
+- **Weekly ASVI staleness.** The slowest leg can hold the composite armed (or vetoed) on week-old information; the daily legs gate actual entries.
+- **Borrow and fee stacking.** Three licensed feeds plus borrow costs make the fixed-cost base high; the composite must clear its data costs before its trading costs — size the book accordingly.
+- **Regime shifts in retail attention.** If attention migrates across platforms, the S097 leg's calibration breaks first; monitor leg-agreement rates for drift.
+
+- **Composite staleness.** The weekly ASVI leg can hold the composite vetoed (or armed) on week-old information while the daily legs see a fresh setup — the slowest input gates the fastest. Consider a time-decay on the ASVI leg's vote rather than a binary arm.
+- **Overfitting the agreement rule.** With three legs and a unanimity structure, it is easy to fit the historical attention regime (e.g., the 2020–2021 retail wave) and fail in the next one. The regime-split backtest — attention-heavy vs attention-quiet years — is required, not optional.
+### T9. Visuals
+
+![T080 worked example](images/T080_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    GT["Google Trends<br/>(weekly ticker search)"] -->|"weekly index"| S099["S099 attention leg<br/>(top 10% of 52-wk, example)"]
+    SOC["Social/message counts<br/>(daily per-name volume)"] -->|"daily message counts"| S097["S097 chatter leg<br/>(top 5% of 60-day, example)"]
+    NEWS["News text feed<br/>(daily full text, 90-day archive)"] -->|"daily full-text items"| S093["S093 novelty leg<br/>(novelty < 0.35, example)"]
+    PX["Daily OHLCV<br/>(US equities)"] -->|"daily closes"| SPIKE["Spike screen<br/>(top 1% of 60-day move, example)"]
+    S099 -->|"leg state"| COMP{"Composite logic<br/>(unanimous agreement, t→t+1)"}
+    S097 -->|"leg state"| COMP
+    S093 -->|"leg state"| COMP
+    SPIKE -->|"spike flag"| COMP
+    COMP -->|all agree| SIZE["Sizing + risk<br/>(dollar-risk $350, 12-name cap, example)"]
+    COMP -->|any veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, borrow locate)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(60% retrace / 1.5× stop / t+5 / leg-breakdown)"]
+    MON -->|"trade P&L"| PNL["P&L (net of borrow + spread)"]
+    style COMP fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Tetlock, P.C. "All the News That's Fit to Reprint." *Review of Financial Studies* 24(5), 1481–1512 (2011). https://doi.org/10.1093/rfs/hhq141 — stale-news reversal, stronger with individual trading. Title/authors verified 2026-09-10.
+2. Da, Z., Engelberg, J. & Gao, P. "In Search of Attention." *Journal of Finance* 66(5), 1461–1499 (2011). https://doi.org/10.1111/j.1540-6261.2011.01679.x — SVI predicts two-week prices, one-year reversal. Title verified 2026-09-10.
+3. Antweiler, W. & Frank, M.Z. "Is All That Talk Just Noise?" *Journal of Finance* 59(3), 1259–1294 (2004). https://doi.org/10.1111/j.1540-6261.2004.00662.x — message activity predicts volatility; small return effect. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Chatbot question-bank TB8 items on attention-composite construction — research prompts, not findings.
+- Vendor price classes above are market-rate bands, `indicative — verify before budgeting`, not quotes.
+
+*Source log: Grok answered Q-TB8-1..7 (2026-09-10); all claims independently verified or labeled unverified.*
