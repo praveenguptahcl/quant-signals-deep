@@ -103,3 +103,5 @@
 - SB6 final re-review COMPLETE (2026-09-10, attempt 2/2): **1/10 APPROVED (S046), 9/10 FAILED** — all failures are trivial C4 first-use definitions (FX: S034/S036/S041/S060; DST: S037/S038/S041/S048; TAQ: S038/S059/S060; SIP: S059/S060; L1: S039/S059; NBBO: S039; OPRA: S048; ADR: S060; MBO/ITCH: S038; bps: S059) plus S036 missing explicit "counterfactual" label for the vetoed fade tape. All are one-line fixes; quarantine-vs-fix decision is the orchestrator's per merge-protocol.
 - 2026-09-10 18:49 UTC: pushed 00aa963 "Stage: SB2 final re-review 10/10 APPROVED (attempt 2/2)" -> origin/main OK.
 - 2026-09-10 18:52 UTC: pushed b5803a5 "Stage: SB2 10/10 approved (merge-ready); SB6 final re-review 1/10 (S046), 9 failed C4 one-liners" -> origin/main OK (b6b3bfb..b5803a5; remote had moved to b6b3bfb via orchestrator's "SB4: Grok Q&A complete" commit — fetch confirmed no divergence).
+- 2026-09-10 18:53 UTC: pushed c14b44d "Stage: push log — 00aa963, b5803a5" -> origin/main OK.
+- 2026-09-10 18:54 UTC: pushed 7892c0e "Stage: SB6 re-review quarantine log (1/10 approved S046; 9 quarantined on C4 one-liners)" -> origin/main OK.
