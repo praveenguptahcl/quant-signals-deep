@@ -114,6 +114,9 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
          ha="center", va="center", rotation=28, weight="bold", zorder=10)
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
-plt.tight_layout()
+import warnings as _warnings
+with _warnings.catch_warnings():
+    _warnings.simplefilter("ignore", UserWarning)  # spurious tight_layout warning on this mpl build
+    plt.tight_layout()
 plt.savefig("images/T055_example.png", bbox_inches="tight")
 plt.close()

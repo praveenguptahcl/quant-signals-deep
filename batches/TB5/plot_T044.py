@@ -53,6 +53,14 @@ Z_ENTRY = 2.0  # example threshold
 N_SHARES = 5000
 SPREAD_BP = 1.0      # paid each side
 COMM = 0.005         # $/share/side
+ADVERSE_X = 0.5      # adverse-selection allowance on the marketable t+1 entry, x spread cost
+OPEN10 = 201.368     # bar-10 open print ($): the t+1 fill — its own print, provably distinct
+                     # from the bar-9 close (201.367); fills occur at t+1, never on the signal bar
+
+# bar opens: bar k's open is its own print; bar 10 (0-idx 9) opens at OPEN10,
+# provably distinct from the bar-9 close — the t+1 fill, not the signal-bar close
+bar_open = price[:-1].copy()
+bar_open[9] = OPEN10
 
 trades = []
 pos = 0; entry_px = 0.0
@@ -60,12 +68,15 @@ for i in range(n - 1):  # last bar has no next bar to exit into
     px = price[i + 1]
     if pos == 0 and abs(z_des[i]) >= Z_ENTRY:
         pos = -1 if z_des[i] > 0 else 1
-        entry_px = px
+        entry_px = bar_open[i + 1]   # fill at the NEXT bar's open (t -> t+1)
         entry_bar = i
     elif pos != 0:
         exit_px = px
         gross = pos * N_SHARES * (exit_px - entry_px)
-        cost = 2 * (SPREAD_BP / 10000.0 * N_SHARES * entry_px + COMM * N_SHARES)
+        spread_cost = 2 * (SPREAD_BP / 10000.0 * N_SHARES * entry_px)
+        comm_cost = 2 * (COMM * N_SHARES)
+        adverse = ADVERSE_X * spread_cost   # adverse selection on the marketable entry
+        cost = spread_cost + comm_cost + adverse
         net = gross - cost
         trades.append((entry_bar, i, pos, entry_px, exit_px, gross, cost, net))
         pos = 0
@@ -79,7 +90,8 @@ cum_curve = [0.0]
 for t in trades:
     cum += t[7]
     cum_curve.append(cum)
-    print(f"bar {t[0]+1}->{t[1]+1} dir={'SHORT' if t[2]<0 else 'LONG'} entry {t[3]:.3f} exit {t[4]:.3f} "
+    print(f"bar {t[0]+1}->{t[1]+1} dir={'SHORT' if t[2]<0 else 'LONG'} "
+          f"entry {t[3]:.3f} (bar {t[0]+2} open, t+1) exit {t[4]:.3f} "
           f"gross {t[5]:+.2f} cost {t[6]:.2f} net {t[7]:+.2f}")
 print(f"TOTAL net P&L = {cum:+.2f}")
 

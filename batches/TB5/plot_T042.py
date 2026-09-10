@@ -37,6 +37,7 @@ rng = np.random.default_rng(142)
 HALF_SPREAD = 0.005
 FEE = 0.0035
 SHARES = 200
+SLIP_BP = 1.0        # 1 bp entry slippage on notional (example; T2 cost model)
 
 # Window A — clean continuous vol spike (fixed synthetic 5-min closes, SYNX, $)
 CLOSES_A = np.array([200.00, 200.10, 200.02, 200.16, 200.04, 200.24,
@@ -58,12 +59,14 @@ print(f"Window B: RV={rvB:.3e} BV={bvB:.3e} J={JB:.3e} RJ={RJB:.1%}")
 
 # Trade on Window A: expansion bar 7 closed up -> LONG at bar-8 open (= close of bar 7)
 entry_px = float(CLOSES_A[7])    # 200.28
-exit_px = float(CLOSES_A[11])    # bar-12 open = bar-11 close = 200.06 (4-bar time stop)
+exit_px = float(CLOSES_A[11])    # bar-12 open = 200.22 (4-bar time stop)
 gross = (exit_px - entry_px) * SHARES
-costs = 2 * SHARES * (HALF_SPREAD + FEE)
+slip = SLIP_BP / 10000.0 * SHARES * entry_px   # 1 bp x $40,056 entry notional = $4.01
+costs = 2 * SHARES * (HALF_SPREAD + FEE) + slip
 net = gross - costs
 print(f"Trade A: long {SHARES} @ {entry_px:.2f} -> {exit_px:.2f} | "
-      f"gross {gross:+.2f} | costs {costs:.2f} | net {net:+.2f}")
+      f"gross {gross:+.2f} | spread+fees {2*SHARES*(HALF_SPREAD+FEE):.2f} | "
+      f"entry slippage {slip:.2f} | net {net:+.2f}")
 
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True,
                                gridspec_kw={"height_ratios": [3, 2]})
@@ -90,11 +93,11 @@ ax1.legend(loc="lower right", fontsize=8)
 # bottom: RV vs BV decomposition per interval (x1e-6), both windows summarized
 x = np.arange(12)
 rv_terms = r ** 2 * 1e6
-bv_terms = (np.pi / 2) * np.abs(r[:-1]) * np.abs(r[1:]) * 1e6
+bv_terms = np.abs(r[:-1]) * np.abs(r[1:]) * 1e6   # raw |r_{i-1} r_i|; pi/2 applies to the aggregate
 w = 0.38
 ax2.bar(x - w / 2, rv_terms, width=w, color=PALETTE["signal"], alpha=0.75, label="RV summand r^2")
 ax2.bar(x[1:] + w / 2, bv_terms, width=w, color=PALETTE["band"],
-        edgecolor=PALETTE["price"], label="BV summand (pi/2)|r_i-1||r_i|")
+        edgecolor=PALETTE["price"], label="BV summand |r_i-1||r_i| (raw; x pi/2 in aggregate)")
 ax2.text(11, max(rv_terms.max(), bv_terms.max()) * 0.92,
          f"Window A: RV={rv_sum*1e6:.2f}e-6  BV={bv_sum*1e6:.2f}e-6\n"
          f"J=0, RJ=0% -> TRADE\n"

@@ -96,34 +96,34 @@ def rt_cost(px):
     return 2 * (HALF_SPREAD_BP / 10000) * px * SHARES + 2 * FEE_SHARE * SHARES
 
 trades = []
-print("seed=157 | trades (bar, forecast_bp, VR, side, gross, cost, net):")
-for t in range(SEG, N - 1):
+print("seed=157 | trades (signal_bar, forecast_bp, VR, side, entry_bar, exit_bar, gross, cost, net):")
+for t in range(SEG, N - 2):
     f = phi * xhat[t]                       # forecast of xhat_{t+1}
     f_bp = f * 10000
     gate_ok = abs(f_bp) > COST_GATE_BP and not np.isnan(vr[t]) and abs(vr[t] - 1) > 0.05
     if not gate_ok:
         continue
     side = 1 if f > 0 else -1
-    pe, px = price[t], price[t + 1]
+    pe, px = price[t + 1], price[t + 2]      # signal at t -> earliest fill t+1, exit t+2
     gross = side * (px - pe) * SHARES
     net = gross - rt_cost(pe)
-    trades.append((t, t + 1, side, f_bp, vr[t], pe, px, gross, rt_cost(pe), net))
+    trades.append((t, t + 1, t + 2, side, f_bp, vr[t], pe, px, gross, rt_cost(pe), net))
     print(f"  bar {t:3d}: fcst={f_bp:+.2f}bp VR={vr[t]:.2f} -> "
-          f"{'LONG ' if side>0 else 'SHORT'} gross={gross:+.2f} cost={rt_cost(pe):.2f} net={net:+.2f}")
+          f"{'LONG ' if side>0 else 'SHORT'} entry={pe:.3f} exit={px:.3f} gross={gross:+.2f} cost={rt_cost(pe):.2f} net={net:+.2f}")
     if len(trades) >= 6:
         break
-print(f"total net = {sum(t[9] for t in trades):+.2f} over {len(trades)} trades")
+print(f"total net = {sum(t[10] for t in trades):+.2f} over {len(trades)} trades")
 
 cum = np.zeros(N)
 for tr in trades:
-    cum[tr[1]] += tr[9]
+    cum[tr[2]] += tr[10]
 equity = np.cumsum(cum)
 
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, gridspec_kw={"hspace": 0.08})
 ax1.plot(price, color=PALETTE["price"], lw=1.2, label="Synthetic price (USD)")
 ax1.axvline(SEG, color=PALETTE["signal"], ls="--", lw=1, label="AR(1) fit window ends")
 for i, tr in enumerate(trades):
-    te, tx, side, f_bp, vr_, pe, px, g, c, n = tr
+    ts, te, tx, side, f_bp, vr_, pe, px, g, c, n = tr
     ax1.scatter([te], [pe], color=PALETTE["profit"] if side > 0 else PALETTE["loss"],
                 marker="^" if side > 0 else "v", s=70, zorder=5)
     ax1.scatter([tx], [px], color=PALETTE["zero"], marker="x", s=50, zorder=5)
@@ -135,7 +135,7 @@ ax1.set_title("T057 — Fractional-Differentiation Memory Trader: synthetic trad
 
 ax2.plot(equity, color=PALETTE["price"], lw=1.8, label="Cumulative net P&L (USD)")
 for i, tr in enumerate(trades):
-    te, tx, side, f_bp, vr_, pe, px, g, c, n = tr
+    ts, te, tx, side, f_bp, vr_, pe, px, g, c, n = tr
     col = PALETTE["profit"] if n >= 0 else PALETTE["loss"]
     ax2.scatter([tx], [equity[tx]], color=col, s=40, zorder=5)
     ax2.annotate(f"T{i+1} {n:+.0f} f={f_bp:+.1f}bp VR={vr_:.2f}",
@@ -152,6 +152,9 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
          ha="center", va="center", rotation=28, weight="bold", zorder=10)
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
-plt.tight_layout()
+import warnings as _warnings
+with _warnings.catch_warnings():
+    _warnings.simplefilter("ignore", UserWarning)  # spurious tight_layout warning on this mpl build
+    plt.tight_layout()
 plt.savefig("images/T057_example.png", bbox_inches="tight")
 plt.close()

@@ -99,19 +99,24 @@ for t in range(30, 80, 10):
     mom_done += 1
 
 # Reversion sleeve: S041 tag-and-reenter Bollinger(20, 2.0) in reversion regime (example)
-sma = np.array([np.mean(price[max(0, t - 19):t + 1]) for t in range(N)])
-sd = np.array([np.std(price[max(0, t - 19):t + 1], ddof=1) for t in range(N)])
+# causality: tag confirmed at bar t (tagged at t-1, back inside at t) -> earliest fill t+1
+sma = np.full(N, np.nan)
+sd = np.full(N, np.nan)
+for t in range(19, N):
+    seg = price[t - 19:t + 1]
+    sma[t] = np.mean(seg)
+    sd[t] = np.std(seg, ddof=1)
 upper, lower = sma + 2 * sd, sma - 2 * sd
 rev_done = 0
-for t in range(80, 160):
+for t in range(81, 160):
     if rev_done >= 3:
         break
     if regime[t] != "reversion":
         continue
     side = 0
-    if price[t] < lower[t] and t + 1 < N and price[t + 1] > lower[t + 1]:
+    if price[t - 1] < lower[t - 1] and price[t] > lower[t]:
         side = 1
-    elif price[t] > upper[t] and t + 1 < N and price[t + 1] < upper[t + 1]:
+    elif price[t - 1] > upper[t - 1] and price[t] < upper[t]:
         side = -1
     if side == 0:
         continue
@@ -179,6 +184,9 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
          ha="center", va="center", rotation=28, weight="bold", zorder=10)
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
-plt.tight_layout()
+import warnings as _warnings
+with _warnings.catch_warnings():
+    _warnings.simplefilter("ignore", UserWarning)  # spurious tight_layout warning on this mpl build
+    plt.tight_layout()
 plt.savefig("images/T054_example.png", bbox_inches="tight")
 plt.close()

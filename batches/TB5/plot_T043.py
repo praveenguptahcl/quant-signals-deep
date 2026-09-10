@@ -45,10 +45,11 @@ SIG_ANCHORS = [(570, 15.0), (605, 14.2), (680, 14.8), (750, 17.0),
                (790, 19.0), (815, 26.0), (855, 31.8), (960, 29.0)]
 
 # price anchors (minute-of-day, price) — events forced exact
-TRADES = [  # (name, entry_min, entry_px, exit_min, exit_px, shares)
-    ("T1", 605, 200.00, 680, 200.58, 300),
-    ("T2", 815, 199.10, 855, 199.62, 200),
+TRADES = [  # (name, fill_min, fill_px, exit_min, exit_px, shares) — fills at t+1, never the trigger bar
+    ("T1", 610, 200.00, 680, 200.58, 300),   # trigger 10:05 (605) -> fill 10:10 (610)
+    ("T2", 825, 199.10, 855, 199.62, 200),   # trigger 13:40 (820) -> fill 13:45 (825)
 ]
+FILL_TAG = {610: "fill 10:10 (t+1)", 825: "fill 13:45 (t+1)"}
 PX_ANCHORS = [(570, 199.80)] + [(t[1], t[2]) for t in TRADES] + \
              [(t[3], t[4]) for t in TRADES] + [(750, 200.30), (960, 199.40)]
 PX_ANCHORS = sorted(set(PX_ANCHORS))
@@ -80,7 +81,7 @@ for name, em, ep, xm, xp, sh in TRADES:
                 zorder=5, edgecolors="black", linewidths=0.7)
     ax1.scatter([xm], [price[mins == xm]], s=90, marker="v", color=PALETTE["loss"],
                 zorder=5, edgecolors="black", linewidths=0.7)
-    ax1.annotate(f"{name}: {sh} sh @ {ep:.2f}\n-> {xp:.2f} · net {net:+.2f}$",
+    ax1.annotate(f"{name}: {sh} sh @ {ep:.2f}\n{FILL_TAG[em]} -> {xp:.2f} · net {net:+.2f}$",
                  xy=(xm, price[mins == xm][0]), fontsize=8,
                  xytext=(16, 16), textcoords="offset points",
                  arrowprops=dict(arrowstyle="-", color="#2c3e50", lw=0.8),
@@ -102,12 +103,19 @@ ax2.axhline(HI_THR, color=PALETTE["signal"], ls=":", lw=1.2, label="high thresho
 ax2.axvspan(570, 750, color=PALETTE["profit"], alpha=0.08)
 ax2.axvspan(750, 790, color=PALETTE["volume"], alpha=0.10)
 ax2.axvspan(790, 961, color=PALETTE["signal"], alpha=0.08)
-ax2.annotate("10:00  14.2 bp < 17.55\n-> LOW (momentum)",
+ax2.annotate("regime @10:00: 14.2 bp < 17.55\n-> LOW (momentum)",
              xy=(605, 14.2), fontsize=8, xytext=(-150, -28), textcoords="offset points",
              arrowprops=dict(arrowstyle="->", color="#2c3e50", lw=0.8))
-ax2.annotate("13:35  26.0 bp > 21.45\n-> HIGH (reversal)",
+ax2.annotate("regime @13:35: 26.0 bp > 21.45\n-> HIGH (reversal)",
              xy=(815, 26.0), fontsize=8, xytext=(20, 14), textcoords="offset points",
              arrowprops=dict(arrowstyle="->", color="#2c3e50", lw=0.8))
+# trigger bars (t) vs fill bars (t+1): entries fill at t+1, never the signal bar
+for tm, lab in [(605, "trigger 10:05"), (820, "trigger 13:40")]:
+    ax2.axvline(tm, color=PALETTE["signal"], lw=1.1, ls=":")
+    ax2.text(tm + 5, 33.2, lab, fontsize=7.5, color=PALETTE["signal"], va="top")
+for tm, lab in [(610, "fill 10:10"), (825, "fill 13:45")]:
+    ax2.axvline(tm, color=PALETTE["profit"], lw=1.1, ls="--")
+    ax2.text(tm + 5, 33.2, lab, fontsize=7.5, color=PALETTE["profit"], va="top")
 ax2.set_xlabel("Time of day (minutes past midnight ET)")
 ax2.set_ylabel("Vol forecast (bp)")
 ax2.legend(loc="upper left", fontsize=8)

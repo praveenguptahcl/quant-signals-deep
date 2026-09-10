@@ -68,19 +68,19 @@ def rt_cost_usd():
     return (HALF_SPREAD_C / 100.0) * SHARES + 2 * FEE_SHARE * SHARES
 
 trades = []
-print("seed=156 | VAR(2) tape (bar, forecast_c, hawkes_z, action):")
-for t in range(2, N - 1):
+print("seed=156 | VAR(2) tape (signal_bar, forecast_c, hawkes_z, action; fill at t+1, exit t+2):")
+for t in range(2, N - 2):
     f = forecast(t)
     fire = abs(f) > FORECAST_GATE_C and abs(hz[t]) < HAWKES_KAPPA
     side = 1 if f > 0 else -1
     if fire:
-        entry_px = mids[t]                      # filled at mid: optimistic, stated in text
-        exit_px = mids[t + 1]
+        entry_px = mids[t + 1]                   # signal at t -> earliest fill t+1
+        exit_px = mids[t + 2]                     # exit one bar later
         gross = side * (exit_px - entry_px) * SHARES
         net = gross - rt_cost_usd()
-        trades.append((t, t + 1, side, f, entry_px, exit_px, gross, rt_cost_usd(), net))
+        trades.append((t + 1, t + 2, side, f, entry_px, exit_px, gross, rt_cost_usd(), net))
         print(f"  bar {t:2d}: fcst={f:+.2f}c hz={hz[t]:+.1f} -> {'LONG ' if side>0 else 'SHORT'} "
-              f"entry={entry_px:.3f} exit={exit_px:.3f} gross={gross:+.2f} net={net:+.2f}")
+              f"entry_bar={t+1} exit_bar={t+2} entry={entry_px:.3f} exit={exit_px:.3f} gross={gross:+.2f} net={net:+.2f}")
     else:
         reason = "veto: Hawkes burst" if abs(hz[t]) >= HAWKES_KAPPA else "below gate"
         print(f"  bar {t:2d}: fcst={f:+.2f}c hz={hz[t]:+.1f} -> no trade ({reason})")
@@ -127,6 +127,9 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
          ha="center", va="center", rotation=28, weight="bold", zorder=10)
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
-plt.tight_layout()
+import warnings as _warnings
+with _warnings.catch_warnings():
+    _warnings.simplefilter("ignore", UserWarning)  # spurious tight_layout warning on this mpl build
+    plt.tight_layout()
 plt.savefig("images/T056_example.png", bbox_inches="tight")
 plt.close()

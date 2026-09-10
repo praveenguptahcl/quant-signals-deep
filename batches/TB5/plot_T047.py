@@ -55,32 +55,34 @@ N = 2000
 SPREAD_BP, COMM = 2.0, 0.005
 
 entry_i, exit_i = 3, 6
-print(f"\nsession {entry_i}: z={z[entry_i]:.2f} < {Z_ENTRY} + UOA put sweep -> SHORT {N} @ {px[entry_i]:.2f}")
+FILL_PX = 87.55   # session-4 open print (t+1 fill): distinct from the session-3 close 88.40
+print(f"\nsession {entry_i}: z={z[entry_i]:.2f} < {Z_ENTRY} + UOA put sweep -> signal SHORT")
+print(f"session {entry_i+1} open (t+1 fill): SHORT {N} @ {FILL_PX:.2f}")
 print(f"session {exit_i}: z={z[exit_i]:.2f} > {Z_EXIT} -> COVER @ {px[exit_i]:.2f}")
 
-gross = N * (px[entry_i] - px[exit_i])
-spread_cost = 2 * (SPREAD_BP / 2 / 10000.0 * N * px[entry_i])
+gross = N * (FILL_PX - px[exit_i])
+spread_cost = 2 * (SPREAD_BP / 2 / 10000.0 * N * FILL_PX)
 comm_cost = 2 * COMM * N
 net = gross - spread_cost - comm_cost
-print(f"gross {N} x ({px[entry_i]:.2f}-{px[exit_i]:.2f}) = {gross:+.2f}")
+print(f"gross {N} x ({FILL_PX:.2f}-{px[exit_i]:.2f}) = {gross:+.2f}")
 print(f"spread {spread_cost:.2f} + commission {comm_cost:.2f} = {spread_cost+comm_cost:.2f}")
 print(f"NET = {net:+.2f}")
 
 # ---- chart: cumulative net P&L with entry/exit markers ----
 cum = np.array([0.0, 0.0, 0.0, 0.0,
-                N * (px[3] - px[4]),
-                N * (px[3] - px[5]),
-                N * (px[3] - px[6]) - (spread_cost + comm_cost),
-                N * (px[3] - px[6]) - (spread_cost + comm_cost)])
+                N * (FILL_PX - px[4]),
+                N * (FILL_PX - px[5]),
+                N * (FILL_PX - px[6]) - (spread_cost + comm_cost),
+                N * (FILL_PX - px[6]) - (spread_cost + comm_cost)])
 xs = np.arange(8)
 
 fig, ax = plt.subplots()
 ax.step(xs, cum, where="post", color=PALETTE["price"], lw=2.2, label="Cumulative net P&L ($)")
 ax.scatter(xs, cum, color=PALETTE["price"], s=36, zorder=5)
-ax.scatter([3], [0], color=PALETTE["signal"], s=90, zorder=6, marker="v")
+ax.scatter([4], [cum[4]], color=PALETTE["signal"], s=90, zorder=6, marker="v")
 ax.scatter([6], [cum[6]], color=PALETTE["profit"], s=90, zorder=6, marker="^")
-ax.annotate(f"SHORT {N} @ {px[3]:.2f}\n(RR Δz {z[3]:+.1f}, UOA put sweep)",
-            xy=(3, 0), xytext=(24, 44), textcoords="offset points", fontsize=9,
+ax.annotate(f"SHORT {N} @ {FILL_PX:.2f}\n(t+1 fill; signal sess 3, RR dz {z[3]:+.1f})",
+            xy=(4, cum[4]), xytext=(24, 44), textcoords="offset points", fontsize=9,
             color=PALETTE["signal"],
             arrowprops=dict(arrowstyle="->", color=PALETTE["zero"], lw=1))
 ax.annotate(f"COVER @ {px[6]:.2f}\nnet +${net:,.2f}", xy=(6, cum[6]), xytext=(-132, -40),

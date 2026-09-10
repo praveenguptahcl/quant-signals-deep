@@ -41,9 +41,10 @@ rng = np.random.default_rng(112)
 
 A = dict(label="A (executed)", prior=100.00, open=99.20, entry=99.24, entry_bar=5,
          exit=99.78, exit_bar=30, shares=568,
-         comm=2 * (568 * 0.005 + 0.50), spread_impact=22.60)
+         comm=2 * (568 * 0.005 + 0.50), spread_impact=22.60,
+         auction_slip=56.37)   # 10 bp RT opening-auction slippage
 A["gross"] = (A["exit"] - A["entry"]) * A["shares"]
-A["costs"] = A["comm"] + A["spread_impact"]
+A["costs"] = A["comm"] + A["spread_impact"] + A["auction_slip"]
 A["net"] = A["gross"] - A["costs"]
 B = dict(label="B (vetoed: jump)", net=0.00)
 C = dict(label="C (vetoed: earnings)", net=0.00)

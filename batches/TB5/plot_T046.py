@@ -58,7 +58,7 @@ print(f"VRP: IV {IV*100:.0f}% - HAR {HAR*100:.0f}% = +{(IV-HAR)*100:.0f} vol pts
 RICH_Z_MIN = 1.0  # example
 if rich_z >= RICH_Z_MIN and VOL_OI < 1.5 and SWEEPS == 0 and (IV - HAR) >= 0.01:
     credit = straddle_mid - spread / 2          # sell at bid: mid - half spread
-    print(f"\nENTER: sell 1 ATM straddle @ {credit:.2f} (bid)")
+    print(f"\nENTER at t+1 open: sell 1 ATM straddle @ {credit:.2f} (bid)")
 else:
     raise SystemExit("gates failed")
 
@@ -77,13 +77,13 @@ print(f"NET = {net:+.2f}")
 
 # ---- chart: straddle value path with entry/exit markers ----
 fig, ax = plt.subplots()
-xs = ["Pre-event\n(mid)", "Event day\n(entry, bid)", "Post-event\n(exit, ask)"]
+xs = ["Signal session t\n(mid)", "t+1 open\n(entry, bid)", "Post-event\n(exit, ask)"]
 vals = [straddle_mid, credit, debit]
 ax.plot(xs, vals, color=PALETTE["price"], lw=2.4, marker="o", markersize=8,
         label="ATM straddle value ($)")
 ax.scatter([1], [credit], color=PALETTE["signal"], s=90, zorder=5)
 ax.scatter([2], [debit], color=PALETTE["profit"], s=90, zorder=5)
-ax.annotate(f"SELL straddle @ {credit:.2f}\n(IM 6.0%, richness z +{rich_z:.2f})",
+ax.annotate(f"SELL straddle @ {credit:.2f} (t+1 open)\n(IM 6.0%, richness z +{rich_z:.2f})",
             xy=(1, credit), xytext=(18, 34), textcoords="offset points", fontsize=9,
             color=PALETTE["signal"],
             arrowprops=dict(arrowstyle="->", color=PALETTE["zero"], lw=1))
