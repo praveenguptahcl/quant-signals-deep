@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 160/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 170/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -170,6 +170,16 @@
 - Stage 158/200 — T058 merged 2026-09-10 · reviewer: c6405562 · plot verified (seed 158)
 - Stage 159/200 — T059 merged 2026-09-10 · reviewer: c6405562 · plot verified (seed 159)
 - Stage 160/200 — T060 merged 2026-09-10 · reviewer: c6405562 · plot verified (seed 160)
+- Stage 161/200 — T061 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 161)
+- Stage 162/200 — T062 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 162)
+- Stage 163/200 — T063 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 163)
+- Stage 164/200 — T064 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 164)
+- Stage 165/200 — T065 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 165)
+- Stage 166/200 — T066 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 166)
+- Stage 167/200 — T067 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 167)
+- Stage 168/200 — T068 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 168)
+- Stage 169/200 — T069 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 169)
+- Stage 170/200 — T070 merged 2026-09-10 · reviewer: 4c12f8c7/spot · plot verified (seed 170)
 
 ## Table of contents
 
@@ -373,6 +383,17 @@
 - [x] Stage 158/200 — [T058 — Dispersion Trader](#stage-158200--t058-dispersion-trader)
 - [x] Stage 159/200 — [T059 — News-Sentiment First-Minute Momentum](#stage-159200--t059-news-sentiment-first-minute-momentum)
 - [x] Stage 160/200 — [T060 — Identified-News Drift Portfolio](#stage-160200--t060-identified-news-drift-portfolio)
+#### TB7 — Session patterns & auction (Stages 161–170)
+- [x] Stage 161/200 — [T061 — Initial-Balance Expansion Trader](#stage-161200--t061-initial-balance-expansion-trader)
+- [x] Stage 162/200 — [T062 — Streak Runner with Exhaustion Flip](#stage-162200--t062-streak-runner-with-exhaustion-flip)
+- [x] Stage 163/200 — [T063 — Stretched-Move Z-Score Fade](#stage-163200--t063-stretched-move-z-score-fade)
+- [x] Stage 164/200 — [T064 — U-Shape Seasonality Timer](#stage-164200--t064-u-shape-seasonality-timer)
+- [x] Stage 165/200 — [T065 — Open-Auction Imbalance Continuation](#stage-165200--t065-open-auction-imbalance-continuation)
+- [x] Stage 166/200 — [T066 — VWAP-Cross Institutional Follower](#stage-166200--t066-vwap-cross-institutional-follower)
+- [x] Stage 167/200 — [T067 — Anchored-VWAP Event Trader](#stage-167200--t067-anchored-vwap-event-trader)
+- [x] Stage 168/200 — [T068 — Scheduled-Event Vol Expansion](#stage-168200--t068-scheduled-event-vol-expansion)
+- [x] Stage 169/200 — [T069 — Late-Day Reversal into Close](#stage-169200--t069-late-day-reversal-into-close)
+- [x] Stage 170/200 — [T070 — MOC Auction-Pin Trader](#stage-170200--t070-moc-auction-pin-trader)
 
 ## Part I — Signal deep dives (S001–S100)
 
@@ -30282,3 +30303,1397 @@ flowchart TD
 - Chan (2003) drift/reversal magnitudes and the 12-month window — direction confirmed via the paper's abstract-level record; exact magnitudes not re-verified this batch.
 
 *Source log: Grok answered Q-TB6-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 161/200 — T061: Initial-Balance Expansion Trader
+
+*Batch TB7 · Strategy 61/100 · Signals S022, S032 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday breakout: first-hour range expansion (Market Profile "initial balance" taxonomy) |
+| **Edge source** | Directional commitment after a narrow first-hour auction resolves, confirmed by relative volume (S032); the breakout leg, not the range itself, is the candidate edge |
+| **Typical holding period** | 30 minutes to 5 hours; flat 15:55 ET |
+| **Capacity hint** | Small: one trade per name per day, 500-name universe, dollar-risk sizing; realistic small-book capacity in the low millions before slippage on the t+1 fill dominates |
+| **Build-or-buy in one line** | Build the IB-freeze and narrow/wide classifier on bought 1-min bars; nothing packaged sells this rule with honest causality, so buy the data, not the "system" |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid US common stocks, ADV ≥ 2M shares (`example`), price ≥ $10, spread ≤ 3¢ median (`example`). RTH only, 09:30–15:55 ET. Exclusions: earnings-day names, halted/resumed names, and half-day sessions when a 1R target cannot complete before the early flatten (`example`: skip if expected session length after 10:30 < 2.5 hours). One trade per name per day (`example`) — the rule is a single auction-resolution bet, not a scalp engine.
+
+**Initial-balance definition.** An **initial balance (IB)** is the first hour's auction range, borrowed from Steidlmayer's Market Profile taxonomy: the high and low printed between 09:30:00 and 10:29:59.999 ET. Define `IBH_d = max high`, `IBL_d = min low`, `IBR_d = IBH_d − IBL_d` over that window. Freeze both levels at 10:30 ET sharp; never update them intraday. **Narrow vs wide IB:** compare today's `IBR_d` to the 10-day median of `IBR` (`example`); *narrow* if `IBR_d < 0.75 × median` (`example`). Expansion trades are taken only on narrow IBs, on the logic that a compressed first-hour auction that then resolves directionally is the day-type this rule was reconstructed to catch.
+
+**Entry rule.** After 10:30 ET, on 5-minute bars. Long: bar *t* closes above `IBH_d` **and** that bar's volume ≥ 1.2× its clock-slot 20-day median (`example`) — the relative-volume (S032) confirmation — **and** today's IB was classified narrow. Short: mirror below `IBL_d`. Signal at bar *t* → earliest fill at the open of bar *t+1* (`example`: fill = next-bar open). No fade-back-inside entries; no second entry after the first trade in the name.
+
+**Exit rule.** Four exits, first touch wins (`example` parameters): (1) stop at the opposite IB edge, or tighter at 0.25×IBR back inside the broken edge (the worked example uses the tighter stop); (2) target at 1.0×IBR beyond the broken edge — the classic "normal variation" projection of a full IB-range extension; (3) time stop: flatten at 15:55 ET (12:55 on half days); (4) failure exit: a close back inside the IB after entry exits at the next open.
+
+**Position sizing.** Dollar-risk sizing: `N = ⌊ R / |P_entry − P_stop| ⌋` with `R = $200` (`example`) per trade. Max per-name heat: 1R. Portfolio heat: cap concurrent expansion trades at 10 names (`example`) — first-hour breakouts cluster on trend days, and the book must survive the correlated-loss case.
+
+**Risk limits.** Daily loss stop at −3R (`example`); kill-switch conditions: data feed stale > 60 seconds, any bar timestamped outside America/New_York, or a half-day calendar mismatch — all halt new entries and flatten at market on the next bar.
+
+**Cost model.** Commission $0.005/share/side (`example`). Spread: pay the half-spread each way on continuous fills (`example`: 2¢-wide book → 1¢/side). Slippage function on the t+1 open fill: +0.5× spread adverse (`example`), applied explicitly in the worked example. No auction legs in this strategy — fills are continuous-session only.
+
+**Order/execution sketch.** Marketable limit orders at the t+1 open (`example`: limit = open print + 2¢ for buys) so the fill price is bounded; participation cap ≤ 10% of the bar's volume (`example`); queue-position honesty note: the strategy is modeled as a taker — no queue-priority fantasy on the breakout bar, where the book is thinnest.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S022 (initial-balance breakout detector) | Primary trigger | `break_up_t = close_t > IBH_d`; `break_dn_t = close_t < IBL_d`; levels frozen at 10:30, causal (only bars ≤ *t*) |
+| S032 (relative volume) | Filter | `rvol_t = vol_t / median_slot20_t`; require `rvol_t ≥ 1.2` on the breakout bar (`example`) |
+| Trailing stop / target / time-stop logic (strategy rule, not a signal) | Exit manager | Implements the opposite-edge / 0.25×IBR stop and the 1.0×IBR target; also enforces the 15:55 time stop and the close-back-inside failure exit |
+
+Combination logic (pseudocode, 21 lines):
+
+```
+# runs on each 5-min bar close t, after 10:30 ET; levels frozen
+IBH, IBL, IBR = freeze_at_1030(today)          # S022
+narrow = IBR < 0.75 * median(IBR, 10d)         # example threshold
+rvol = volume[t] / median_slot(volume, 20d)    # S032
+if traded_today or not narrow: wait
+if close[t] > IBH and rvol >= 1.2:              # S022 + S032
+    side = LONG; ref = IBH
+elif close[t] < IBL and rvol >= 1.2:
+    side = SHORT; ref = IBL
+else: wait
+# signal at t -> earliest fill at open of t+1
+entry = open[t+1] (+ taker slippage)
+stop  = ref -/+ 0.25 * IBR                     # example stop rule
+target = ref +/- 1.0 * IBR                     # example
+N = floor(200 / abs(entry - stop))             # example R
+flatten_at(15:55 ET) or on close_back_inside
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity XYZ, seed 161. IB window prints (high/low): 09:30 50.20/49.95; 09:35 50.28/50.02; 10:25 50.35/50.10. Freezing at 10:30: **IBH = 50.40, IBL = 49.90, IBR = 0.50**. The 10-day median IBR is 0.80, so `0.50 < 0.75 × 0.80 = 0.60` → narrow IB (`example` classifier). The 10:40–10:45 bar closes at **50.46** on 1.4× slot RVOL (≥ 1.2, confirmed). Signal at *t* = 10:45 close → earliest fill at the 10:45 bar's successor open: fill long at **50.48** (pay the ask; 0.5× spread slippage embedded). Tight stop = `50.40 − 0.25 × 0.50` = **50.275**. Risk/share = `50.48 − 50.275` = 0.205. `N = ⌊200 / 0.205⌋` = **975 shares**. Target = `50.40 + 0.50` = 50.90; the extension carries and the exit fills at **50.89**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Buy (t+1 open) | 50.48 | 975 | −49,218.00 |
+| Sell (target) | 50.89 | 975 | +49,617.75 |
+| Gross | | | **+399.75** |
+| Commission (975 × $0.01 round-trip) | | | −9.75 |
+| **Net** | | | **+$390.00** |
+
+Failure path (for the honest ledger): if the breakout fails and the stop fills at 50.27: gross = `975 × (50.27 − 50.48)` = −204.75, commission −9.75, net **−$214.50** — roughly −1.07R. The example is a single winning trade on a narrow-IB trend day; it is not a backtest.
+
+**Where the example is optimistic.** Fills are assumed at the printed t+1 open with only a half-spread penalty — no partial fills, no queue slippage on the breakout bar (the worst bar to be a taker), no latency between the 10:45 close signal and the fill, and the target fill at 50.89 assumes the extension prints through cleanly. Real first-hour breakouts frequently wick the level and reverse; the stop at 50.275 would often fill worse on a fast tape. The RVOL 1.4× confirmation is measured on the same bar that triggers, which in live trading requires the bar to be complete before the signal exists — honored here (signal at *t* → fill *t+1*), but a common implementation bug is to peek at the in-progress bar.
+
+### T5. Data & infra — what must run
+
+Pipeline for a 500-name universe: (1) pre-open job (08:30 ET): load the 10-day IBR history, today's calendar (full vs half day), and the 20-day slot-volume medians; (2) intraday loop on 1-minute or 5-minute bars: maintain running IBH/IBL until 10:30, freeze, then evaluate S022/S032 per bar; (3) post-close: ledger reconciliation and the next day's median recomputation. Feeds: SIP-grade 1-minute OHLCV is sufficient — IB needs only highs/lows, RVOL needs bar volume. Storage: 500 symbols × 390 one-minute bars ≈ 195,000 bars/day is trivial locally; 60 days of one-minute bars for 500 symbols is ~3GB on disk with a trivial RAM footprint (per the project cost model). Keep the working set below ~77GB; Polars-class simple operations run at a planning assumption of ~10–50M rows/sec, so the entire IB/RVOL feature pass is a seconds-scale batch. Strategy-harness build effort for this tier is estimated at 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the IB logic itself is an afternoon; the hours are calendar handling, corporate-action adjustment of the 10-day medians, and the replay harness with no look-ahead on the 10:30 freeze. **M5 Max feasibility verdict: yes, trivially** — peak intraday state is a few hundred MB; this runs on any modern laptop. Failure plan: if the bar feed drops mid-session, enter safe mode — no new entries, existing positions keep their stops, and everything flattens at 15:55 ET on the last known prices; never infer a breakout from a gap-filled bar.
+
+### T6. Buy vs build
+
+Retail platform: **QuantConnect** (paper/live research hosting, ~$60–$300/mo class, `indicative — verify before budgeting`) can host this — it accepts custom bar features and a 10:30 freeze is expressible. **Interactive Brokers paper trading** (no incremental platform fee on an existing account, `indicative — verify before budgeting`) is the cheapest routing test for the t+1 open fills. Professional data/venue: **Massive (formerly Polygon) Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) supplies SIP real-time plus 1-minute/second aggregates adequate for IB and RVOL; for history, Massive flat files or **Databento** usage-based history cover 2 years of 1-minute bars for tens to low hundreds of dollars (`indicative — verify before budgeting`). Verdict: **build the strategy, buy the bars.** The IB freeze, narrow/wide classifier, and dollar-risk sizing are ~100 lines plus a calendar file; no packaged "opening-range system" can be audited for t→t+1 causality, and several retail bots compute the range on in-progress bars. Crossover: if you ever add the auction-pin leg (T070), the data decision changes — that needs the imbalance feed, not just bars.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Zarattini, Barbon & Aziz, "A Profitable Day Trading Strategy For The U.S. Equity Market" (SSRN 4729284) | Stocks-in-Play opening-range breakout study, >7,000 US stocks, 2016–2023 | Nearest tested cousin of IB expansion; costs are commission-only ($0.0035/share), not spread+impact — the precise Sharpe/IRR/hit-rate figures circulating are per a third-party reading, commission-only (see Unverified leads) |
+| Zarattini & Aziz, "Can Day Trading Really Be Profitable?" (SSRN 4416622) | QQQ 5-minute ORB, 2016–2023 | Same family, single-name; net of commissions, not necessarily spread/impact |
+| Gao, Han, Li & Zhou, "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return" (SSRN 2552752) | S&P 500 ETF 1993–2013; first-half-hour return predicts last-half-hour return, stronger on volatile/high-volume/macro-news days | Supports the "first hour matters directionally" premise; it is an intraday-momentum fact, not an IB-breakout trading rule |
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) | Short-term reversal tied to temporary liquidity imbalances and bid-ask bounce; direct trading loses after spread | The cautionary counterweight: microstructure edges decay fast and spreads eat naive implementations |
+| Crabel, T., *Day Trading With Short Term Price Patterns and Opening Range Breakout* (Traders Press, 1990; ISBN 9780934380171) | Practitioner origin of opening-range breakout mechanics; computer-tested pattern catalog | Historical/practitioner record, not a peer-reviewed P&L study; the IB taxonomy itself (Steidlmayer/Dalton) is a day-type classification, not an alpha paper |
+
+Capacity/crowding/decay: opening-range breakout is one of the most published intraday patterns in existence; any edge concentrates in the RVOL-confirmed, narrow-IB, trend-day subset, and 5-minute ranges are broken both ways on most days. Honest bottom line: for a ≤$1M paper operation, this is a reasonable first strategy to *implement* because its costs are honest and its logic is falsifiable — expect the unfiltered rule to be weak-to-negative after spread, and only the filtered subset to have a chance. For an institutional desk, the capacity is a rounding error; the desk would trade the underlying auction dynamics, not this rule.
+
+### T8. Failure modes
+
+- **Regime: wide-IB/range day.** The first hour already printed the day's range; expansion entries become failed auctions and stop out repeatedly. *Mitigation:* the narrow-IB classifier is a veto, not a suggestion — skip wide days entirely; track IB-width regime hit-rate weekly and widen the skip threshold if the filtered set degrades.
+- **Crowding: the 10:30 level is public.** Everyone sees 50.40; stop runs and fakeouts cluster at round IB edges. *Mitigation:* require the RVOL confirmation (S032) rather than the level touch alone; consider the 0.25×IBR confirmation variant (enter only after a second bar holds outside).
+- **Latency: SIP vs direct.** On a fast tape the t+1 open fill can be several cents worse than the printed open. *Mitigation:* model taker slippage explicitly (done in T4's cost model) and paper-trade with a 1-bar delay variant to measure sensitivity.
+- **Costs: spread optimism.** A 2¢ spread assumption fails on names where the breakout bar widens the book to 5–10¢. *Mitigation:* spread filter — skip entries when the prevailing spread exceeds 3¢ (`example`).
+- **Overfit: the 0.75× median / 1.2× RVOL / 0.25× IBR constants.** All marked `example`; they are round numbers, not estimated optima. *Mitigation:* walk-forward re-estimation with an embargo; freeze parameters quarterly, not daily.
+- **Operations: DST/half-day calendar.** A mis-cut IB window or a missed early flatten is the classic way this strategy blows up on the day after Thanksgiving. *Mitigation:* single exchange-calendar file (America/New_York), tested against the half-day list before every early close; kill-switch on calendar mismatch.
+
+### T9. Visuals
+
+![T061 worked example — synthetic 5-min XYZ tape with frozen IB band, breakout trigger, entry/stop/target markers, and per-trade net P&L](images/T061_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(1-min OHLCV bars)"] -->|"1-min bars"| SIGS["Signals<br/>S022 IB-breakout · S032 RVOL"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(IB break + RVOL ≥ 1.2, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs stop, 10-name heat cap)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, ≤10% participation)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(1.0×IBR target / 0.25×IBR stop / 15:55)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Zarattini, C., Barbon, A. & Aziz, A. "A Profitable Day Trading Strategy For The U.S. Equity Market." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4729284 — Stocks-in-Play ORB on >7,000 US stocks, 2016–2023; costs commission-only. Title/authors verified 2026-09-10.
+2. Zarattini, C. & Aziz, A. "Can Day Trading Really Be Profitable?" SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4416622 — QQQ 5-minute ORB, 2016–2023, net of commissions. Title/authors verified 2026-09-10.
+3. Gao, L., Han, Y., Li, S.Z. & Zhou, G. "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2552752 — S&P 500 ETF 1993–2013; effect stronger on volatile, high-volume, recession, and macro-news days. Title verified 2026-09-10.
+4. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — short-term reversal linked to temporary liquidity imbalances and bid-ask bounce; direct trading loses after spread. Title verified 2026-09-10.
+5. Crabel, T. *Day Trading With Short Term Price Patterns and Opening Range Breakout.* Traders Press, 1990. ISBN 9780934380171. https://www.thriftbooks.com/w/day-trading-with-short-term-price-patterns-and-opening-range-breakout_toby-crabel/261589/ — bibliographic record confirms author, publisher, year, ISBN. Verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Steidlmayer (Market Profile, CBOT 1985) and Dalton, Jones & Dalton, *Mind Over Markets* (1990) — named by Grok as the IB/day-type taxonomy sources; specific editions not verified in this pass.
+- Grok Q-TB7-3 performance figures: unfiltered 5-min ORB Sharpe 0.48 / +3.2% IRR / 41% hit; RVOL top-20 Sharpe 2.81 / +41.6% IRR / ~48% hit (commission-only); QQQ 5-min ORB Sharpe ~1.12 net of commission with replication "net dies at ~2.2¢/share slippage"; NQ 7-year ORB practitioner test (tiny-target ≈ coin flip, "break and hold to EOD/2R" PF ~1.1, t ≈ 1.7–2.1); ES/NQ first hour ≈ 25–28% of RTH volume and ~55–63% of day's range; 30-min OR "continues" to close ~65–67% of days — all Grok-sourced, treat as research leads.
+- 2026 NYSE holiday/half-day calendar specifics (e.g., half days 27 Nov and 24 Dec 2026, full close 3 Jul 2026) per Grok Q-TB7-1 — verify against the exchange's published calendar before trading.
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 162/200 — T062: Streak Runner with Exhaustion Flip
+
+*Batch TB7 · Strategy 62/100 · Signals S031, S041 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday momentum-then-reversal: ride a consecutive-bar streak, flip at the exhaustion print |
+| **Edge source** | Short-horizon continuation (S031) that terminates in a capitulation bar (S041); the flip harvests the inventory-driven snap-back documented in reversal literature |
+| **Typical holding period** | 15 minutes to 2 hours per leg; flat 15:55 ET |
+| **Capacity hint** | Modest: 2–4 names per day with qualifying streaks in a 500-name universe; sizing is dollar-risked so capacity is bounded by fill quality at the exhaustion bar |
+| **Build-or-buy in one line** | Build — a streak counter plus an exhaustion z-score on bought 5-minute bars; no vendor sells the flip logic with honest t→t+1 timing |
+
+### T2. Full mechanics
+
+**Universe & session.** Same liquid large-cap/ETF universe as T061 (ADV ≥ 2M shares, price ≥ $10, `example`). RTH 09:45–15:55 ET — the first 15 minutes are excluded because the opening auction produces mechanical streaks that are not order-flow runs. Exclusions: earnings days, halts, FOMC 14:00 days after 13:30 (`example`; scheduled-volatility days break the streak/exhaustion pattern — see T068).
+
+**Streak definition.** A **streak** is *n* consecutive same-direction 5-minute closes: `streak_t = streak_{t-1} + 1` if `sign(close_t − close_{t-1})` matches, else reset to 1. The strategy arms when `n ≥ 5` (`example`) **and** the cumulative run from streak start is ≥ 1.0× the 14-bar 5-minute ATR (Average True Range — the trailing 14-bar mean of per-bar ranges, a volatility ruler in price units) (`example`) — this rejects trivial drift. While the streak extends, the "runner" leg is conceptually long the run; in this implementation the runner leg is not traded separately — the strategy waits for the exhaustion print and trades only the flip (keeps the rule to one position per event and avoids paying spread twice).
+
+**Exhaustion signature.** An **exhaustion bar** (S041) at bar *t* requires: (1) bar range > 2.0× the 20-bar median range (`example`); (2) bar volume ≥ 2.0× the slot median (`example`); (3) the bar closes in the *top* (for an up-streak) third of its range — the capitulation wick. A **parabolic exhaustion** additionally requires the last-3-bar slope to exceed 2× the streak's average slope (`example`) — the run is accelerating into the top.
+
+**Entry rule.** At bar *t*: streak ≥ 5, cumulative run ≥ 1.0× ATR, and exhaustion signature prints. Flip direction: short after an up-streak exhaustion, long after a down-streak exhaustion. Signal at *t* → fill at the open of *t+1*. One flip per name per day (`example`).
+
+**Exit rule.** (`example` parameters): (1) signal-flip exit — the mean-reversion z-score crosses back through ±0.5 toward zero; (2) stop at the exhaustion bar's extreme + 0.3× ATR (beyond the wick — a genuine new high/low invalidates the fade); (3) time stop 15:55 ET; (4) scratch: if adverse excursion exceeds 1.0R without the thesis breaking, exit at next open (prevents slow bleed).
+
+**Position sizing.** `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`). Max 2 concurrent flips (`example`) — exhaustion events cluster at session extremes.
+
+**Risk limits.** Daily loss stop −3R (`example`); no new flips after 15:30 ET (`example` — the last 25 minutes belong to the auction book, T070's territory); kill-switch on stale bars > 60 s.
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread paid each way on continuous fills; the exhaustion bar is the widest-spread bar of the run — the cost model assumes a 2× normal spread on the t+1 fill (`example`), which is where this strategy's backtests most often lie to their authors.
+
+**Order/execution sketch.** Marketable limit into the t+1 open (`example`); participation ≤ 10% of bar volume (`example`); the fill is modeled as a taker paying the post-exhaustion spread — never as a mid-price fill.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S031 (consecutive-run momentum) | Arming condition | `n ≥ 5` consecutive same-sign closes and cumulative run ≥ 1.0× ATR(`14`) (`example`) |
+| S041 (parabolic exhaustion) | Primary trigger | Range > 2.0× median range(20), volume ≥ 2.0× slot median, close in extreme third of range, optional 3-bar slope acceleration (`example`) |
+| Mean-reversion z-score exit logic (strategy rule, not a signal) | Exit manager | z = (close − MA20)/σ20; exit when \|z\| recrosses 0.5 toward zero; also computes the wick+0.3×ATR stop (`example`) |
+
+Combination logic (pseudocode, 22 lines):
+
+```
+# each 5-min bar close t, 09:45-15:30 ET
+n, run = update_streak(close[t], close[t-1])     # S031
+atr = ATR(close, 14)
+if n >= 5 and run >= 1.0 * atr:                  # example; armed
+    rng20 = median(range, 20); vol20 = slot_median(volume, 20)
+    wick_up = close[t] > high[t] - range[t]/3
+    if range[t] > 2.0*rng20 and volume[t] >= 2.0*vol20 and wick_up:
+        side = SHORT                             # flip the up-streak
+        # signal at t -> fill at open[t+1]
+        entry = open[t+1] (taker, 2x spread cost) # example
+        stop  = high[t] + 0.3 * atr               # example stop rule
+        N = floor(200 / abs(entry - stop))
+        z_exit = 0.5                             # recross toward 0
+        flatten_at(15:55 ET); scratch if MAE > 1R
+    # mirror for down-streaks
+else: wait
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity DEF, seed 162. Morning: five consecutive up closes 09:45→10:10, cumulative run +0.95 vs 14-bar ATR 0.80 (≥ 1.0× ATR — armed, `example`). The 10:10–10:15 bar prints the exhaustion signature: range 0.55 vs 20-bar median 0.24 (2.3×), volume 2.4× slot median, close in the top third — parabolic (last-3-bar slope 2.1× streak average). Signal at *t* = 10:15 close → fill short at the 10:20 open: **62.30** (taker, 2× spread cost embedded).
+
+- **Trade 1 (loser — the run extends).** Short 454 @ 62.30. Stop = exhaustion-bar high 62.50 + 0.3×0.80 = **62.74**; risk/share = 0.44; `N = ⌊200/0.44⌋` = **454**. The extension bar stops the position at 10:25: **62.74**. Gross = `454 × (62.30 − 62.74)` = −199.76. Commission = 454 × 0.01 = −4.54. Net = **−204.30**.
+
+Afternoon: six consecutive down closes 13:30→14:00, cumulative run −1.10 vs ATR 0.85 (armed); 14:00–14:05 exhaustion bar: range 2.2× median, volume 2.1×, close in bottom third. Signal → fill long at 14:10 open: **61.10**. Stop = 60.72 − 0.3×0.85 = **60.465**→ 60.47; risk/share = 0.63; N = ⌊200/0.63⌋ = 317. z-score exit: z recrosses +0.5→ the 15:20 bar closes 61.68; fill next open **61.66**. Gross = `317 × (61.66 − 61.10)` = +177.52. Commission = 317 × 0.01 = −3.17. Net = **+174.35**.
+
+Session ledger:
+
+| Trade | Side | Entry | Exit | Shares | Gross | Comm. | Net |
+|---|---|---|---|---|---|---|---|
+| 1 | Short | 62.30 | 62.74 | 454 | −199.76 | −4.54 | −204.30 |
+| 2 | Long | 61.10 | 61.66 | 317 | +177.52 | −3.17 | +174.35 |
+| **Session** | | | | | | | **−$29.95** |
+
+A deliberately losing day: the morning exhaustion was premature — the run extended and the stop did its job; the afternoon flip worked but not enough to cover. That asymmetry (exhaustion fades fail more often than they work, winners must be larger) is the strategy's documented character, not a flaw in the example.
+
+**Where the example is optimistic.** The exhaustion bar is identified on the *closed* bar — in practice the volume condition is only known after the close, which this respects (signal at *t* → fill *t+1*), but the 2× spread cost on the t+1 fill is a guess; on real capitulation bars the spread can be 3–5× normal and the open can gap through the wick. The stop at the exhaustion extreme assumes a fill at 62.74; a fast extension gaps over stops. One flip per name per day is enforced; without it, traders re-fade the same run repeatedly and the −204.30 becomes a −600 day.
+
+### T5. Data & infra — what must run
+
+Same bar pipeline as T061 with two additions: the streak counter (O(1) per bar) and the 20-bar median range/volume baselines plus the z-score series. All computable from 1-minute or 5-minute OHLCV — no tick data required. Footprint: 500 symbols × 390 one-minute bars ≈ 195,000 bars/day, trivial; 60 days ≈ 3GB on disk (project cost model), working set far below the ~77GB budget; Polars-class throughput (~10–50M rows/sec planning assumption) makes the feature pass seconds-scale. Harness build: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the streak/exhaustion logic is simple; the hours go to the no-look-ahead replay (the exhaustion volume must be bar-complete) and the z-score exit calibration. **M5 Max feasibility verdict: yes** — intraday state under 1GB. Failure plan: stale feed → no new flips; existing flips keep wick stops; flatten 15:55 ET.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`) hosts the streak/exhaustion logic; **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`) for fill realism. Professional data: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) 1-minute/second bars are adequate — this strategy does not need tick-level exhaustion detection to be testable. Verdict: **build on bought bars.** The exhaustion signature is three ratios; paying for a "reversal indicator" product buys you someone else's overfit constants. Crossover: if you move exhaustion detection to tick/event granularity, revisit — then you need a real-time trades feed and the build cost roughly doubles.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm | Short-term reversal tied to temporary liquidity imbalances; same-interval seasonality | The flip leg's academic home: reversals after liquidity-driven moves are real, but direct trading loses after spread — the exhaustion filter is an attempt to trade only the liquidated tail |
+| Lehmann, B. "Fads, Martingales, and Market Efficiency" (*QJE* 1990) https://econpapers.repec.org/RePEc:oup:qjecon:v:105:y:1990:i:1:p:1-28. | Weekly reversal evidence | Broader reversal background; weekly, not intraday — direction only, not a parameter source |
+| Jegadeesh, N. "Evidence of Predictable Behavior of Security Returns" (JF 1990) https://doi.org/10.1111/j.1540-6261.1990.tb05110.x | Monthly return predictability incl. short-term reversal components | Useful only as reversal literature context; the packaged "run then flip" rule is a reconstruction `[D/SR]` |
+
+Capacity/crowding/decay: streak-fading is folk knowledge; the exhaustion filter (2× range, 2× volume) is the only thing separating this from a naive fade, and those constants are `example` values, not estimated edges. Honest bottom line: for a ≤$1M paper operation this is a second-strategy candidate — trade it only after T061-style breakout logic is live, because its win rate is lower and its losers (like Trade 1 above) come from the run extending. For an institutional desk, intraday streak-flipping at 5-minute granularity has no capacity worth staffing; the desk's version is a market-making inventory problem, not this rule.
+
+### T8. Failure modes
+
+- **Regime: trend day without exhaustion.** A genuine institutional program prints streak after streak with no capitulation bar; every flip is run over. *Mitigation:* the cumulative-run ≥ 1.0× ATR arming plus the acceleration requirement; add a daily regime veto — if the first two flips both stop out, stand down for the day (`example`).
+- **Crowding: exhaustion bars are where everyone fades.** The t+1 open after a famous wick is crowded and gaps. *Mitigation:* 2× spread cost assumption in the model (already), plus a "no trade if the open gaps beyond 50% of the exhaustion bar's range" filter (`example`).
+- **Latency: the volume condition resolves at the close.** Computing "2× slot median" on a partial bar peeks. *Mitigation:* signal only on closed bars; replay harness asserts bar-completeness before signal evaluation.
+- **Costs: the flip pays the worst spread of the day.** *Mitigation:* modeled explicitly; if live slippage exceeds the 2× assumption over 20 trades, widen the model or stop trading the rule.
+- **Overfit: 5-bar streak, 2× range, 2× volume.** All `example`. *Mitigation:* walk-forward with embargo; report the parameter surface, not a point optimum.
+- **Operations: FOMC/scheduled-news days.** Streaks into 14:00 ET are news positioning, not order-flow exhaustion. *Mitigation:* calendar veto from the T068 event feed (S076).
+
+### T9. Visuals
+
+![T062 worked example — synthetic 5-min DEF tape with streak runs, exhaustion bars, flip entry/exit markers, and per-trade net P&L](images/T062_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(5-min OHLCV bars)"] -->|"5-min bars"| SIGS["Signals<br/>S031 streak · S041 exhaustion"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(streak≥5 + exhaustion, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs wick stop, 2-name cap)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, 2× spread cost)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(z-recross / wick stop / 15:55 / scratch)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — short-term reversal linked to temporary liquidity imbalances and bid-ask bounce. Title verified 2026-09-10.
+2. Lehmann, B.N. "Fads, Martingales, and Market Efficiency." *Quarterly Journal of Economics* 105(1), 1–28 (1990). https://econpapers.repec.org/RePEc:oup:qjecon:v:105:y:1990:i:1:p:1-28. — weekly reversal evidence; reversal background only. Title/metadata verified 2026-09-10.
+3. Jegadeesh, N. "Evidence of Predictable Behavior of Security Returns." *Journal of Finance* 45(3) (1990). https://doi.org/10.1111/j.1540-6261.1990.tb05110.x — monthly return predictability; broader reversal context. DOI metadata verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB7-3 streak/exhaustion folklore: "5-min ranges are almost always broken both ways (double break ~70%+)"; ES/NQ configuration-sweep claims — named-only, no verifiable URL captured; treat as leads.
+- The 5/2.0×/2.0×/0.3× constants in T2–T3 are illustrative (`example`), not estimated from any cited study.
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 163/200 — T063: Stretched-Move Z-Score Fade
+
+*Batch TB7 · Strategy 63/100 · Signals S045, S014 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday statistical mean-reversion: fade statistically stretched moves after volatility compression |
+| **Edge source** | Temporary liquidity-driven displacement (S045 z-score) that snaps back when the pre-move compression indicates positioning rather than information |
+| **Typical holding period** | 30 minutes to 3 hours; flat 15:55 ET |
+| **Capacity hint** | Moderate for a small book: many names stretch daily, but the compression pre-condition filters to a handful; dollar-risk sizing keeps per-trade risk at $200 (`example`) |
+| **Build-or-buy in one line** | Build on 5-minute bars — a z-score, a compression ratio, and a liquidity-provision sizing rule; nothing to buy except the bars |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid US stocks, ADV ≥ 2M shares, price ≥ $10 (`example`). RTH 09:45–15:55 ET. Exclusions: earnings days, halts, and the 30 minutes around scheduled macro releases — a stretched move *into* a known event is information repricing, not a fade candidate.
+
+**Z-score definition.** On 5-minute bars: `z_t = (close_t − MA20_t) / σ20_t`, where `MA20_t` and `σ20_t` are the trailing 20-bar mean and standard deviation of closes, computed causally (bars ≤ *t* only). **Stretched** means `|z_t| ≥ 2.5` (`example`). The z-score is a standardized displacement, not a forecast — it measures how far price has traveled from its recent center in units of recent noise.
+
+**Volatility-compression pre-condition.** Before the stretch, require compression: the 5-bar realized range must be ≤ 0.6× the 20-bar median range (`example`). The logic: a move that erupts from a compressed coil and stretches 2.5σ is more likely to be a liquidity event (stop cascade, program imbalance) than a move that extends an already-volatile trend. This is the strategy's key filter and its main overfit surface.
+
+**Liquidity-provision framing.** The fade is sized and executed as *liquidity provision* (S014): passive limit orders at the stretched extreme, never chasing. If the limit is not touched within 2 bars of the signal (`example`), the signal expires — a fade that needs chasing is not a liquidity trade.
+
+**Entry rule.** At bar *t*: compression pre-condition true over bars *t−6…t−1* (`example` window), and `|z_t| ≥ 2.5`. Fade direction: short if `z_t > 0`, long if `z_t < 0`. Signal at *t* → fill at the open of *t+1* (`example`: limit at the stretched price; fill assumed at next open for the worked example). One fade per name per day (`example`).
+
+**Exit rule.** (`example`): (1) z recrosses ±0.5 toward zero — the displacement has mean-reverted; (2) stop at 1.5σ adverse beyond entry (the stretch was information, not liquidity); (3) time stop 15:55 ET; (4) if a second consecutive bar stretches *further* (|z| increases and the bar closes beyond entry against the position), exit at next open — the anti-martingale rule.
+
+**Position sizing.** `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`). Max 5 concurrent fades (`example`) — stretched moves correlate on market-wide liquidity events.
+
+**Risk limits.** Daily loss stop −3R (`example`); kill-switch on stale bars; no new fades after 15:30 ET (`example`).
+
+**Cost model.** Commission $0.005/share/side (`example`); limit-order execution assumed at the quote (maker) — half-spread *earned*, not paid — but the worked example conservatively assumes a taker-style fill at the next open with a half-spread penalty, because fading into momentum often means paying to get filled.
+
+**Order/execution sketch.** Resting limit at the stretched level for 2 bars; if unfilled, re-price to the next open as a marketable limit (`example`). Participation ≤ 10% of bar volume (`example`). Queue honesty: the fill is not assumed at the extreme tick — the example fills at the next-bar open.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S045 (deviation z-score) | Primary trigger | `z_t = (close_t − MA20_t)/σ20_t`; trigger `\|z_t\| ≥ 2.5` (`example`); exit on recross of ±0.5 |
+| Volatility-compression gate (strategy rule, not a signal) | Filter / arming | `range5_t / median(range20)_t ≤ 0.6` (`example`) over the pre-move window; veto otherwise |
+| S014 (liquidity provision) | Sizing + execution mode | Resting-limit execution, 2-bar expiry, participation cap; fill assumption discipline |
+
+Combination logic (pseudocode, 20 lines):
+
+```
+# each 5-min bar close t, 09:45-15:30 ET
+ma, sd = MA(close, 20), STDEV(close, 20)      # S045, causal
+z = (close[t] - ma) / sd
+compressed = range(close,5) <= 0.6 * median(range,20)  # example gate
+if faded_today or not compressed: wait
+if z >= 2.5: side = SHORT                     # S045, example
+elif z <= -2.5: side = LONG
+else: wait
+# signal at t -> fill at open[t+1]
+entry = open[t+1] (limit at stretched level, 2-bar expiry)  # S014
+stop  = entry -/+ 1.5 * sd                    # example
+N = floor(200 / abs(entry - stop))
+exit when |z| recrosses 0.5 toward 0           # S045
+exit next open if |z| extends 2 bars running   # anti-martingale
+flatten_at(15:55 ET)
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity GHI, seed 163. The 11:00–11:25 window is compressed: 5-bar range 0.21 vs 20-bar median range 0.38 (0.55× ≤ 0.6 — armed, `example`). The 11:25–11:30 bar spikes: close **44.83** vs trailing MA20 **44.20**, σ20 **0.18** → `z = (44.83 − 44.20)/0.18 = +3.5` (≥ 2.5 — trigger). Signal at *t* = 11:30 close → fill short at the next open: **44.80**.
+
+Stop = entry + 1.5σ = `44.80 + 1.5 × 0.18` = **45.07**. Risk/share = 0.27. `N = ⌊200/0.27⌋` = **740 shares**. The displacement mean-reverts: the 13:10 bar closes 44.35, z recrosses below +0.5 → exit at the next open: **44.36**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Short (t+1 open) | 44.80 | 740 | +33,152.00 |
+| Cover (z-recross exit) | 44.36 | 740 | −32,826.40 |
+| Gross | | | **+325.60** |
+| Commission (740 × $0.01 round-trip) | | | −7.40 |
+| **Net** | | | **+$318.20** |
+
+**Where the example is optimistic.** The z-score uses a 20-bar σ of 0.18 that is itself estimated on the compressed window — σ is understated exactly when compression precedes the move, so the +3.5 z is flattered; a σ estimated on a longer window would read a smaller stretch. The fill at 44.80 assumes the next open doesn't gap with the momentum; fading into a real liquidity event often fills 10–30¢ worse. The stop at 45.07 assumes a clean fill on a bar that is, by construction, moving fast. And the single winning trade shown is the *selected* outcome — the anti-martingale rule exists because roughly a third of such stretches (illustrative) keep stretching, and those exits are full 1R+ losers.
+
+### T5. Data & infra — what must run
+
+5-minute (or 1-minute resampled) OHLCV for 500 names; per-bar features: 20-bar MA/σ, 5-bar range, 20-bar median range — all O(1) rolling state per symbol. A subtle implementation point: the σ that standardizes the z-score must be recomputed causally on every bar from the trailing window only. Pre-computing σ on the full day and reading it back is the single most common look-ahead bug in mean-reversion replays, because the full-day σ "knows" the stretch before it happens and shrinks the z that the live strategy would have seen. The replay harness should therefore recompute the rolling statistics inside the bar loop and assert that no feature function ever indexes a bar dated after the signal bar. Footprint per the project cost model: 195,000 bars/day, trivial; 60 days ≈ 3GB disk; working set far below ~77GB; Polars-class throughput (~10–50M rows/sec planning assumption) makes the whole feature pass seconds-scale. Harness build: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the z-score logic is trivial; the hours are the replay harness (σ must be recomputed causally, no peeking at the full-day range) and the compression-window calibration. **M5 Max feasibility verdict: yes.** Failure plan: stale feed → no new fades; resting limits are day-orders that die with the session; flatten 15:55 ET.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`) for research hosting; **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`) for fill realism. Professional data: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) covers the bar inputs. Verdict: **build.** A z-score fade is twenty lines; any vendor "mean-reversion indicator" is selling its own `example` constants. Crossover: none at this granularity — if you move to tick-level liquidity-provision modeling, that is a different strategy (market-making), not this one.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm | Short-term reversal tied to temporary liquidity imbalances and bid-ask bounce; direct trading loses after spread | Direct academic support for the fade premise — displacements caused by liquidity provision snap back — plus the cost warning that governs position sizing |
+| Lehmann, B. "Fads, Martingales, and Market Efficiency" (*QJE* 1990) https://econpapers.repec.org/RePEc:oup:qjecon:v:105:y:1990:i:1:p:1-28. | Weekly reversal evidence | Reversal background; weekly horizon, not intraday |
+| Jegadeesh, N. "Evidence of Predictable Behavior of Security Returns" (JF 1990) https://doi.org/10.1111/j.1540-6261.1990.tb05110.x | Return predictability with short-term reversal components | Broader context; the compression pre-condition and z thresholds are the strategy's own reconstruction `[D/SR]`, not from these papers |
+
+Capacity/crowding/decay: intraday reversal is among the most crowded statistical facts in markets; the compression filter is what makes this rule *different* from a naive fade, and its 0.6×/2.5 parameters are illustrative, not estimated. Honest bottom line: for a ≤$1M paper operation, this is a reasonable mean-reversion sleeve — trade small, enforce the anti-martingale exit, and expect the edge (if any) to live in the illiquid tail of the universe, not in SPY. For an institutional desk, this granularity is a market-making problem with inventory controls, not a signal-following rule.
+
+### T8. Failure modes
+
+- **Regime: information, not liquidity.** A stretched move on real news keeps stretching; the fade funds the informed. *Mitigation:* the compression pre-condition plus the earnings/macro exclusion list; the anti-martingale exit caps the damage at ~1R+.
+- **Crowding: everyone fades 2.5σ.** Standard z-thresholds are consensus; fills deteriorate. *Mitigation:* the compression filter differentiates; track fill quality vs the model and widen the threshold if fills decay.
+- **Latency: σ underestimation.** As noted, σ estimated on the compressed window understates the stretch. *Mitigation:* compute σ on a 60-bar window as a robustness check (`example`); require the trigger on *both*.
+- **Costs: assumed maker, realized taker.** *Mitigation:* the worked example already assumes a taker fill; keep that conservatism in the model.
+- **Overfit: 2.5 / 0.6 / 20-bar.** All `example`. *Mitigation:* walk-forward with embargo; the compression ratio is the parameter most likely to be curve-fit — stress it ±50%.
+- **Operations: the 2-bar limit expiry.** A resting limit that isn't canceled on a halt becomes a gift. *Mitigation:* cancel-all on halt flags; no GTC orders, day-orders only.
+
+### T9. Visuals
+
+![T063 worked example — synthetic 5-min GHI z-score series with ±2.5 trigger lines, compression window, entry/exit markers, and per-trade net P&L](images/T063_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(5-min OHLCV bars)"] -->|"5-min bars"| SIGS["Signals<br/>S045 z-score · S014 liquidity"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(|z|≥2.5 + compressed, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs 1.5σ stop, 5-name cap)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"resting limit orders"| EXEC["Execution<br/>(limit at stretch, 2-bar expiry)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(z-recross / stop / anti-martingale / 15:55)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — short-term reversal linked to temporary liquidity imbalances and bid-ask bounce; direct trading loses after spread. Title verified 2026-09-10.
+2. Lehmann, B.N. "Fads, Martingales, and Market Efficiency." *Quarterly Journal of Economics* 105(1), 1–28 (1990). https://econpapers.repec.org/RePEc:oup:qjecon:v:105:y:1990:i:1:p:1-28. — weekly reversal evidence. Title/metadata verified 2026-09-10.
+3. Jegadeesh, N. "Evidence of Predictable Behavior of Security Returns." *Journal of Finance* 45(3) (1990). https://doi.org/10.1111/j.1540-6261.1990.tb05110.x — return predictability; reversal context. DOI metadata verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Temporary-impact/resiliency literature (e.g., liquidity-provision returns predicting reversals) was suggested as further reading by Grok; no specific paper was independently verified in this pass.
+- All z-score, compression, and window constants are illustrative (`example`), not taken from the cited papers.
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 164/200 — T064: U-Shape Seasonality Timer
+
+*Batch TB7 · Strategy 64/100 · Signals S046, S067, S027 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday seasonality allocation: trade momentum on the high-volume U-arms, stand down in the midday doldrums |
+| **Edge source** | The documented U-shaped intraday pattern of volume and volatility (S046) — directional persistence is highest when the session's own activity is highest; forecasts (S067) scale the bet |
+| **Typical holding period** | 30–60 minutes per arm; two arms max per day; flat 15:55 ET |
+| **Capacity hint** | Good for a small book: the arms are the most liquid minutes of the day; capacity constrained by the sizing rule, not by the book |
+| **Build-or-buy in one line** | Build the slot-seasonality table on bought bars; the only thing to buy is clean history to estimate it |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid ETFs and large-caps (SPY/QQQ/AAPL-class, ADV ≥ 5M shares, `example`) — the U-shape is cleanest where volume is deep. RTH 09:30–16:00 ET. Exclusions: half days (the U compresses), FOMC days (the 14:00 event re-shapes the afternoon arm), earnings days.
+
+**The U-shape.** Intraday volume and volatility are U-shaped: high at the open, a midday lull roughly 11:30–14:00 ET, high again into the close (documented since Wood–McInish–Ord 1985). Define per-30-minute clock slot *s*: `vol_med[s]` = 20-day median of slot volume, `rng_med[s]` = 20-day median of slot range (`example` lookback). **Arm-on condition:** the current slot's developing range ≥ 1.5× `rng_med[s]` (`example`) — the arm is "live" and carrying direction.
+
+**Entry rule.** Two arms, one trade each (`example`):
+- *Morning arm* (09:30–10:30): at the 09:35 bar close *t*, if the 09:30–09:35 bar range ≥ 1.5× `rng_med[09:30]` and the bar closed up (down), go long (short). Signal at *t* → fill at the open of *t+1*.
+- *Afternoon arm* (15:00–15:55): same logic on the 15:00–15:05 bar; flatten at 15:55 regardless.
+The realized-vol forecast (S067) scales size: `size_mult = clamp(forecast_slot_vol / median_slot_vol, 0.5, 1.5)` (`example`) — bet more when the arm is running hotter than its own history.
+
+**Exit rule.** (`example`): (1) time stop — morning arm exits at 10:30, afternoon arm at 15:55 (S027); (2) stop at 0.75× the entry bar's range adverse; (3) signal flip — if the *next* bar closes against the position by more than the entry bar's range, exit at the following open (the arm's direction failed immediately).
+
+**Position sizing.** `N = ⌊ (R × size_mult) / |P_entry − P_stop| ⌋`, `R = $200` (`example`). Max 1 position per arm.
+
+**Risk limits.** Daily loss stop −3R (`example`); if the morning arm stops out, the afternoon arm is vetoed (`example` — a failed morning arm often marks a news-driven or range day, not a seasonality day); kill-switch on stale bars.
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way; the arms are the most liquid minutes of the day, so the spread assumption is the most defensible in this batch — but the t+1 open fill still pays a half-spread penalty in the model.
+
+**Order/execution sketch.** Marketable limit at the t+1 open (`example`); participation ≤ 10% of bar volume (`example`); taker modeling throughout.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S046 (intraday seasonality) | Regime gate + trigger | Slot medians `vol_med[s]`, `rng_med[s]`; arm-on when developing range ≥ 1.5× `rng_med[s]` (`example`) |
+| S067 (realized-vol forecast) | Sizing | `size_mult = clamp(forecast/median, 0.5, 1.5)` (`example`); scales R |
+| S027 (time-based exit) | Exit manager | 10:30 / 15:55 time stops; owns the session clock and half-day shifts |
+
+Combination logic (pseudocode, 21 lines):
+
+```
+# slot tables built pre-open from 20d history     # S046
+vol_med, rng_med = slot_medians(20d)             # example
+for arm, (t_entry, t_flat) in [(MORN, 0935, 1030), (AFT, 1505, 1555)]:
+    s = clock_slot(t_entry)
+    if range(bar[t_entry]) < 1.5 * rng_med[s]: wait   # arm not live
+    dir = LONG if close[t_entry] > open[t_entry] else SHORT
+    # signal at t_entry -> fill at open[t_entry+1]
+    entry = open[t_entry+1]
+    stop = entry -/+ 0.75 * range(bar[t_entry])   # example
+    mult = clamp(rv_forecast(s)/rng_med[s], 0.5, 1.5)  # S067
+    N = floor(200 * mult / abs(entry - stop))
+    flatten_at(t_flat)                            # S027
+    exit next open if next bar reverses > entry-bar range
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity JKL, seed 164. Morning arm: the 09:30–09:35 bar range is **0.62** vs `rng_med[09:30]` = 0.35 (1.77× ≥ 1.5 — arm live, `example`); the bar closes up. Signal at *t* = 09:35 close → fill long at the 09:40 open: **30.12**. S067 forecast ratio = 1.2 → `size_mult` = 1.2. Stop = `30.12 − 0.75 × 0.62` = **29.655** → 29.66; risk/share = 0.46; `N = ⌊200 × 1.2 / 0.46⌋` = **521 shares**. Time stop 10:30: exit at **30.58**. Gross = `521 × 0.46` = +239.66. Commission = 521 × 0.01 = −5.21. Net = **+234.45**.
+
+Afternoon arm: the 15:00–15:05 bar range is **0.55** vs `rng_med[15:00]` = 0.30 (1.83× — live); closes up. Signal → fill long at 15:10 open: **30.70**. `size_mult` = 1.0. Stop = `30.70 − 0.75 × 0.55` = **30.2875** → 30.29; risk/share = 0.41; `N = ⌊200/0.41⌋` = **487 shares**. The arm fades: 15:55 time-stop exit at **30.55**. Gross = `487 × (30.55 − 30.70)` = −73.05. Commission = −4.87. Net = **−77.92**.
+
+Session ledger:
+
+| Arm | Entry | Exit | Shares | Gross | Comm. | Net |
+|---|---|---|---|---|---|---|
+| Morning | 30.12 | 30.58 | 521 | +239.66 | −5.21 | +234.45 |
+| Afternoon | 30.70 | 30.55 | 487 | −73.05 | −4.87 | −77.92 |
+| **Session** | | | | | | **+$156.53** |
+
+The morning arm pays for the afternoon arm's fade — the honest shape of a seasonality rule: the pattern is real, the daily P&L is not guaranteed.
+
+**Where the example is optimistic.** The slot medians are treated as known and stable; in practice the U-shape shifts with the volatility regime and the 20-day median lags it. The arm-on 1.5× test uses the *completed* 09:30–09:35 bar — respected here — but the fill at the 09:40 open assumes no gap between the signal bar's close and the next open on a running tape. The S067 size multiplier (1.2×) boosts the winner in this example; on a losing morning it would boost the loser symmetrically. The afternoon fade shown is mild; on inventory-driven closes (see T069) the afternoon arm can be actively hostile to momentum.
+
+### T5. Data & infra — what must run
+
+Pre-open: 20-day slot-median tables (48 thirty-minute slots) for the universe; intraday: developing slot range vs the table; post-close: table update. Data: 1-minute OHLCV, 500 names — 195,000 bars/day, trivial; 60 days ≈ 3GB disk (project cost model); working set far below ~77GB; Polars-class throughput (~10–50M rows/sec planning assumption) makes the slot-table build seconds-scale. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the slot logic is simple; the hours are the half-day/FOMC calendar and the no-look-ahead replay (slot medians must exclude today). **M5 Max feasibility verdict: yes.** Failure plan: stale feed → no new arm entries; running arms keep stops and time stops; a missed 10:30 flatten triggers a market flatten on the next available bar.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Professional data: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) for bars; 2-year history for the slot tables runs tens to low hundreds of dollars on flat files (`indicative — verify before budgeting`). Verdict: **build.** The slot-seasonality table is the asset and it must be estimated on *your* universe and *your* calendar — a vendor's generic "time-of-day" indicator is the wrong table. Crossover: none — this strategy's data needs are fully covered by 1-minute bars.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Wood, McInish & Ord, "An Investigation of Transactions Data for NYSE Stocks" (JF 1985) https://digitalcommons.memphis.edu/facpubs/11516/ (DOI: 10.1111/j.1540-6261.1985.tb04996.x) | Unusually high returns/volatility at the beginning and end of the trading day | The empirical root of the U-shape; documents the pattern's existence, not a tradable momentum rule |
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm | Intraday periodicity in returns incl. same-interval effects | Supports time-of-day structure in returns; the arm-momentum packaging is the strategy's own `[D/SR]` |
+| Gao, Han, Li & Zhou, "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return" (SSRN 2552752) https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2552752 | S&P 500 ETF 1993–2013; first-half-hour predicts last-half-hour, stronger on volatile/high-volume days | Closest to the morning-arm premise: early-session direction carries; it is index-level and not a per-name entry rule |
+
+Capacity/crowding/decay: time-of-day effects are among the oldest documented patterns and are widely known; the arms are the day's most liquid minutes, so capacity is relatively good but the edge (if any) is thin and lives in the *sizing* (S067), not in the direction call. Honest bottom line: for a ≤$1M paper operation, this is a sensible "second sleeve" — it trades when liquidity is deepest and stands down when it isn't, which is good risk hygiene even if the alpha is zero. For an institutional desk, intraday seasonality is an execution-scheduling input (when to trade), not a proprietary signal.
+
+### T8. Failure modes
+
+- **Regime: volatility-regime shift.** After a vol spike, the 20-day slot medians understate the arms for weeks; the 1.5× gate fires constantly. *Mitigation:* regime-normalize the medians (divide by trailing 20-day daily range, `example`); re-estimate monthly.
+- **Crowding: the arms are consensus.** 09:35 and 15:05 are crowded entry times. *Mitigation:* the t+1 fill discipline plus participation cap; measure slippage vs the model weekly.
+- **Latency: the slot-median table must exclude today.** Including today's developing range in the median peeks. *Mitigation:* replay-harness assertion; tables built pre-open only.
+- **Costs: afternoon-arm spreads.** The 15:00–15:30 window can be wide on rebalance days. *Mitigation:* spread filter (skip if spread > 3¢, `example`).
+- **Overfit: 1.5×, 0.75×, 20-day.** All `example`. *Mitigation:* walk-forward with embargo; the arm-on multiplier is the parameter to stress first. Note that the two arms should be calibrated separately — the morning arm's 1.5× gate and the afternoon arm's 1.5× gate live in different volatility regimes, and forcing one shared multiplier across both is a needless constraint that usually costs the afternoon arm its selectivity.
+- **Operations: FOMC/half-day.** The U-shape is not U-shaped on these days. *Mitigation:* calendar vetoes from the S076 event feed; the morning-arm-fails veto covers the rest.
+
+### T9. Visuals
+
+![T064 worked example — synthetic session U-curve of slot ranges with arm-on gates, morning/afternoon entry/exit markers, and per-trade net P&L](images/T064_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(1-min OHLCV bars)"] -->|"1-min bars"| SIGS["Signals<br/>S046 seasonality · S067 RV forecast · S027 time exit"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(arm-on 1.5× + direction, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(R × RV multiplier, 1 per arm)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, ≤10% participation)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(time stop / 0.75× range stop / flip)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Wood, R.A., McInish, T.H. & Ord, J.K. "An Investigation of Transactions Data for NYSE Stocks." *Journal of Finance* 40(3), 723–739 (1985). https://digitalcommons.memphis.edu/facpubs/11516/ — unusually high returns/volatility at the beginning and end of the trading day. Title verified 2026-09-10.
+2. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — intraday periodicity and short-horizon reversal. Title verified 2026-09-10.
+3. Gao, L., Han, Y., Li, S.Z. & Zhou, G. "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2552752 — S&P 500 ETF 1993–2013 intraday momentum. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Admati & Pfleiderer, "A Theory of Intraday Patterns: Volume and Price Variability" (*RFS* 1988) — the theoretical U-shape reference named by Grok; a canonical publisher URL was not verified in this pass.
+- Grok Q-TB7-3 claims: ES/NQ first hour ≈ 25–28% of RTH volume / ~55–63% of day's range; Boyarchenko–Larsen–Whelan (2023) overnight-drift figures — named-only, treat as leads.
+- All slot, multiplier, and window constants are illustrative (`example`).
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 165/200 — T065: Open-Auction Imbalance Continuation
+
+*Batch TB7 · Strategy 65/100 · Signals S033, S094, S059 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Opening-auction momentum: trade with the pre-open imbalance into the first 30 minutes of continuous trading |
+| **Edge source** | Overnight order-flow imbalance revealed in the opening auction's indicative book (S033); the opening print often under-reacts and the imbalance leans the same way for the first half hour |
+| **Typical holding period** | 5–30 minutes; flat by 10:00 ET |
+| **Capacity hint** | Thin: one trade per name per day, sized to a fraction of the published imbalance; the opening cross is competitive and fills are the constraint |
+| **Build-or-buy in one line** | Buy the opening-imbalance feed (or a vendor's pre-open indicative), build the continuation rule — the feed is the product, the rule is trivial |
+
+### T2. Full mechanics
+
+**Universe & session.** NYSE- and Nasdaq-listed large caps, ADV ≥ 5M shares (`example`). Pre-open window 09:15–09:30 ET for signal formation; trading window 09:30–10:00 ET only. Exclusions: halts, LULD limit states, news-halted names, and days when the name is in the S&P/Dow rebalance (the open is then an index event, not an imbalance event).
+
+**Imbalance signal.** An **auction imbalance** is the net unpaired share volume published by the exchange before the opening cross: on NYSE the Opening Auction Imbalance Information (Total/Market Imbalance, imbalance reference price); on Nasdaq the NOII (Net Order Imbalance Indicator: paired shares, imbalance side/direction, near/far indicative prices). Define `I_t` = signed imbalance shares (positive = buy-heavy), `P̂_t` = indicative match price. Read at 09:25 (`example`). **Entry requires all of:** (1) `|I| ≥ 3% of 20-day ADV` or `≥ 50,000 shares` (`example`); (2) sign(I) stable vs the 09:15 print — no flip; (3) `|P̂ − prior_close| ≥ 20 bps` in the imbalance's direction (`example`) — there must be a gap worth continuing; (4) not a halt/LULD state.
+
+**Entry rule.** Two implementations (`example`): (a) *auction entry* — MOO (market-on-open) or LOO (limit-on-open) in the imbalance direction, filled at the official opening print; (b) *confirmation entry* — wait for the first 5-minute bar (09:30–09:35) to close in the imbalance direction, then enter at the next open (signal at *t* → fill *t+1*). The worked example uses (a). Auction orders rest until the official auction print — they are not continuous-session fills.
+
+**Exit rule.** (`example`): (1) time stop 10:00 ET flat; (2) signal flip — the 09:35 or 09:40 bar closes against the imbalance direction → exit next open; (3) stop at the opening print ∓ 0.5× the pre-open indicative range (a full retrace of the gap invalidates the continuation).
+
+**Position sizing.** `N = min(⌊R/stop_dist⌋, 0.02 × |I|)` (`example`) — never be more than 2% of the published imbalance; you are riding the imbalance, not *being* it. `R = $200` (`example`).
+
+**Risk limits.** Daily loss stop −3R (`example`); one trade per name per day; kill-switch on a missing 09:25 imbalance print (stale feed = no trade).
+
+**Cost model.** Commission $0.005/share/side (`example`). Auction entry: no spread is paid on the cross itself — the fill is the official open print; cost vs the thesis is `open_print − P̂_09:25` (adverse selection if the print runs away before you commit). Confirmation entry: half-spread each way on the continuous fill.
+
+**Order/execution sketch.** MOO/LOO submitted by the broker's cutoff (before 09:28 ET, `example`; broker cutoffs run ahead of the exchange's); LOO limit at `P̂ ± 10 bps` (`example`) so a runaway open doesn't fill at a bad print. Participation honesty: the opening cross is the day's most competitive print — model the fill at the official print with no price improvement.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S033 (auction imbalance) | Primary trigger | Signed imbalance `I`, indicative `P̂`, paired shares; entry requires size ≥ 3% ADV, sign stability, ≥ 20 bps gap (`example`) |
+| S094 (RVOL / block pressure) | Filter | Confirms the indicative gap direction vs prior close — the pre-open RVOL/block-pressure gap-confirmation filter |
+| S059 (futures–spot lead-lag) | Confirmation | The pre-open futures leg confirms the gap direction; veto if it reverses the gap after 09:25; first 5-minute bar close in the imbalance direction for the confirmation-entry variant |
+
+Combination logic (pseudocode, 20 lines):
+
+```
+# pre-open, 09:25 ET snapshot                      # S033
+I, P_hat, paired = read_opening_imbalance(sym)     # exchange feed
+if halted or LULD: no trade
+adv = ADV(sym, 20d)
+gap_bps = (P_hat - prior_close) / prior_close * 1e4  # S094
+if abs(I) >= max(0.03*adv, 50000) and sign(I)==sign(I_0915) \
+   and abs(gap_bps) >= 20 and sign(gap_bps)==sign(I):
+    side = BUY if I > 0 else SELL                 # example thresholds
+    # variant A: MOO/LOO -> filled at official open print
+    # variant B: wait for 0930-0935 bar close with imbalance, fill t+1
+    N = min(floor(200/stop_dist), 0.02*abs(I))    # example
+    stop = open_print -/+ 0.5 * preopen_range     # example
+    flatten_at(10:00 ET); exit on bar close vs imbalance
+else: wait
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic pre-open tape, NYSE-listed ABC, seed 165. Prior close **90.00**. 20-day ADV = 8.0M shares. 09:15 print: buy imbalance 240,000. 09:25 print: buy imbalance **250,000** (≥ 3% × 8M = 240,000 — qualifies, `example`), sign stable, indicative **P̂ = 90.45** (+50 bps ≥ 20 bps — qualifies). S094 confirms the gap direction; no halt. Enter variant A: **buy 625 MOO** — check the imbalance cap: `0.02 × 250,000` = 5,000 ≥ 625 ✓; risk check: stop distance 0.32 (see below) → `⌊200/0.32⌋` = 625 ✓. The MOO rests until the official opening print: fill at **90.42** (the print undercuts the indicative — normal auction noise).
+
+Stop = `90.42 − 0.5 × 0.64` = **90.10** (pre-open indicative range 0.64, `example`). The continuation holds: 09:35 and 09:40 bars close up; time-stop exit at 10:00: **90.73**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Buy MOO (official open print) | 90.42 | 625 | −56,512.50 |
+| Sell (10:00 time stop) | 90.73 | 625 | +56,706.25 |
+| Gross | | | **+193.75** |
+| Commission (625 × $0.01 round-trip) | | | −6.25 |
+| **Net** | | | **+$187.50** |
+
+**Where the example is optimistic.** The MOO fill at the official print assumes the broker's cutoff was met and the order was accepted — on a busy open, retail MOO orders can be rejected or filled at a worse print than the indicative suggested. The indicative-to-print slippage (90.45 → 90.42) is shown as favorable; it is frequently adverse. The 3%-of-ADV and 20-bps thresholds are `example` values; real opening-imbalance continuation is dominated by participants with faster indicative feeds than the one modeled here. The single winning trade is illustrative — opens that gap *and* continue are a minority of gap opens; most are faded by the continuous-session book within minutes.
+
+### T5. Data & infra — what must run
+
+Pre-open job: pull the 09:15/09:25 imbalance snapshots (NYSE Opening Auction Imbalance Information or Nasdaq NOII), prior close, 20-day ADV; 09:30–10:00: 5-minute bars for the confirmation variant and the flip exit. The imbalance feed is the critical path — SIP bars alone cannot produce it. Footprint: bars are trivial (195,000/day; 60 days ≈ 3GB per the cost model); the imbalance snapshots are kilobytes per name per day. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the continuation rule is simple; the hours are the venue-specific feed normalization (NYSE vs Nasdaq field schemas), the MOO/LOO order-type state machine, and half-day open-time shifts. **M5 Max feasibility verdict: yes** — the constraint is the feed license, not compute. Failure plan: missing 09:25 print → no trade, no exceptions; a halt between entry and 10:00 → the position is held to the resume with the stop widened to the halt-range (`example`), or flattened immediately if the halt was news-driven.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`) for the research host; **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`) — IBKR supports MOO/LOO routing for live testing. Professional data: **Nasdaq TotalView** (~$1.6k–$1.7k/mo firm + ~$80/user, `indicative — verify before budgeting`) carries NOII for Nasdaq names; **NYSE opening-auction imbalance** data is an exchange-direct or vendor add-on (vendor-individual pricing varies; `indicative — verify before budgeting`); **Massive/Polygon** offers an NYSE-listed imbalance-style product as a cheaper on-ramp (`indicative — verify before budgeting`). Verdict: **buy the feed, build the rule.** Without the official imbalance print you are guessing the auction from the tape — that is the documented way to lose at this game. Crossover: if the imbalance feed costs more than the strategy's expected monthly P&L at your size, drop the strategy — the feed *is* the edge's price tag.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Madhavan, A. & Panchapagesan, V. "Price Discovery in Auction Markets: A Look Inside the Black Box" (*RFS* 2000) https://ideas.repec.org/a/oup/rfinst/v13y2000i3p627-58.html | NYSE opening-auction price discovery with order-level data; designated dealers facilitate discovery vs a pure automated call | Academic foundation that the opening auction aggregates information — the imbalance is informative, not noise; it does not bless a continuation rule |
+| Biais, B., Hillion, P. & Spatt, C. "An Empirical Analysis of the Limit Order Book and the Order Flow in the Paris Bourse" (JF 1995) https://ideas.repec.Org/a/bla/jfinan/v50y1995i5p1655-89.html | Order flow concentrated near the quote; quote shifts follow large trades (information effects) | Limit-order-book mechanics behind why an opening imbalance can lean the early continuous session; Paris Bourse, not US opens |
+| NYSE Rule 7.35 Series — Auction mechanics (SEC Exhibit 5, 2026) https://www.sec.gov/files/rules/sro/nyse/2026/34-106126-ex5.pdf | Auction-only order types (MOO/MOC/LOC), imbalance definitions, freeze and cutoff rules | The venue rulebook the strategy must obey; confirms MOO/LOO exist as auction-only orders and that imbalance information is a defined, disseminated quantity — not a trading edge by itself |
+
+Capacity/crowding/decay: the opening cross is the most-watched print of the day; any continuation edge is competed away by participants with faster indicative feeds and better queue positions. Honest bottom line: for a ≤$1M paper operation, this is a *feed-dependent* strategy — paper-trade it only if you have the real imbalance feed; a SIP-proxy version is self-deception. For an institutional desk, opening-imbalance continuation is a standard microstructure input, sized in basis points of the imbalance, not a standalone book.
+
+### T8. Failure modes
+
+- **Regime: index-rebalance and news opens.** The imbalance is then an index or information event; continuation logic misfires. *Mitigation:* rebalance/news exclusion list; S094 (RVOL / block pressure) gap-confirmation filter.
+- **Crowding: the indicative feed is public.** Everyone sees the same 250,000-share print. *Mitigation:* the 2%-of-imbalance sizing cap and the LOO limit discipline — never chase a runaway print.
+- **Latency: indicative vs your snapshot.** A 09:25 snapshot can be stale by the 09:28 broker cutoff. *Mitigation:* re-check sign stability at the latest available print; abort on flip.
+- **Costs: MOO adverse selection.** The print can run away from the indicative between your decision and the cross. *Mitigation:* prefer LOO with a `P̂ ± 10 bps` limit (`example`); model the indicative-to-print slippage explicitly.
+- **Overfit: 3% / 50k / 20 bps.** All `example`. *Mitigation:* walk-forward; these are filters, not optima — report sensitivity.
+- **Operations: broker cutoff misses.** A MOO submitted after the broker's cutoff is dead or, worse, converted to a market order at 09:30. *Mitigation:* submit by 09:28 ET (`example`); hard-coded per-broker cutoff table; kill-switch on cutoff-table staleness.
+
+### T9. Visuals
+
+![T065 worked example — synthetic pre-open indicative vs official open print vs 09:30–10:00 tape with MOO entry and time-stop exit, per-trade net P&L](images/T065_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(imbalance feed + 5-min bars)"] -->|"imbalance snapshots + 5-min bars"| SIGS["Signals<br/>S033 imbalance · S094 RVOL/block pressure · S059 futures lead-lag"]
+    SIGS -->|"per-print signal vector"| ENTRY{"Entry logic<br/>(|I|≥3% ADV + stable + ≥20bps, auction rest)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(min(dollar-risk, 2% of imbalance))"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"MOO/LOO orders"| EXEC["Execution<br/>(rest to official open print)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(10:00 flat / flip / gap-retrace stop)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Madhavan, A. & Panchapagesan, V. "Price Discovery in Auction Markets: A Look Inside the Black Box." *Review of Financial Studies* 13(3), 627–658 (2000). https://ideas.repec.org/a/oup/rfinst/v13y2000i3p627-58.html — NYSE opening-auction price discovery; designated dealers facilitate discovery. Title verified 2026-09-10.
+2. Biais, B., Hillion, P. & Spatt, C. "An Empirical Analysis of the Limit Order Book and the Order Flow in the Paris Bourse." *Journal of Finance* 50(5), 1655–1689 (1995). https://ideas.repec.Org/a/bla/jfinan/v50y1995i5p1655-89.html — order-flow/book interaction; quote shifts after large trades. Title verified 2026-09-10.
+3. NYSE Rule 7.35 Series, "Auctions" (Rule 7P Equities Trading), via SEC Exhibit 5 (2026). https://www.sec.gov/files/rules/sro/nyse/2026/34-106126-ex5.pdf — auction-only orders (MOO/MOC/LOC), imbalance definitions, freeze rules. Content confirmed 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB7-1 opening-auction cutoff specifics (NYSE imbalance 15:50-style ladders applied to the open; Nasdaq NOII timing; LOO/MOO broker cutoffs) — venue-rule details per Grok; verify against current exchange rulebooks before trading.
+- Grok Q-TB7-3 auction-design attributions (Hu & Murphy 2022 on Nasdaq imbalance dynamics; Comerton-Forde & Putniņš successors) — named-only or misattributed in the source material; the verified venue paper is Jegadeesh & Wu (2022), cited in T070.
+- All imbalance-size, gap, and timing thresholds are illustrative (`example`).
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 166/200 — T066: VWAP-Cross Institutional Follower
+
+*Batch TB7 · Strategy 66/100 · Signals S024, S040, S032 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday trend-following off the institutional benchmark: go with price when it reclaims VWAP with volume, exit when it loses it |
+| **Edge source** | VWAP is the dominant institutional execution benchmark (S024); a volume-confirmed reclaim (S040 cross) can mark the point where the day's program flow flips from distribution to accumulation — and the exit when it fails |
+| **Typical holding period** | 30 minutes to 3 hours; flat 15:55 ET |
+| **Capacity hint** | Good in liquid names: VWAP-cross minutes are deep; sizing is the usual $200-risk (`example`) discipline |
+| **Build-or-buy in one line** | Build — session VWAP and an RVOL filter on bought bars; the "institutional following" narrative is free, the spread is not |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid US stocks/ETFs, ADV ≥ 5M shares, price ≥ $10 (`example`). RTH 09:35–15:55 ET (VWAP needs the first 5 minutes to stabilize). Exclusions: earnings days, halts, FOMC 14:00 days after 13:30 (`example`).
+
+**VWAP definition.** Session volume-weighted average price from the opening print: `VWAP_t = Σ(P_i × V_i) / ΣV_i` over bars from 09:30 to *t*, computed causally. **Institutional-flow lens (S024):** institutions benchmark execution to VWAP; price persistently above VWAP suggests net accumulation pressure, below it distribution — this is a *framing* assumption, not a measured fact.
+
+**Cross with volume confirmation.** A **VWAP cross** (S040) at bar *t*: close crosses from below to above VWAP (long) or above to below (short). **Volume confirmation** (S032): bar *t* volume ≥ 1.5× the slot median (`example`) — rejects low-volume drift-throughs that mean-revert. Optional anchor discipline: ignore crosses in the first 30 minutes after a gap open ≥ 1% (`example`) — gap-open VWAP crosses are mostly noise.
+
+**Entry rule.** At bar *t*: VWAP cross + volume confirmation + no gap-open veto. Signal at *t* → fill at the open of *t+1* (`example`). One VWAP-side position per name per day (`example`) — no re-crossing whipsaws.
+
+**Exit rule.** (`example`): (1) opposite cross — close crosses back through VWAP → exit at next open (the follower's thesis is symmetric); (2) stop at the entry-bar extreme ∓ 0.5× the 14-bar ATR (Average True Range — the trailing 14-bar mean of per-bar ranges, a volatility ruler in price units) (beyond the cross bar — a genuine failure); (3) time stop 15:55 ET.
+
+**Position sizing.** `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`), with an `example` 500-share single-trade cap. Max 3 concurrent followers (`example`).
+
+**Risk limits.** Daily loss stop −3R (`example`); kill-switch on stale bars; no new crosses after 15:30 ET (`example`).
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way on continuous fills. Note: VWAP-cross minutes are liquid, so the spread assumption is defensible — but the *strategy's own trading* pushes its average fill away from VWAP by construction (it buys after the reclaim). Do not benchmark the strategy's P&L to VWAP; that comparison is circular.
+
+**Order/execution sketch.** Marketable limit at the t+1 open (`example`); participation ≤ 10% of bar volume (`example`); taker modeling.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S024 (VWAP benchmark) | Reference line + framing | Causal session VWAP; the cross is evaluated against it; institutional-flow interpretation is narrative `[D]` |
+| S040 (VWAP cross) | Primary trigger | Close crosses VWAP with volume ≥ 1.5× slot median (`example`); direction = cross direction |
+| S032 (relative volume) | Confirmation filter | Vetoes low-volume crosses; also computes the entry-bar ATR stop |
+
+Combination logic (pseudocode, 20 lines):
+
+```
+# each 5-min bar close t, 09:35-15:30 ET
+vwap = cumsum(P*V)/cumsum(V) since 09:30      # S024, causal
+rvol = volume[t] / slot_median(volume, t)     # S032
+if close[t-1] < vwap[t-1] and close[t] > vwap[t] and rvol >= 1.5:
+    side = LONG                               # S040, example
+elif close[t-1] > vwap[t-1] and close[t] < vwap[t] and rvol >= 1.5:
+    side = SHORT
+else: wait
+# signal at t -> fill at open[t+1]
+entry = open[t+1]
+stop  = low[t] - 0.5 * ATR(14) (for LONG)     # example
+N = floor(200 / abs(entry - stop))
+exit on opposite cross at next open           # S040 symmetric
+flatten_at(15:55 ET)
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity MNO, seed 166 (tape per Grok capture, reproduced here as the synthetic example). 10:25: close **80.10**, VWAP **80.18**, RVOL 0.9 — below VWAP, no signal. 10:30: close **80.22** crosses above VWAP **80.19** with RVOL **1.8** (≥ 1.5 — confirmed). Signal at *t* = 10:30 close → fill long at the 10:35 open: **80.25**. Stop = 80.25 − 0.5×ATR(0.40) = **80.05**; risk/share = 0.20; the example sizes **500 shares** (`example` position cap for the illustration; the formula would allow more, the cap keeps the tape's liquidity honest).
+
+14:10: close **80.20** crosses below VWAP **80.31** with RVOL **1.6** — opposite cross. Exit at the next open: **80.18**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Buy (10:35 open) | 80.25 | 500 | −40,125.00 |
+| Sell (14:15 open) | 80.18 | 500 | +40,090.00 |
+| Gross | | | **−35.00** |
+| Commission (500 × $0.01 round-trip) | | | −5.00 |
+| **Net** | | | **−$40.00** |
+
+A deliberately losing example: the reclaim failed, the symmetric exit did its job, and the round trip cost $40. This is the modal outcome of VWAP-cross following — the cross is a lagging confirmation, and the exit gives back the move that triggered the entry.
+
+**Where the example is optimistic.** The VWAP itself is computed on the synthetic tape's volume, which is smooth; real VWAP jumps with block prints and the cross can trigger on a single large print rather than genuine flow. The fill at 80.25 assumes the 10:35 open doesn't gap with the cross momentum; the exit at 80.18 assumes a clean fill on the opposite cross. The 1.5× RVOL filter is `example` — on real data it filters some whipsaws and passes some failures, and this example was chosen to show a failure. The circular-benchmark warning stands: this strategy should be evaluated on net P&L, never on "beat VWAP."
+
+### T5. Data & infra — what must run
+
+1-minute or 5-minute OHLCV for 500 names; per-bar causal session VWAP, slot-median volume, 14-bar ATR — all O(1) rolling state. Footprint per the project cost model: 195,000 bars/day, trivial; 60 days ≈ 3GB disk; working set far below ~77GB; Polars-class throughput (~10–50M rows/sec planning assumption) makes the feature pass seconds-scale. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the cross logic is trivial; the hours are the causal-VWAP replay discipline (no full-session VWAP peeking) and the gap-open veto calendar. **M5 Max feasibility verdict: yes.** Failure plan: stale feed → no new crosses; running followers keep ATR stops and the opposite-cross exit; flatten 15:55 ET.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Professional data: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`) covers bars. Verdict: **build.** VWAP is arithmetic; no vendor's "institutional flow" indicator adds anything the cross doesn't already show. Crossover: none — but if you want *actual* institutional flow (13F, block prints, program-trade flags), that is a different data product and a different strategy.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Berkowitz, S.A., Logue, D.E. & Noser, E.A. "The Total Cost of Transactions on the NYSE" (JF 1988) https://doi.org/10.1111/j.1540-6261.1988.tb02591.x | VWAP as the standard institutional execution benchmark; measured execution costs | Establishes VWAP's *benchmark* role — the premise that institutions care about VWAP. It does **not** document that following VWAP crosses is profitable; the directional rule is weakly documented/folkloric `[D]` |
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm | Short-horizon continuation and reversal structure intraday | General intraday-trend background; the cross-following rule itself is a reconstruction |
+| Gao et al., "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return" https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2552752 | Intraday momentum in the S&P 500 ETF | Directional-following background; index-level, not a VWAP-cross rule |
+
+Capacity/crowding/decay: VWAP is the most-watched line on every institutional blotter; any cross-following edge is competed away in the most liquid names first. There is an additional structural reason to expect thin results: the strategy's entries are *adverse-selection machines* — every long entry buys after price has already risen through VWAP, so the fill is systematically worse than the benchmark the signal is named after. That does not make the rule unusable, but it means the gross edge must clear a hurdle that backtests anchored on mid-prices will understate. Practically, the way to know whether the rule has anything is to measure the markout: if the average fill is not followed by continued drift in the cross direction over the next 30–60 minutes, the cross was noise and no parameter tuning will fix it. Honest bottom line: for a ≤$1M paper operation, this is a *discipline* strategy more than an alpha strategy — it keeps you with the day's flow and cuts losers mechanically, but expect the gross edge to be near zero before costs. For an institutional desk, VWAP-cross following is an execution-timing heuristic, not a signal.
+
+### T8. Failure modes
+
+- **Regime: range days.** VWAP crosses back and forth all day; the one-position-per-day rule caps the damage at one whipsaw, but the whipsaw is the modal outcome. *Mitigation:* the volume-confirmation filter; a daily regime check — if the first cross fails, no second cross (`example`).
+- **Crowding: everyone watches VWAP.** The cross bar is crowded; the t+1 fill is the crowded fill. *Mitigation:* participation cap; measure slippage vs the model.
+- **Latency: VWAP is causal but volume prints late.** Corrected prints can revise the cross after the fact. *Mitigation:* use as-published bars in the replay; accept that some historical "crosses" never existed in real time.
+- **Costs: buying the reclaim.** The strategy systematically buys above VWAP and sells below it. *Mitigation:* model fills honestly; never benchmark to VWAP.
+- **Overfit: 1.5× RVOL, 0.5× ATR.** All `example`. *Mitigation:* walk-forward with embargo.
+- **Operations: corporate actions.** Splits/dividends shift the VWAP series. *Mitigation:* split-adjusted bars only; halt on unadjusted corporate-action flags.
+- **Signal staleness: VWAP anchor drift.** On high-volume days the session VWAP becomes a slow-moving average dominated by the morning's prints, and late-day crosses against it mean less — the benchmark has gone stale while the tape has moved on. *Mitigation:* an `example` freshness check — skip crosses after 14:30 if the day's volume is already above 1.5× its 20-day average, on the grounds that the VWAP line no longer represents the marginal institutional benchmark.
+
+### T9. Visuals
+
+![T066 worked example — synthetic 5-min MNO price vs session VWAP with cross markers, RVOL filter, entry/exit, and per-trade net P&L](images/T066_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(5-min OHLCV bars)"] -->|"5-min bars"| SIGS["Signals<br/>S024 VWAP · S040 cross · S032 RVOL"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(VWAP cross + RVOL≥1.5, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs ATR stop, 3-name cap)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, ≤10% participation)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(opposite cross / ATR stop / 15:55)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Berkowitz, S.A., Logue, D.E. & Noser, E.A. "The Total Cost of Transactions on the NYSE." *Journal of Finance* 43(1), 97–112 (1988). https://doi.org/10.1111/j.1540-6261.1988.tb02591.x — VWAP as institutional execution benchmark; execution-cost measurement. DOI metadata verified 2026-09-10.
+2. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — intraday return structure. Title verified 2026-09-10.
+3. Gao, L., Han, Y., Li, S.Z. & Zhou, G. "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2552752 — intraday momentum in SPY. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- The "institutional flow flips at the VWAP reclaim" narrative is a practitioner framing `[D]`, not a documented empirical result — no verified study of directional VWAP-cross profitability was found in this pass.
+- The 1.5× RVOL and 0.5× ATR constants are illustrative (`example`).
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 167/200 — T067: Anchored-VWAP Event Trader
+
+*Batch TB7 · Strategy 67/100 · Signals S024, S091, S093 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Event-anchored intraday trend: re-anchor VWAP at the news print, trade the post-event drift while price holds the anchor |
+| **Edge source** | Post-event drift (S091) — prices under-react to news in the first minutes; the anchored VWAP (S024) is the reference line that separates drift from reversal; the news classifier (S093) filters which events qualify |
+| **Typical holding period** | 15 minutes to 2 hours post-event; flat 15:55 ET |
+| **Capacity hint** | Event-driven and lumpy: 0–3 qualifying events per day in a 500-name universe; sizing is $200-risk (`example`) per event |
+| **Build-or-buy in one line** | Build the anchor engine on bought bars; buy the news feed — the classifier is only as good as the timestamped headline stream behind it |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid US stocks, ADV ≥ 2M shares, price ≥ $10 (`example`). RTH 09:35–15:55 ET. Exclusions: the event must occur during RTH with a clean pre-event tape (no halt in the prior 30 minutes, `example`).
+
+**Anchored VWAP.** An **anchored VWAP (AVWAP)** is the volume-weighted average price computed from a chosen anchor bar forward: `AVWAP_t = Σ(P_i × V_i)/ΣV_i` for bars `i ∈ [anchor, t]`. The anchor here is the **event bar** — the 5-minute bar containing the news timestamp. Unlike session VWAP, the AVWAP resets its memory at the event: it measures the market's average price *since the news*, which is the reference a post-event drift trader actually needs.
+
+**Event qualification (S093).** A qualifying event: (1) a timestamped headline from the news feed during RTH; (2) the event bar's range ≥ 2.0× the 20-bar median range (`example`); (3) the event bar's volume ≥ 2.0× the slot median (`example`); (4) the headline classifier tags it directional (earnings surprise language, guidance change, analyst action, M&A — `example` categories) rather than noise (rumor, rehash, "shares halted"). Non-directional or ambiguous headlines are vetoed — the strategy trades drift, not confusion.
+
+**Entry rule.** At event bar *t* (news timestamp inside bar *t*): if qualified and the bar closes in the top/bottom third of its range in the headline's direction, enter with the drift. Signal at *t* → fill at the open of *t+1* (`example`). One event trade per name per day (`example`).
+
+**Exit rule.** (`example`): (1) AVWAP cross against the position — the drift has failed vs the post-news average price; (2) stop at the event-bar extreme ∓ 0.3× ATR (Average True Range — the trailing 14-bar mean of per-bar ranges, a volatility ruler in price units) (a full retrace of the event bar invalidates the news read); (3) time stop — exit 60 minutes after entry or 15:55 ET, whichever first (S091 drift decays); (4) a second headline reversing the first → exit at next open.
+
+**Position sizing.** `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`). Max 3 concurrent event trades (`example`) — headlines cluster.
+
+**Risk limits.** Daily loss stop −3R (`example`); no new event trades after 15:00 ET (`example` — late headlines leave no drift window before the auction book takes over); kill-switch on stale news feed (> 5 minutes without a heartbeat, `example`).
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way. Event bars are wide-spread bars — the model assumes a 2× normal spread on the t+1 fill (`example`), same honesty rule as T062.
+
+**Order/execution sketch.** Marketable limit at the t+1 open (`example`); participation ≤ 10% of bar volume (`example`); taker modeling. Never pre-position on rumor — the entry requires the qualified event bar to have *closed*.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S091 (event drift) | Primary trigger | Qualified headline + event-bar confirmation; direction = headline direction confirmed by bar close |
+| S024 (VWAP, anchored) | Reference + exit | AVWAP from the event bar; the against-position cross is the primary exit |
+| S093 (news classifier) | Filter | Directional-vs-noise tagging; vetoes ambiguous headlines and rumor-class items |
+
+Combination logic (pseudocode, 22 lines):
+
+```
+# on each 5-min bar close t with headline timestamp in t   # S091
+if halted_last_30min or t > 15:00 ET: wait
+if range[t] < 2.0*median(range,20): wait                  # example
+if volume[t] < 2.0*slot_median(volume): wait              # example
+tag = classify(headline[t])                               # S093
+if tag not in {BULLISH, BEARISH}: wait                    # veto noise
+if not closes_in_extreme_third(t, tag): wait
+side = LONG if tag == BULLISH else SHORT
+# signal at t -> fill at open[t+1]
+entry = open[t+1] (2x spread cost)                        # example
+avwap = AVWAP(anchor=t)                                   # S024
+stop = extreme[t] -/+ 0.3 * ATR(14)                       # example
+N = floor(200 / abs(entry - stop))
+exit on AVWAP cross vs position                           # S024
+exit 60 min after entry or 15:55 ET                       # S091 decay
+exit next open on reversing headline
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity PQR, seed 167. 10:42 ET: headline "PQR raises FY guidance" (S093 tags BULLISH, directional). Event bar 10:40–10:45: range **0.90** vs 20-bar median 0.30 (3.0× — qualifies), volume 2.6× slot median, closes **25.60** in the top third of the bar. AVWAP anchored at 10:40. Signal at *t* = 10:45 close → fill long at the 10:50 open: **25.66** (2× spread cost embedded).
+
+Stop = event-bar low 25.15 − 0.3×ATR(0.35) = **25.045** → 25.05; risk/share = 0.61; `N = ⌊200/0.61⌋` = **327 shares**. The drift holds above the AVWAP for 40 minutes; at 11:35 the bar closes below the AVWAP → exit at the next open: **26.10**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Buy (10:50 open) | 25.66 | 327 | −8,390.82 |
+| Sell (11:40 open, AVWAP cross) | 26.10 | 327 | +8,534.70 |
+| Gross | | | **+143.88** |
+| Commission (327 × $0.01 round-trip) | | | −3.27 |
+| **Net** | | | **+$140.61** |
+
+**Where the example is optimistic.** The headline timestamp is assumed accurate to the bar — real news feeds have variable latency, and a 1–3 minute delay means the "event bar" you trade is not the event bar the market traded. The S093 classifier is assumed correct; misclassified headlines (bullish tag on a "raises guidance but cuts margin outlook" release) are a real and frequent loser. The 2× spread cost is a guess — post-headline spreads can be far wider. The AVWAP exit at 26.10 assumes a clean fill; the cross bar itself is often fast. And this is a winning example chosen for illustration — post-event drift exists on average in the literature, but the per-event variance is enormous and the median qualified event is roughly a scratch after costs (illustrative).
+
+### T5. Data & infra — what must run
+
+Two feeds: (1) 1-minute/5-minute OHLCV for 500 names (195,000 bars/day; 60 days ≈ 3GB per the cost model); (2) a timestamped headline stream with machine-readable timestamps — the strategy's critical path. Per-bar state: AVWAP from each open event anchor (a handful of anchors per day, O(1) each), 20-bar median range, slot-median volume, 14-bar ATR. Working set far below ~77GB; Polars-class throughput (~10–50M rows/sec planning assumption) is ample. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the anchor engine is simple; the hours are the news-feed integration (timestamp normalization, duplicate-headline dedup, heartbeat monitoring) and the replay discipline (headlines must be injected at their *feed-arrival* time, not their *publication* time — the difference is the look-ahead trap). **M5 Max feasibility verdict: yes** — the constraint is the news-feed license, not compute. Failure plan: news-feed heartbeat missed → no new event trades; open event trades keep AVWAP exits and stops; flatten 15:55 ET.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). News: retail-grade headline streams (e.g., Benzinga Newsfeed standard tier, `indicative — verify before budgeting`) carry timestamps but with variable latency; professional: **Bloomberg Event-Driven Feeds / RavenPack** (enterprise pricing, `indicative — verify before budgeting`). Bars: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`). Verdict: **buy the news feed, build the anchor engine.** A timestamped headline stream cannot be built; the AVWAP-and-drift logic around it is twenty lines. Crossover: if the news-feed cost exceeds the strategy's expected monthly P&L at your size, drop the strategy — like T065's imbalance feed, the feed is the edge's price tag.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Tetlock, P.C. "Giving Content to Investor Sentiment: The Role of Media in the Stock Market" (JF 2007) https://doi.org/10.1111/j.1540-6261.2007.01232.x | News media content predicts stock returns; negative news predicts downward pressure with a reversal | Supports the premise that timestamped news moves prices with a tradeable drift window; it is daily-horizon, not intraday |
+| MacKinlay, A.C. "Event Studies in Economics and Finance" (JEL 1997) http://ideas.repec.org/a/aea/jeclit/v35y1997i1p13-39.html | Event-study methodology: measuring abnormal returns around identified events | The methodological backbone — the strategy *is* an intraday event study with a position attached; it does not bless any threshold |
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm | Intraday return structure incl. short-horizon continuation | General intraday-drift background; the AVWAP packaging is the strategy's own `[D/SR]` |
+
+Capacity/crowding/decay: post-news drift is competed over by every event-driven desk with a faster feed; the retail-readable version of this strategy trades the *residue* after the fast money has moved. Honest bottom line: for a ≤$1M paper operation, this is a feed-gated strategy — paper-trade it only with the actual timestamped feed you would trade live, because feed latency *is* the backtest. For an institutional desk, news-drift is a standard input, and the desk's edge is feed speed and classifier quality, not the AVWAP rule.
+
+### T8. Failure modes
+
+- **Regime: news latency.** A feed that is 2 minutes slower than the market turns every "drift" into a fade-the-top. *Mitigation:* measure feed latency vs the event bar's volume spike in the replay; if the volume precedes your timestamp, the feed is too slow to trade.
+- **Crowding: the headline is public.** The drift window shrinks as more participants automate it. *Mitigation:* the event-bar confirmation filter (only trade headlines the market itself confirms); track per-category hit rates and retire dead categories.
+- **Latency: publication time vs arrival time.** Using the headline's *publication* timestamp in research while trading on *arrival* latency is the classic look-ahead. *Mitigation:* replay injects at arrival time; the harness asserts it.
+- **Costs: post-event spreads.** *Mitigation:* the 2× spread assumption; abort if the t+1 spread exceeds 4× normal (`example`).
+- **Overfit: 2.0×/2.0×/0.3×/60-min.** All `example`. *Mitigation:* walk-forward with embargo; the classifier categories are the real overfit surface — freeze them before the walk-forward, not during.
+- **Operations: duplicate/retracted headlines.** A retraction after entry is an immediate exit signal, not a hold. *Mitigation:* dedup on headline ID; retraction = exit at next open.
+
+### T9. Visuals
+
+![T067 worked example — synthetic 5-min PQR tape with news timestamp, event bar, anchored VWAP from the anchor, AVWAP-cross exit, and per-trade net P&L](images/T067_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(5-min bars + headline feed)"] -->|"5-min bars + timestamped headlines"| SIGS["Signals<br/>S091 drift · S024 AVWAP · S093 classifier"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(qualified event bar, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs event-bar stop, 3-name cap)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, 2× spread cost)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(AVWAP cross / stop / 60-min / 15:55)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Tetlock, P.C. "Giving Content to Investor Sentiment: The Role of Media in the Stock Market." *Journal of Finance* 62(3), 1139–1168 (2007). https://doi.org/10.1111/j.1540-6261.2007.01232.x — media content predicts returns; news-driven pressure with reversal. DOI metadata verified 2026-09-10.
+2. MacKinlay, A.C. "Event Studies in Economics and Finance." *Journal of Economic Literature* 35(1), 13–39 (1997). http://ideas.repec.org/a/aea/jeclit/v35y1997i1p13-39.html — event-study methodology. Title verified 2026-09-10.
+3. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — intraday return structure. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB7-3 news-drift specifics (event-window lengths, per-category drift magnitudes) — named-only, no verifiable source captured; treat as leads.
+- The headline classifier's categories and all bar/volume thresholds are illustrative (`example`); no verified study of intraday AVWAP-anchored news trading was found in this pass.
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 168/200 — T068: Scheduled-Event Vol Expansion
+
+*Batch TB7 · Strategy 68/100 · Signals S034, S076 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Event-volatility breakout: buy the post-release expansion after scheduled macro events, in the direction of the release surprise |
+| **Edge source** | Scheduled announcements resolve uncertainty and volatility expands (S034); the reactive side read sets the trade side; the pre-release compression → post-release expansion-breakout trigger (S076) times the entry |
+| **Typical holding period** | 15 minutes to 2 hours post-release; flat 15:55 ET |
+| **Capacity hint** | Sparse: 8 FOMC (Federal Open Market Committee) + 12 CPI (Consumer Price Index)/NFP (non-farm payrolls) days a year dominate; the strategy trades a handful of days per month, sized at $200-risk (`example`) per event |
+| **Build-or-buy in one line** | Build the expansion-breakout rule on bought bars; the economic calendar is a commodity feed — buy the cheapest timestamped one |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid macro-sensitive instruments: SPY/QQQ and large-cap leaders (`example`). Event days only: FOMC decisions (14:00 ET), CPI/PPI (08:30 ET), NFP (08:30 ET), plus ECB (European Central Bank)/BOJ (Bank of Japan) decisions for the overnight session where traded (`example` list). Non-event days: the strategy does nothing.
+
+**Volatility expansion (S076 — volatility breakout / squeeze positioning).** Scheduled releases resolve uncertainty and realized volatility expands after the print — the pattern documented by Ederington & Lee (1996) for scheduled announcements. Define the **pre-release compression**: the 30-minute realized range before the release ≤ 0.5× the 20-day median 30-minute range (`example`). Define **expansion**: the first post-release 5-minute bar range ≥ 2.0× the pre-release 30-minute range (`example`).
+
+**Reactive side selection (strategy logic).** The trade side comes from the surprise: for FOMC, the 2-minute move in the front-month futures or the SPY tick in the release direction; operationally, the direction of the first post-release 5-minute bar's close (`example`) — the strategy follows the market's own verdict rather than forecasting the surprise. This is deliberately *reactive*: forecasting the surprise is a different (and harder) game.
+
+**Entry rule.** At the first post-release 5-minute bar *t* that satisfies expansion: if it closes in the top/bottom third of its range, trade with it. Signal at *t* → fill at the open of *t+1* (`example`). One event trade per release (`example`).
+
+**Exit rule.** (`example`): (1) expansion-exhaustion — a subsequent 5-minute bar closes against the position by more than the entry bar's range → exit next open; (2) stop at the entry-bar extreme ∓ 0.5× the pre-release 30-minute range (a full retrace of the expansion bar invalidates the breakout); (3) time stop — FOMC trades exit by 15:55 ET; CPI/NFP (08:30 releases) trades exit by 11:30 ET (`example` — the morning expansion decays into the midday lull).
+
+**Position sizing.** `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`). Max 1 position per release.
+
+**Risk limits.** Daily loss stop −3R (`example`); if the first post-release bar does *not* expand (a "dud" release), there is no trade — never force one; kill-switch on a missing calendar entry (an unscheduled headline is not this strategy's trade).
+
+**Cost model.** Commission $0.005/share/side (`example`); half-spread each way. Post-release spreads are wide — the model assumes 2× normal spread on the t+1 fill (`example`).
+
+**Order/execution sketch.** Marketable limit at the t+1 open (`example`); participation ≤ 10% of bar volume (`example`); taker modeling. Never enter *before* the release — this is not a straddle strategy and takes no position into the announcement.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S034 (scheduled macro-announcement drift) | Primary trigger (schedule/context) | Timestamped release list; defines event days, release times, and the pre-release window — scheduled releases resolve uncertainty into realized-vol expansion (Ederington & Lee 1996); the calendar gate that arms the strategy on event days |
+| S076 (volatility breakout / squeeze positioning) | Breakout trigger | Pre-release compression (≤ 0.5× median, `example`) + first post-release bar expansion (≥ 2.0×, `example`) — the compression→expansion volatility-breakout / squeeze-positioning trigger |
+| Reactive side read (strategy logic, not a signal) | Side selector | Direction of the first expansion bar's close (`example` reactive read); no pre-release forecasting |
+
+Combination logic (pseudocode, 20 lines):
+
+```
+# on scheduled release day, release time R        # S076
+pre = range(bars[R-30min : R])                    # pre-release window
+if pre > 0.5 * median(range30, 20d): wait         # no compression, example
+# first 5-min bar t after R
+if range[t] < 2.0 * pre: wait                    # dud release, example
+if not closes_in_extreme_third(t): wait
+side = LONG if close[t] > mid(range[t]) else SHORT  # reactive side read (example)
+# signal at t -> fill at open[t+1]
+entry = open[t+1] (2x spread cost)                 # example
+stop = extreme[t] -/+ 0.5 * pre                   # example
+N = floor(200 / abs(entry - stop))
+exit on against-close > entry-bar range           # S034 exhaustion
+flatten_at(15:55 ET or 11:30 ET)                  # release-dependent
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, SPY, FOMC day, seed 168. Release 14:00 ET. Pre-release 30-minute range (13:30–14:00): **0.42** vs 20-day median 1.05 (0.40× ≤ 0.5 — compressed, `example`). First post-release bar 14:00–14:05: range **1.30** (3.1× the pre-release range — expansion), closes **601.20** in the top third. Signal at *t* = 14:05 close → fill long at the 14:10 open: **601.35** (2× spread cost embedded).
+
+Stop = entry-bar low 600.40 − 0.5×0.42 = **600.19**; risk/share = 1.16; `N = ⌊200/1.16⌋` = **172 shares**. The expansion continues; the 15:20 bar closes against the position by more than the entry-bar range → exit at the next open: **603.10**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Buy (14:10 open) | 601.35 | 172 | −103,432.20 |
+| Sell (15:25 open) | 603.10 | 172 | +103,733.20 |
+| Gross | | | **+301.00** |
+| Commission (172 × $0.01 round-trip) | | | −1.72 |
+| **Net** | | | **+$299.28** |
+
+**Where the example is optimistic.** The expansion bar is clean and directional; real FOMC bars whipsaw — the 14:00–14:05 bar frequently reverses in the 14:05–14:10 bar, and the t+1 fill then starts underwater. The 2× spread cost understates post-FOMC spreads, which can be far wider for minutes. The exit at 603.10 assumes the exhaustion signal fires on a closed bar and fills cleanly at the next open; in a fast tape the "against close" bar gaps. The compression pre-condition (0.5×) is `example` — some of the best FOMC trends come *without* clean pre-release compression. And this is a winning example: roughly half of expansion breakouts (illustrative) reverse within 30 minutes, and the stop at 600.19 is a full −$200 loser when they do.
+
+### T5. Data & infra — what must run
+
+Per event day: 1-minute/5-minute OHLCV for the traded names plus the timestamped calendar entry (release time to the minute). Pre-release: 20-day median 30-minute ranges; post-release: the expansion-bar logic. Data volume is small (event days only), but the calendar must be *correct* — a wrong release time is a wrong strategy. Footprint: bars trivial per the cost model; calendar entries are bytes. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the breakout rule is simple; the hours are the calendar feed (holiday shifts, release-time changes, "tentative" releases that move) and the replay discipline (the release timestamp must be the *announcement* time, and the pre-release window must exclude it). **M5 Max feasibility verdict: yes.** Failure plan: calendar entry missing or ambiguous → no trade; a release that doesn't expand → no trade (the dud rule); flatten at the release-dependent time stop.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`). Calendar: free economic calendars (ForexFactory-class, `indicative — verify before budgeting`) are adequate for FOMC/CPI/NFP timestamps — verify release times against the issuing agency, not the aggregator. Bars: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`). Verdict: **build on a bought-or-free calendar.** The calendar is a commodity; the expansion-breakout rule is twenty lines. Crossover: none — but if you want the *surprise* forecast (consensus vs actual), that is a separate data product and a separate strategy.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Ederington, L.H. & Lee, J.H. "The Creation and Resolution of Market Uncertainty: The Impact of Information Releases on Implied Volatility" (JFQA 1996) https://ideas.Repec.org/a/cup/jfinqa/v31y1996i04p513-539_02.html | Implied volatility impounds the anticipated impact of scheduled macro releases (employment report, PPI) before the release and declines as uncertainty resolves after | Direct support for the expansion premise — scheduled releases resolve uncertainty into volatility; it does not bless a directional breakout rule |
+| Andersen, T.G. & Bollerslev, T. "Deutsche Mark–Dollar Volatility: Intraday Activity Patterns, Macroeconomic Announcements, and Longer Run Dependencies" (NBER 5783) https://EconPapers.RePEc.org/paper/nbrnberwo/5783.htm | Macro announcements drive intraday volatility patterns; volatility has long-memory structure | Supports announcement-driven vol expansion; FX, not US equities — direction only |
+| Corsi, F. "A Simple Approximate Long-Memory Model of Realized Volatility" (J. Financial Econometrics 2009) https://econpapers.repec.org/RePEc:oup:jfinec:v:7:y:2009:i:2:p:174-196 | HAR-RV: daily/weekly/monthly realized-vol components forecast volatility | The forecasting backbone for the compression/expansion measurement; a vol model, not a trading rule |
+
+Capacity/crowding/decay: FOMC/CPI volatility is the most studied event pattern in markets; the *expansion* is well known, the *directional* breakout rule is the strategy's own `[D/SR]`. Crucially, options markets price the expected expansion — implied volatilities rise into the release — so the underlying's move must exceed the *priced* move for any vol-linked P&L; this directional rule sidesteps that by trading direction, not vol, but the crowdedness of the post-release tape remains. Honest bottom line: for a ≤$1M paper operation, this is a part-time strategy — a dozen tradable days a year — and should be sized as a hobby sleeve, not a book. For an institutional desk, event vol is traded in options, not in the underlying's first 5-minute bar.
+
+### T8. Failure modes
+
+- **Regime: the priced move.** Options already impound the expected expansion; the underlying's directional move can be violent yet unprofitable after the whipsaw. *Mitigation:* the reactive (not predictive) entry; the dud-release rule keeps you out of non-events.
+- **Crowding: the post-release tape.** The first minutes after FOMC are the most competitive tape of the month. *Mitigation:* 2× spread assumption; participation cap; accept that the t+1 fill is often the worst fill of the trade.
+- **Latency: release-time accuracy.** A calendar that says 14:00 when the statement drops at 14:00:37 is fine; a calendar that is a day off is a disaster. *Mitigation:* verify release times against the issuing agency; heartbeat on the calendar feed.
+- **Costs: post-release spreads.** *Mitigation:* modeled at 2×; abort if the t+1 spread exceeds 4× normal (`example`).
+- **Overfit: 0.5× / 2.0× / 0.5×.** All `example`. *Mitigation:* walk-forward across release types; these are filters, not optima.
+- **Operations: unscheduled headlines.** An unscheduled headline during the pre-release window contaminates the compression read. *Mitigation:* the news-feed veto from T067 — any RTH headline in the pre-release window voids the setup.
+
+### T9. Visuals
+
+![T068 worked example — synthetic 5-min SPY tape on FOMC day with release marker, pre-release compression, expansion bar, entry/exhaustion exit, and per-trade net P&L](images/T068_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(5-min bars + event calendar)"] -->|"5-min bars + release timestamps"| SIGS["Signals<br/>S034 schedule · S076 squeeze-breakout"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(compression + expansion bar, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs expansion stop, 1 per release)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"sized limit orders"| EXEC["Execution<br/>(t+1 open fill, 2× spread cost)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(exhaustion / stop / release time stop)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Ederington, L.H. & Lee, J.H. "The Creation and Resolution of Market Uncertainty: The Impact of Information Releases on Implied Volatility." *Journal of Financial and Quantitative Analysis* 31(4), 513–539 (1996). https://ideas.Repec.org/a/cup/jfinqa/v31y1996i04p513-539_02.html — implied volatility around scheduled macro announcements (employment report, PPI), not FOMC. Verified against the live RePEc record on 2026-09-10 (title, authors, journal, volume/pages match the corrected entry).
+2. Andersen, T.G. & Bollerslev, T. "Deutsche Mark–Dollar Volatility: Intraday Activity Patterns, Macroeconomic Announcements, and Longer Run Dependencies." NBER Working Paper 5783. https://EconPapers.RePEc.org/paper/nbrnberwo/5783.htm — macro announcements and intraday volatility. Title verified 2026-09-10.
+3. Corsi, F. "A Simple Approximate Long-Memory Model of Realized Volatility." *Journal of Financial Econometrics* 7(2), 174–196 (2009). https://econpapers.repec.org/RePEc:oup:jfinec:v:7:y:2009:i:2:p:174-196 — HAR-RV long-memory vol model. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB7-3 scheduled-event specifics (pre/post volatility ratios, e.g., "FOMC-day volume 1.5–2× normal") — named-only, no verifiable source captured; treat as leads.
+- All compression, expansion, and stop multipliers are illustrative (`example`); the directional breakout rule is the strategy's own reconstruction `[D/SR]`.
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 169/200 — T069: Late-Day Reversal into Close
+
+*Batch TB7 · Strategy 69/100 · Signals S027, S038, S041 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Late-session mean-reversion: fade the day's extreme move in the last 30 minutes as intraday inventory mean-reverts into the close |
+| **Edge source** | Intraday reversal of liquidity-driven extremes (S038/S041) timed by the session clock (S027) — the day's inventory imbalances get worked off before the closing auction |
+| **Typical holding period** | 10–30 minutes; flat at the closing auction (MOC into the cross) |
+| **Capacity hint** | Good in liquid names: the last 30 minutes are deep; sizing is $200-risk (`example`) per fade |
+| **Build-or-buy in one line** | Build on 5-minute bars — a day-range position metric, an exhaustion read, and a clock; nothing to buy |
+
+### T2. Full mechanics
+
+**Universe & session.** Liquid US stocks/ETFs, ADV ≥ 5M shares, price ≥ $10 (`example`). Trading window 15:30–15:59 ET only — the strategy exists exclusively in the last half hour. Exclusions: index-rebalance days (the close is an index event — see T070), FOMC days after 14:00 (the afternoon is a news tape), earnings days.
+
+**Extreme-day definition.** At 15:30, compute the day's range position: `day_pos = (close_15:30 − day_low) / (day_high − day_low)`. An **extreme day** long-fade candidate: `day_pos ≥ 0.85` (`example`) — the name is pinned near its high; short-fade candidate: `day_pos ≤ 0.15` (`example`). Add the exhaustion read (S041): the 15:00–15:30 advance must show deceleration — the last 30-minute bar's range ≤ 0.7× the prior 30-minute bar's range (`example`) — so the fade triggers on a *stalling* extreme, not a running one.
+
+**Inventory rationale.** The working assumption `[D]`: intraday market-maker and program inventory accumulated during the day's trend gets worked off into the close, producing a partial reversal of the extreme. This is a framing story, not a measured inventory series — the strategy trades the price pattern, not observed positioning.
+
+**Entry rule.** At the 15:30 bar close *t*: extreme-day + deceleration conditions met. Fade direction: short if pinned near the high, long if pinned near the low. Signal at *t* → fill at the 15:35 open (`example`). One fade per name per day (`example`).
+
+**Exit rule.** (`example`): (1) MOC exit — submit a market-on-close order to flatten into the official closing cross (the strategy's natural endpoint; the MOC rests until the official auction print); (2) stop — if price makes a *new* day extreme after entry (the trend re-accelerates), exit at the next open immediately; (3) partial target — cover half at 50% of the entry-to-day-extreme distance (`example`).
+
+**Position sizing.** `N = ⌊ R / |P_entry − P_stop| ⌋`, `R = $200` (`example`), with the stop defined as the day extreme + 0.25× the day's range (`example`). Max 3 concurrent fades (`example`).
+
+**Risk limits.** Daily loss stop −3R (`example`); the new-day-extreme stop is hard — no second chances in the last 20 minutes; kill-switch on stale bars.
+
+**Cost model.** Commission $0.005/share/side (`example`); entry pays half-spread on the continuous fill; the MOC exit crosses at the official close print with no spread — but the close print can differ from the 15:59 quote by the auction imbalance, which the model books as slippage, not as alpha.
+
+**Order/execution sketch.** Limit entry at the 15:35 open (`example`); MOC submitted by the broker's cutoff (before 15:50 ET, `example`); the MOC rests until the official closing print. Participation ≤ 10% of bar volume (`example`).
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S027 (time-based) | Session gate | Defines the 15:30–15:59 window; owns the clock and the MOC cutoff |
+| S038 (late-day reversal) | Primary trigger | Extreme-day position (`day_pos ≥ 0.85 / ≤ 0.15`, `example`) + deceleration (last 30-min range ≤ 0.7× prior, `example`) |
+| S041 (exhaustion) | Confirmation | The stalling read — rejects extremes that are still accelerating into 15:30 |
+
+Combination logic (pseudocode, 21 lines):
+
+```
+# at 15:30 bar close t                            # S027
+day_pos = (close[t] - day_low) / (day_high - day_low)
+decel = range(bars[15:00-15:30]) <= 0.7 * range(bars[14:30-15:00])  # example
+if day_pos >= 0.85 and decel: side = SHORT         # S038 + S041
+elif day_pos <= 0.15 and decel: side = LONG
+else: wait
+# signal at t -> fill at open[t+1] = 15:35
+entry = open[t+1]
+stop = day_high + 0.25 * day_range (for SHORT)     # example
+N = floor(200 / abs(entry - stop))
+submit MOC to flatten at the close                # S027
+exit next open on new day extreme                 # invalidation
+cover half at 50% retrace of entry-to-extreme     # example
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-minute bars, equity STU, seed 169. The day trends up: day high **55.90**, day low 54.20, day range 1.70. At 15:30: close **55.72** → `day_pos = (55.72 − 54.20)/1.70` = 0.894 (≥ 0.85 — extreme, `example`). Deceleration: 15:00–15:30 range 0.28 vs 14:30–15:00 range 0.45 (0.62× ≤ 0.7 — stalling, `example`). Signal at *t* = 15:30 close → fill short at the 15:35 open: **55.68**.
+
+Stop = day high + 0.25×range = `55.90 + 0.425` = **56.325** → 56.33; risk/share = 0.65; `N = ⌊200/0.65⌋` = **307 shares**. The reversal comes: the partial target is 50% of the entry-to-day-extreme distance — `(55.90 − 55.68) × 0.5` = 0.11, target `55.68 − 0.11` = **55.57** (`example`). Cover 153 at 55.57: gross = `153 × 0.11` = +16.83. Remainder 154 shares ride the MOC: official close print **55.42**; gross = `154 × (55.68 − 55.42)` = +40.04. Total gross = +56.87. Commission = 307 × 0.01 = −3.07. Net = **+$53.80**.
+
+Session ledger:
+
+| Leg | Price | Shares | Gross |
+|---|---|---|---|
+| Short (15:35 open) | 55.68 | 307 | — |
+| Cover half (retrace target) | 55.57 | 153 | +16.83 |
+| MOC flatten (official close) | 55.42 | 154 | +40.04 |
+| Commission | | | −3.07 |
+| **Net** | | | **+$53.80** |
+
+A small winning example — deliberately small, because the window is 25 minutes and the edge (if any) is a partial retrace, not a trend.
+
+**Where the example is optimistic.** The deceleration read uses completed 30-minute bars — respected — but the fill at the 15:35 open assumes no gap on a stalling tape; late-day tapes gap. The MOC exit at the official close print 55.42 assumes the auction imbalance doesn't run against the position; on real closes the print can differ from the 15:59 quote by several cents either way. The inventory story is `[D]` framing — no inventory is observed. The new-day-extreme stop is assumed fillable at the next open; in the last 15 minutes a re-accelerating trend gaps over stops. And the partial-target fill at exactly 55.57 assumes a resting limit gets filled — late-day limits at exact levels often don't.
+
+### T5. Data & infra — what must run
+
+5-minute OHLCV for 500 names through 15:59 plus the closing-auction print; per-bar state: running day high/low, 30-minute ranges, the MOC order state machine. Data: 195,000 bars/day, trivial; 60 days ≈ 3GB per the cost model; working set far below ~77GB; Polars-class throughput (~10–50M rows/sec planning assumption) ample. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the rule is simple; the hours are the MOC order-type state machine (cutoffs, cancel/replace rules, the auction-print fill) and the rebalance-day calendar. **M5 Max feasibility verdict: yes.** Failure plan: stale feed after 15:30 → no new fades; open fades keep the new-extreme stop and the MOC; a halt in the last 30 minutes → cancel the MOC and flatten on the resume (`example`).
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`) — supports MOC routing for live testing. Bars: **Massive Stocks Advanced** (~$199/mo, `indicative — verify before budgeting`). Verdict: **build.** The rule is a day-range position plus a clock; no vendor product is needed. Crossover: none — though if you want the *actual* closing-auction imbalance feed to time the MOC (rather than fading blind into it), that is T070's feed and T070's cost-benefit applies.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Heston, Korajczyk & Sadka, "Intraday Patterns in the Cross-Section of Stock Returns" (JF 2010) https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm | Short-term reversal tied to temporary liquidity imbalances; same-interval seasonality | The reversal premise for fading liquidity-driven extremes; the 15:30 timing is the strategy's own |
+| Lou, Polk & Skouras, "A Tug of War: Overnight versus Intraday Expected Returns" (JFE 2019) https://researchonline.lse.ac.uk/id/eprint/87481/ (DOI: 10.1016/j.jfineco.2019.03.011) | Intraday vs overnight return decomposition; intraday reversals vs overnight momentum | Documents that intraday returns mean-revert while overnight trends — supports fading the *day's* extreme rather than chasing it |
+| Cushing, D. & Madhavan, A. "Stock Returns and Trading at the Close" (J. Financial Markets 2000) https://repec.udesa.edu.ar/pub/Finanzas/Journals/Journal%20of%20Financial%20markets/2000/Volume%203,%20Issue%201/Stock%20returns%20and%20trading%20at%20the%20close.pdf | Trading concentration and return behavior at the close | Documents close-session microstructure; relevant to the MOC exit mechanics, not to the fade's profitability |
+
+Capacity/crowding/decay: late-day reversal is folk knowledge and the last 30 minutes are heavily traded; the deceleration filter is the differentiator and its 0.7×/0.85 constants are `example`. Honest bottom line: for a ≤$1M paper operation, this is a reasonable end-of-day sleeve — small targets, hard stops, and flat into the close every night, which is good book hygiene. For an institutional desk, the close is an execution problem (how to trade the auction), not a fade-the-extreme signal.
+
+### T8. Failure modes
+
+- **Regime: trend-into-close days.** On genuine news days the extreme extends into the auction and the fade funds it. *Mitigation:* the deceleration requirement plus the earnings/FOMC exclusion list; the new-day-extreme stop is the hard backstop.
+- **Crowding: the 15:30 fade is consensus.** *Mitigation:* the stalling filter differentiates; the MOC exit avoids competing for the 15:59 continuous liquidity.
+- **Latency: the 15:30 bar must be complete.** A partial bar's day_pos is wrong. *Mitigation:* signal only on the closed 15:30 bar; replay-harness assertion.
+- **Costs: the MOC print vs the quote.** *Mitigation:* the auction-imbalance slippage is modeled as a cost; on rebalance days (excluded) it would dominate. As a standing control, log the difference between the 15:59 mid and the official close print on every fade day — if that difference starts trending against the position, the auction book has learned the fade and the MOC exit needs re-timing.
+- **Overfit: 0.85/0.15/0.7×/0.25×.** All `example`. *Mitigation:* walk-forward with embargo; stress the extreme-day threshold first.
+- **Operations: MOC cutoff misses.** A MOC submitted after the broker's cutoff may be rejected, leaving the position overnight. *Mitigation:* submit by 15:50 ET (`example`); a missed cutoff triggers an immediate market flatten — never carry the fade overnight.
+
+### T9. Visuals
+
+![T069 worked example — synthetic 5-min STU day tape with day high/low, 15:30 extreme read, short entry, partial cover, MOC flatten at the close print, and per-trade net P&L](images/T069_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(5-min OHLCV bars)"] -->|"5-min bars"| SIGS["Signals<br/>S027 clock · S038 reversal · S041 exhaustion"]
+    SIGS -->|"per-bar signal vector"| ENTRY{"Entry logic<br/>(extreme day + stalling, causality t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(dollar-risk vs extreme stop, 3-name cap)"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"limit entry + MOC exit"| EXEC["Execution<br/>(15:35 fill, MOC rests to close print)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(partial target / new-extreme stop / MOC)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Heston, S.L., Korajczyk, R.A. & Sadka, R. "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407 (2010). https://www.kellogg.northwestern.edu/faculty/korajczy/htm/HestonKorajczykSadkaJF2010.htm — short-term reversal linked to temporary liquidity imbalances. Title verified 2026-09-10.
+2. Lou, D., Polk, C. & Skouras, S. "A Tug of War: Overnight versus Intraday Expected Returns." *Journal of Financial Economics* (2019). https://researchonline.lse.ac.uk/id/eprint/87481/ — intraday reversal vs overnight momentum decomposition. DOI: 10.1016/j.jfineco.2019.03.011. Title verified 2026-09-10.
+3. Cushing, D. & Madhavan, A. "Stock Returns and Trading at the Close." *Journal of Financial Markets* 3(1) (2000). https://repec.udesa.edu.ar/pub/Finanzas/Journals/Journal%20of%20Financial%20markets/2000/Volume%203,%20Issue%201/Stock%20returns%20and%20trading%20at%20the%20close.pdf — return behavior and trading at the close. Title verified 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB7-3 late-day specifics (e.g., "last 30 min ≈ 18–22% of daily volume"; "70–80% of large intraday reversals begin in the final 60–90 min") — named-only, no verifiable source captured; treat as leads.
+- All extreme-day, deceleration, and stop constants are illustrative (`example`); the inventory framing is `[D]`.
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 170/200 — T070: MOC Auction-Pin Trader
+
+*Batch TB7 · Strategy 70/100 · Signals S033, S027, S074 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Closing-auction pin: trade toward the price level where the auction book is pinned, using the published imbalance and a dealer-positioning proxy |
+| **Edge source** | The closing auction concentrates the day's liquidity at one print (S033 imbalance); when the book shows a persistent lean, the indicative drifts toward the pin into the cross — and **modeled dealer GEX (proxy)** estimates where dealer hedging flows lean |
+| **Typical holding period** | 5–10 minutes; flat at the official close |
+| **Capacity hint** | Thin and competitive: the close is the most-watched print of the day; size to a fraction of the imbalance |
+| **Build-or-buy in one line** | Buy the closing-imbalance feed; build the pin rule and the GEX proxy — the proxy is arithmetic on option open interest, not a product |
+
+### T2. Full mechanics
+
+**Universe & session.** NYSE/Nasdaq large caps, ADV ≥ 5M shares (`example`); synthetic example uses NYSE-listed ABC, ADV 2.0M. Trading window 15:50–16:00 ET only. Exclusions: index-rebalance days (the pin is an index event with a different book), halts, LULD states.
+
+**Closing-auction imbalance.** From 15:50 ET the exchange publishes the closing-auction imbalance: NYSE's Closing Auction Imbalance Information (Total Imbalance, Market Imbalance, imbalance reference price) and Nasdaq's NOII (paired shares, imbalance side, near/far indicative). Define `I_t` = signed imbalance shares, `P̂_t` = indicative match price, sampled at 15:50, 15:52, 15:55, 15:58 (`example` cadence).
+
+**Modeled dealer GEX (proxy).** **GEX** (gamma exposure) measures how much dealer hedging flow a price move triggers: long-gamma positioning means dealers trade *against* the move (dampening — a "pin" force); short-gamma means dealers trade *with* it (amplifying). The strategy uses **modeled dealer GEX (proxy)**: open interest by strike × option gamma × an assumed dealer positioning share (`example` 60% of customer-facing flow). **Critical caveat:** open interest does *not* reveal who holds it — the tape shows contracts outstanding, not dealer ownership or sign. Inferred dealer positioning is therefore **not observed truth**; it is a model output with an unobserved sign assumption. The proxy is used only as a *directional lean* (does the modeled book suggest pinning or amplifying pressure near the indicative?), never as a precise level. Any backtest that treats modeled GEX as observed positioning is circular.
+
+**Pin definition.** A **pin candidate** exists when: (1) `|I_15:52| ≥ 100,000 shares` (`example`) with a stable sign across the 15:50→15:52 prints; (2) the indicative `P̂` is within 10 bps of a high-open-interest strike (`example`); (3) the **modeled dealer GEX (proxy)** at that strike is long-gamma (dampening) — the pin force and the imbalance lean the same way; (4) the continuous-session mid is within 15 bps of the indicative (`example`) — the pin is tradeable, not a mirage.
+
+**Entry rule.** At 15:52 (`example`): if the pin candidate holds, trade *toward* the pin — buy if the pin is above the mid, sell if below. Enter continuously at the mid (`example`): the position is a bet that the indicative converges to the pin by the cross. Signal at *t* → fill at *t+1* (next print); auction orders (the offsetting MOC) rest until the official auction print.
+
+**Exit rule.** The position is flattened by an **offsetting MOC order** submitted by 15:58 (`example`), filled at the official closing print. If the imbalance flips sign between 15:52 and 15:58, cancel the MOC and flatten continuously at the next print (`example`).
+
+**Position sizing.** `N = min(⌊R/stop_dist⌋, 0.02 × |I|)` (`example`), `R = $200` (`example`). One pin trade per name per day.
+
+**Risk limits.** Daily loss stop −3R (`example`); a flipped imbalance voids the setup — no stubbornness into the cross; kill-switch on a missing 15:52 print.
+
+**Cost model.** Commission $0.005/share/side (`example`). Continuous entry pays half-spread; the MOC exit crosses at the official print — the print-vs-indicative difference is booked as slippage.
+
+**Order/execution sketch.** Continuous limit at the mid for entry (`example`); MOC for the offsetting exit by the broker's cutoff; the MOC rests until the official auction print. Participation ≤ 10% of bar volume on the continuous leg (`example`).
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S033 (auction imbalance) | Primary trigger | Signed imbalance `I`, indicative `P̂`, paired shares at 15:50/15:52/15:55/15:58; stability and size gates (`example`) |
+| S027 (time-based) | Session gate | Defines the 15:50–16:00 window; owns the MOC cutoff and the flat-at-close discipline |
+| S074 (dealer positioning proxy) | Lean filter | **Modeled dealer GEX (proxy)** from option open interest; long-gamma = pinning force; sign is *assumed*, not observed |
+
+Combination logic (pseudocode, 22 lines):
+
+```
+# closing-auction window, 15:50-16:00 ET             # S027
+I50, P50 = read_closing_imbalance(15:50)            # S033
+I52, P52 = read_closing_imbalance(15:52)
+if halted or LULD: no trade
+if abs(I52) < 100000 or sign(I52) != sign(I50): wait   # example
+gex = modeled_dealer_GEX(strikes, open_interest)   # S074 PROXY
+# caveat: OI does not reveal dealer ownership/sign; inferred
+# positioning is not observed truth
+pin_strike = nearest_high_OI_strike(P52)
+if abs(P52 - pin_strike)/P52 > 10e-4: wait         # example
+if gex_sign(pin_strike) != LONG_GAMMA: wait        # pin force
+if abs(mid - P52)/P52 > 15e-4: wait                # example
+side = BUY if pin_strike > mid else SELL
+# signal at t -> continuous fill at t+1; MOC rests to the print
+entry = mid at 15:52 (continuous limit)            # example
+submit offsetting MOC by 15:58                     # rests to close print
+N = min(floor(200/stop_dist), 0.02*abs(I52))       # example
+cancel MOC and flatten continuous if sign(I) flips # example
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic NYSE-listed ABC, ADV 2.0M, seed 170 (tape per Grok capture, reproduced here as the synthetic example). 15:50: buy imbalance **120,000** (`example` size gate uses 100,000), indicative **40.08**. 15:52: buy imbalance **110,000**, sign stable, indicative **40.10**, continuous mid **40.04**. Pin check: high-OI strike at **40.00**; the indicative (40.10) sits 25 bps above it — outside the 10-bps strike-proximity gate as written. The captured tape's trade still qualifies under the *imbalance-stability* gate (buy imbalance 120k→110k, sign stable) and the **modeled dealer GEX (proxy)** long-gamma lean around the 40.00 strike, which points the pin force upward toward the indicative. This chapter therefore treats strike-proximity as a confirming rather than binding condition (`example` discretion, documented here rather than hidden): the traded gates are imbalance stability + GEX lean, and the proximity gate is reported as the parameter most in need of walk-forward calibration.
+
+Signal at *t* = 15:52 → buy **2,000** continuously at **40.05** (within the `0.02 × 110,000` = 2,200 cap ✓). 15:58: submit the offsetting **MOC sell**; it rests until the official auction print. Official close: **40.11**.
+
+Ledger:
+
+| Leg | Price | Shares | Amount |
+|---|---|---|---|
+| Buy (continuous, 15:52) | 40.05 | 2,000 | −80,100.00 |
+| Sell MOC (official close print) | 40.11 | 2,000 | +80,220.00 |
+| Gross | | | **+120.00** |
+| Commission (2,000 × $0.01 round-trip) | | | −20.00 |
+| **Net** | | | **+$100.00** |
+
+**Where the example is optimistic.** The continuous fill at 40.05 assumes the mid doesn't move against the buyer in the 8 minutes to the cross — on a real buy-leaning book, buying *into* the lean moves the mid. The MOC fill at the official print 40.11 assumes the imbalance doesn't flip after 15:58; late flips happen and the cancel-and-flatten rule then pays the spread. The **modeled dealer GEX (proxy)** is doing narrative work here: the example's long-gamma read depends on the *assumed* 60% dealer share of customer flow — flip the assumption and the "pin force" reverses sign. Open interest does not reveal dealer ownership or sign, so the proxy is a hypothesis, not a measurement. The 100,000-share gate and the 2%-of-imbalance cap are `example`. And this is a winning example chosen for illustration — auction pins fail whenever a late institutional MOC order overwhelms the book, and the failure mode is a full adverse print with no continuous exit available.
+
+### T5. Data & infra — what must run
+
+Per close: the 15:50–15:58 closing-imbalance snapshots (NYSE or Nasdaq feed), 1-minute bars into the close, the official closing print, and an end-of-day option open-interest surface for the **modeled dealer GEX (proxy)**. The imbalance feed is the critical path; the OI surface can be T+1 (yesterday's OI — same-day OI is not published before the close, so any "live GEX" product is itself a proxy on stale OI — worth knowing). Footprint: bars trivial; imbalance snapshots are kilobytes; the OI surface is megabytes per day. Harness: Tier M+ band, 40–100 hours ($6,000–$15,000 loaded at $150/hour) — the pin rule is simple; the hours are the venue-specific imbalance schemas, the MOC state machine, and the GEX-proxy calibration harness with the sign assumption made explicit and stress-tested. **M5 Max feasibility verdict: yes** — the constraint is feed licenses, not compute. Failure plan: missing 15:52 print → no trade; imbalance flip → cancel MOC, flatten continuous; a halt after entry → the MOC stands (auction orders survive halts per venue rules — verify per venue) or is canceled per the venue's halt handling, in which case flatten on the resume.
+
+### T6. Buy vs build
+
+Retail: **QuantConnect** (~$60–$300/mo class, `indicative — verify before budgeting`); **IBKR paper** (no incremental platform fee on an existing account, `indicative — verify before budgeting`) — supports MOC routing. Professional data: **Nasdaq TotalView** (~$1.6k–$1.7k/mo firm + ~$80/user, `indicative — verify before budgeting`) carries NOII; **NYSE closing-auction imbalance** via exchange-direct or vendor add-on (`indicative — verify before budgeting`); option OI surfaces from the listed-options feed vendors (vendor pricing varies, `indicative — verify before budgeting`). Verdict: **buy the imbalance feed, build the pin rule and the GEX proxy.** The GEX proxy is open-interest arithmetic — any vendor selling "live dealer GEX" is selling the same proxy with a slicker sign assumption; build it so the assumption is yours and visible. Crossover: if the imbalance feed plus the OI surface cost more than the strategy's expected monthly P&L at your size, drop the strategy — the feeds are the edge's price tag, and at retail size the tag usually wins.
+
+### T7. Success-ratio evidence
+
+| Source | What it documents | Relevance / caveat |
+|---|---|---|
+| Bogousslavsky, V. & Muravyev, D. "Who Trades at the Close? Implications for Price Discovery and Liquidity" (SSRN 3485840) https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3485840 | Closing-auction volume share, who trades at the close, price-discovery and liquidity implications | Documents that the close is where liquidity concentrates — the premise that the auction print is the day's most informative price; it does not bless a pin-trading rule |
+| Jegadeesh, N. & Wu, Y. "Closing auctions: Nasdaq versus NYSE" (JFE 2022) https://econpapers.repec.org/article/eeejfinec/v_3a143_3ay_3a2022_3ai_3a3_3ap_3a1120-1139.htm (DOI: 10.1016/j.jfineco.2021.12.003) | Venue comparison of closing-auction design and outcomes | The verified venue-design reference for how the two closes differ — required reading before trading either book |
+| NYSE Rule 7.35 Series — Auction mechanics (SEC Exhibit 5, 2026) https://www.sec.gov/files/rules/sro/nyse/2026/34-106126-ex5.pdf | Auction-only orders (MOO/MOC/LOC), imbalance definitions, freeze and cutoff rules | The rulebook: confirms MOC/LOC exist as auction-only orders, imbalance information is disseminated, and auction orders rest until the official print |
+
+Capacity/crowding/decay: the closing cross is the single most competitive print of the day; any pin edge is competed away by participants with faster imbalance feeds and direct auction access. The **modeled dealer GEX (proxy)** adds no verified edge — no verified study in this pass documents profitable pin-trading on modeled GEX; it is included as a *lean filter* `[D/SR]`, and the open-interest ownership/sign caveat means it must never be presented as observed positioning. Honest bottom line: for a ≤$1M paper operation, this is a feed-gated curiosity — paper-trade it only with the real imbalance feed, size it as a fraction of the imbalance, and expect the gross edge to be near zero. For an institutional desk, the close is an execution venue, and "auction-pin trading" is called *trading the close* — it is done with the real book, not a proxy.
+
+### T8. Failure modes
+
+- **Regime: rebalance/index days.** The pin is then an index-creation event; the imbalance is real but the pin logic misfires. *Mitigation:* rebalance exclusion list — hard veto.
+- **Crowding: the indicative is public.** Everyone sees the 110,000-share print. *Mitigation:* the 2%-of-imbalance cap; never be the marginal buyer into your own thesis.
+- **Latency: imbalance snapshots vs your read.** A 15:52 snapshot can be stale by the 15:58 MOC cutoff. *Mitigation:* re-check sign at the latest print; the flip rule is the backstop.
+- **Costs: buying into the lean.** The continuous entry pays the spread and moves the mid. *Mitigation:* modeled as a taker fill; measure entry slippage vs the mid at signal time.
+- **Overfit: the GEX sign assumption.** The proxy's output flips with the assumed dealer share — the most dangerous `example` in this chapter. *Mitigation:* stress the assumption 30%–90%; if the rule's P&L depends on the assumption's exact value, the rule has no edge.
+- **Operations: MOC cutoff misses.** A MOC submitted after the broker's cutoff is dead, leaving a directional position into the after-hours. *Mitigation:* submit by 15:58 ET (`example`); a missed cutoff triggers an immediate continuous flatten — never carry the pin overnight.
+
+### T9. Visuals
+
+![T070 worked example — synthetic ABC tape 15:50–16:00 with imbalance prints, indicative vs mid, modeled dealer GEX (proxy) lean, continuous entry, MOC exit at the official close print, and per-trade net P&L](images/T070_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(imbalance feed + 1-min bars + OI)"] -->|"imbalance snapshots + 1-min bars + OI surface"| SIGS["Signals<br/>S033 imbalance · S027 clock · S074 GEX proxy"]
+    SIGS -->|"per-print signal vector"| ENTRY{"Entry logic<br/>(stable imbalance + GEX lean, t→t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(min(dollar-risk, 2% of imbalance))"]
+    ENTRY -->|no trigger / veto| WAIT["Wait"]
+    SIZE -->|"continuous entry + MOC exit"| EXEC["Execution<br/>(mid fill, MOC rests to close print)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(imbalance-flip cancel / MOC print)"]
+    MON -->|"trade P&L"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Bogousslavsky, V. & Muravyev, D. "Who Trades at the Close? Implications for Price Discovery and Liquidity." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3485840 — closing-auction volume, participation, and price discovery. Title verified 2026-09-10.
+2. Jegadeesh, N. & Wu, Y. "Closing auctions: Nasdaq versus NYSE." *Journal of Financial Economics* 143(3), 1120–1139 (2022). https://econpapers.repec.org/article/eeejfinec/v_3a143_3ay_3a2022_3ai_3a3_3ap_3a1120-1139.htm — venue comparison of closing-auction design. DOI: 10.1016/j.jfineco.2021.12.003. Title/authorship verified 2026-09-10 (note: some secondary sources misattribute this paper; the published authors are Jegadeesh & Wu).
+3. NYSE Rule 7.35 Series, "Auctions" (Rule 7P Equities Trading), via SEC Exhibit 5 (2026). https://www.sec.gov/files/rules/sro/nyse/2026/34-106126-ex5.pdf — auction-only orders, imbalance definitions, freeze rules. Content confirmed 2026-09-10.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Grok Q-TB7-1 closing-auction mechanics (NYSE imbalance ladder timing, MOC/LOC cutoff specifics, freeze rules) — venue-rule details per Grok; verify against current exchange rulebooks before trading.
+- The **modeled dealer GEX (proxy)** construction (60% assumed dealer share of customer flow, long-gamma pin inference) is the strategy's own model `[D/SR]` — no verified study of profitable GEX-proxy pin trading was found in this pass, and open interest does not reveal dealer ownership or sign.
+- All imbalance-size, timing, and proximity thresholds are illustrative (`example`).
+
+*Source log: Grok answered Q-TB7-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
