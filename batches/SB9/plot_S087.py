@@ -124,7 +124,7 @@ ax2.axhline(0.05, color=PALETTE["zero"], ls="--", lw=1.5, label="ADF p = 0.05")
 ax2.axvline(dstar, color=PALETTE["profit"], ls=":", lw=1.8)
 ax2.annotate(f"d* = {dstar:.2f}", (dstar, 0.5), textcoords="offset points",
              xytext=(8, 10), fontsize=10, color=PALETTE["profit"], weight="bold")
-ax2.set_title("Memory vs stationarity tradeoff (seed 7)")
+ax2.set_title("Memory vs stationarity tradeoff (seed 2)")
 ax2.set_xlabel("Fractional order d")
 ax2.set_ylabel("Correlation / ADF p-value")
 ax2.set_xlim(0, 1)
