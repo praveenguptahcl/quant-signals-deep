@@ -1,0 +1,8 @@
+**64. Jump-robust realized variance (RV / bipower / Lee–Mykland)** [D]
+- Intuition: Separating continuous volatility from jump variation isolates news/informed bursts for event gating.
+- Formula: RV_t = Σ_{i=1..M} r_{t,i}² on an evenly spaced grid (1–5 min to limit microstructure noise). Bipower variation: BV_t = (π/2)·Σ_{i=2..M}|r_i|·|r_{i−1}| → integrated variance; jump component J_t = max(RV_t − BV_t, 0); relative jump RJ = (RV − BV)/RV. Lee–Mykland test: L(i) = |r_i|/σ̂_i (σ̂ = local bipower-based vol); flag jumps beyond the Gumbel critical value.
+- Data: 1–5 min intraday returns + local vol estimates.
+- Sources: Any intraday feed.
+- Horizon: estimation window (day); the jump series gates news/vol signals.
+- Citations: Andersen, Bollerslev, Diebold & Labys (2003); Barndorff-Nielsen & Shephard (2004); Lee & Mykland (2008).
+- Coverage: G, M, S, R1 (2.2 adjacent).

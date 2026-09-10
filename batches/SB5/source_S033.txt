@@ -1,0 +1,8 @@
+**33. Open-auction imbalance continuation** [SR]
+- Intuition: A large opening-auction imbalance leaves residual pressure that continues for the first minutes of continuous trading.
+- Formula (standard reconstruction): signed opening imbalance (or open print vs pre-open indicative price); trade with the sign for the first 5–15 minutes.
+- Data: Opening-auction imbalance feed / opening print vs reference.
+- Sources: Exchange feeds, Databento Imbalance.
+- Horizon: 5–15 minutes.
+- Citations: Practitioner standard.
+- Coverage: R1, T.

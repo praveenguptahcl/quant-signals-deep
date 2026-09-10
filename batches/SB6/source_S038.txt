@@ -1,0 +1,8 @@
+**38. Sub-hour microstructure reversal** [D]
+- Intuition: At horizons under an hour, returns negatively autocorrelate due to bid-ask bounce and temporary liquidity imbalances — fade sharp 5–30 minute moves.
+- Formula: r_{t:t+h} = α − β·r_{t−h:t} + ε with β > 0 for h < 60 min; or simply signal = −r over the last 5–15 minutes, entered with limit orders earning the spread.
+- Data: Minute bars or ticks.
+- Sources: Any intraday feed.
+- Horizon: minutes to < 1 hour.
+- Citations: Heston, Korajczyk & Sadka (2010) ("short-term reversal driven by temporary liquidity imbalances lasting less than an hour and bid-ask bounce"); Jegadeesh (1990)/Lehmann (1990) for the daily/weekly analog.
+- Coverage: R1.

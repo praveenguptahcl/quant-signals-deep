@@ -1,0 +1,8 @@
+**82. Deep learning on the LOB (DeepLOB + classical ML features)** [D/SR]
+- Intuition: The first L bid/ask levels as a tensor carry short-horizon information about the next mid move beyond linear features; a cheaper cousin uses hand-built features in logistic/GBM models.
+- Procedure: Input: 100 most recent 10-level LOB snapshots (price+size) in event time; label ∈ {up, flat, down} at horizons 10/20/50/100 events; architectures: CNN–LSTM (DeepLOB, Zhang, Zohren & Roberts 2019), LSTM on events (Sirignano & Cont 2019 — "universal" model pooled across ~1,000 stocks beat per-stock models); output P(up/flat/down), trade the softmax direction above a confidence threshold. Classical form [SR]: features per bar — microprice deviation (entry 4), OFI (entry 1), bid/ask depth ratio, spread, queue imbalance at levels 1–5, short-term return, Lee–Ready trade-sign imbalance; label = sign of mid change over next N events; model P(up|features); trade when |P − 0.5| > threshold with a spread-cost filter (the Kercheval–Seemann setup). **Caution:** a published research pipeline, not a plug-and-play rule; label definition dominates reported accuracy; reproducing needs full LOB reconstruction and heavy compute.
+- Data: L2 snapshots, 10–20 levels (deep form); L2 or L1 (classical form).
+- Sources: LOBSTER, Databento MBP-10.
+- Horizon: 10 events to ~1 minute (deep); seconds to minutes (classical).
+- Citations: Sirignano & Cont (2019); Zhang, Zohren & Roberts (2019); Kercheval & Seemann.
+- Coverage: R1, S, G.

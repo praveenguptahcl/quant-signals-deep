@@ -1,0 +1,8 @@
+**58. Futures calendar spread (term-structure carry)** [D]
+- Intuition: The term structure of futures is anchored by carry; calendar-spread deviations from fair value mean-revert.
+- Formula: Fair F(T) = S·e^{(r−q−y)T}; calendar signal = (F_2 − F_1) − (fair_2 − fair_1); trade toward fair net of financing/storability. **Distinguish** from entry 60 (predictive lead-lag, not fair-value).
+- Data: Futures quotes across expiries + rates/dividends.
+- Sources: Databento CME, CQG, dxFeed.
+- Horizon: minutes–days.
+- Citations: Cost-of-carry model.
+- Coverage: G, R1 (3.7 adjacent).

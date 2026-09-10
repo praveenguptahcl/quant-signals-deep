@@ -1,0 +1,8 @@
+**18. Order-sign autocorrelation / sequential trade correlation** [D]
+- Intuition: Market-order signs are strongly positively autocorrelated (order splitting); the sign series has long memory — flow is predictable even when price is not.
+- Formula: C(τ) = E[ε_t·ε_{t+τ}]/E[ε_t²], ε_t = ±1 aggressor sign; empirically C(τ) ~ τ^{−γ}, γ ≈ 0.5; or fit ARFIMA(d) on the sign series. Sequential-trade form: 2×2 trade-direction Markov transition matrix (Easley–O'Hara 1987: P(buy|buy) ≈ 0.49, P(sell|sell) ≈ 0.45 in the original sample).
+- Data: Classified tick trades, exchange timestamps.
+- Sources: ITCH/TAQ/Databento.
+- Horizon: seconds–minutes; a flow-predictability input to execution/MM models.
+- Citations: Lillo & Farmer (2004); Bouchaud, Gefen, Potters & Wyart (2004); Easley & O'Hara (1987).
+- Coverage: G, M.

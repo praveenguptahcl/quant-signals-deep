@@ -1,0 +1,12 @@
+**34. Scheduled macro-announcement drift** [D]
+- Intuition: Volatility and directional drift concentrate around scheduled releases (FOMC, CPI, payrolls); pre-announcement drift and post-announcement momentum are tradable.
+- Formula: Event calendar; measure pre-event drift (e.g., 30 min before) and trade continuation for 15–60 min after the print.
+- Data: 1-min bars + economic calendar.
+- Sources: Any intraday vendor + calendar feed.
+- Horizon: minutes to 1 hour around the event.
+- Citations: Ederington & Lee (1993) document the volatility-spike pattern.
+- Coverage: R1, T.
+
+---
+
+# Family C — Intraday Mean Reversion & Reversal (35–48)

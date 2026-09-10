@@ -1,0 +1,8 @@
+**28. Donchian breakout** [D]
+- Intuition: A new N-bar high/low is range expansion; trend-followers buy strength, sell weakness.
+- Formula: UC = max(high, N periods); LC = min(low, N periods); mid = (UC + LC)/2. Long when price closes above the upper channel (cover shorts); short when it closes below the lower channel (liquidate longs). Use closed, shifted-by-one channels so the triggering bar cannot reference itself.
+- Data: Minute bars; N commonly 20 on intraday (e.g., 20 × 5-min = 100 min).
+- Sources: Any OHLCV vendor.
+- Horizon: tens of minutes to multi-hour (intraday variants flatten at close).
+- Citations: Donchian (1960s); Turtle rules (Eckhardt/Dennis, documented by Curtis Faith).
+- Coverage: G, T, C.

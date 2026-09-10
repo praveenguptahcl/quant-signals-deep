@@ -1,0 +1,8 @@
+**70. Straddle-implied move vs realized** [SR]
+- Intuition: The ATM straddle prices the expected move; realized moves systematically under- or over-shoot it around events — fade realized moves beyond the implied move, or buy realized when implied is rich.
+- Formula (standard desk reconstruction): ImpliedMove = (C_ATM + P_ATM)/S for the expiry; compare with subsequent realized |return| or high-frequency RV; signal = (realized − implied), z-scored; fade extremes. Into the event/expiry.
+- Data: Options quotes + underlying price.
+- Sources: OPRA/options vendors, equity feeds.
+- Horizon: into the event/expiry.
+- Citations: Practitioner standard; trading rule flagged [SR].
+- Coverage: R1.

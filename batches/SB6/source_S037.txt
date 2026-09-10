@@ -1,0 +1,8 @@
+**37. Jump-filtered overnight-gap reversal** [D]
+- Intuition: Only statistically significant overnight jumps (not noise gaps) mean-revert reliably in the first two hours.
+- Procedure: Detect overnight jumps with the Barndorff–Nielsen–Shephard (2004) / Andersen et al. (2010) jump test; if a significant jump is detected, trade against it during the first ~120 minutes after the open, exiting on reversion or a time stop.
+- Data: High-frequency (minute or finer) prices including the pre-open/overnight session.
+- Sources: TAQ, Databento.
+- Horizon: minutes to 2 hours.
+- Citations: Stübinger & Endres (2018), "Statistical Arbitrage with Mean-Reverting Overnight Price Gaps."
+- Coverage: R1, S.

@@ -1,0 +1,8 @@
+**84. Hasbrouck (1991) trade–quote VAR** [D]
+- Intuition: Joint dynamics of quote revisions and signed trades decompose price moves into trade-correlated (information) vs trade-uncorrelated components.
+- Formula: VAR in (r_t, x_t) (log-quote revision, signed trade); impulse response of r to an x shock = information content of a trade; variance decomposition = informativeness share.
+- Data: Tick trades + quotes, synchronized.
+- Sources: TAQ, LOBSTER.
+- Horizon: seconds–minutes.
+- Citations: Hasbrouck (1991).
+- Coverage: G.

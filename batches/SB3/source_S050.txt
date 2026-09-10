@@ -1,0 +1,8 @@
+**50. Engle–Granger cointegration z-score** [D]
+- Intuition: If a linear combination of prices is stationary, the residual is a mean-reverting spread.
+- Formula: (1) OLS logP^A = α + β·logP^B + ε; (2) ADF test on ε for stationarity (I(0)); (3) z = (ε − μ_ε)/σ_ε; enter at |z| > 2, exit at z → 0/0.5 or a time stop. Hedge ratio = β. Mandatory: stop/time-stop; multiple-testing correction when scanning many pairs.
+- Data: Synchronized mids/lasts, daily or 1-min; same currency.
+- Sources: Same vendors as entry 49; borrow availability needed for the short leg.
+- Horizon: the half-life of ε (hours–weeks).
+- Citations: Engle & Granger (1987); Vidyamurthy, *Pairs Trading* (2004).
+- Coverage: R1, G, T, C.

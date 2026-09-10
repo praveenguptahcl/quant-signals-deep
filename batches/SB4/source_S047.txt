@@ -1,0 +1,8 @@
+**47. Bid–ask bounce exploitation** [D]
+- Intuition: Transaction prices oscillate bid↔ask even when the mid is flat; a print at the ask is likelier followed by one at the bid.
+- Formula: Roll DGP: Δp_t = s/2·(Q_t − Q_{t−1}) + u_t. Public rule: fade a print at the ask toward mid (and vice versa). Live MM bounce capture (queue position, cancels) is proprietary.
+- Data: Trades + NBBO.
+- Sources: TAQ, Databento MBP-1. Without quotes this is just the Roll estimator (entry 12), not a trade.
+- Horizon: next 1–20 trades (ms–seconds); after costs an HFT/MM feature, not paper-trading alpha.
+- Citations: Roll (1984); Stoll; Ho–Stoll inventory models.
+- Coverage: G, R1 (as microstructure effect).

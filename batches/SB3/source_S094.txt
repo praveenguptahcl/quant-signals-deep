@@ -1,0 +1,8 @@
+**94. Unusual intraday volume (RVOL) & signed block-trade pressure** [SR]
+- Intuition: Abnormal volume marks institutional participation or information arrival; large signed prints reveal institutional direction before price fully adjusts.
+- Formula (standard reconstruction): RVOL_t = Vol_t/mean(Vol at the same time-of-day over trailing N days) — time-of-day matching removes the U-shape (entry 67); trigger RVOL > 2 or z(RVOL) > 2; direction from concurrent signed return or block sign. Lee–Ready sign each trade (up/down tick rule); block filter: size ≥ threshold (e.g., ≥10,000 shares or top 1% of prints); BlockImb = (BuyVol_blocks − SellVol_blocks)/TotalVol_blocks per 15–30 min; trade with the sign, fade when it mean-reverts. Options variant (documented rule, Stanford CS229 project on OptionMetrics): flag an option when volume > 2× daily average AND ≥ 500 contracts.
+- Data: Intraday volume by time bin; tick trades with prices/sizes; options volume/OI from OPRA/Cboe.
+- Sources: TAQ, Polygon, Databento; OPRA/Cboe for options.
+- Horizon: minutes to session.
+- Citations: Lee & Ready (1991) for signing; RVOL construction is [SR].
+- Coverage: S, G.

@@ -1,0 +1,12 @@
+**90. Variance-ratio / Hurst regime toggle** [D]
+- Intuition: Detect whether the tape is in a trending (momentum) or choppy (reversal) regime and switch the signal family accordingly.
+- Formula: VR(q) = Var(r^{(q)}_t)/(q·Var(r_t)); VR > 1 → trending (use momentum), VR < 1 → mean-reverting (use reversal). Hurst H from R/S analysis: H > 0.5 trending, H < 0.5 reverting.
+- Data: 1-min returns, rolling windows.
+- Sources: Any intraday feed.
+- Horizon: regime label valid minutes to hours.
+- Citations: Lo & MacKinlay (1988) variance ratio; Hurst (1951).
+- Coverage: R1, C.
+
+---
+
+# Family G — Alternative Data (91–100)

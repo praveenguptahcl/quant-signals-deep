@@ -1,0 +1,8 @@
+**51. Ornstein–Uhlenbeck half-life trading** [D]
+- Intuition: The spread is an OU process; entry threshold and holding time scale with half-life and costs.
+- Formula: dS = θ(μ − S)dt + σdW; discrete AR(1): ΔS_t = α + λS_{t−1} + u_t, λ < 0; half-life = −ln(2)/λ. Stationary variance σ²/(−2λ) sets entry z-thresholds. Timing rule (reconstruction): enter at |z| > 2, expect convergence over ~1–2 half-lives; exit at μ or after ~2×HL. Optimal-stopping variants (Bertram) are the research-grade upgrade.
+- Data: Same as the cointegration residual at the AR(1) sampling frequency.
+- Sources: Same as entries 49–50.
+- Horizon: order of the half-life.
+- Citations: Uhlenbeck & Ornstein (1930); Elliott, Van der Hoek & Malcolm (2005); Bertram (2010).
+- Coverage: R1, G, T, C, S.

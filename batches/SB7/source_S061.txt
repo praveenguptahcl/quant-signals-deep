@@ -1,0 +1,8 @@
+**61. ADR / dual-listed premium** [D/SR]
+- Intuition: Cross-listed securities are linked by FX; the premium/discount mean-reverts as arbitrageurs convert.
+- Formula: premium = (P_ADR − FX·P_local·ratio)/(FX·P_local·ratio); z-score vs trailing window; trade toward zero. Time-align with HY (entry 60) if clocks differ.
+- Data: Both listings' prices + FX tick + depositary ratio, minute or daily.
+- Sources: Equity feeds + FX tick source.
+- Horizon: minutes when sessions overlap; overnight inventory otherwise.
+- Citations: Gagnon & Karolyi dual-listing/ADR premium literature; Hasbrouck IS (entry 16) for price-discovery weighting.
+- Coverage: R1, G.

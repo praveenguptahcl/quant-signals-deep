@@ -1,0 +1,8 @@
+**41. Bollinger-band reversal** [D]
+- Intuition: A close beyond kσ of a moving mid is a ~2-sigma excursion; fade back to the mid when the impulse fails to expand. (The breakout use of the same bands is family B.)
+- Formula: Mid = SMA(n), upper/lower = SMA ± k·σ (n=20, k=2 conventional); %b = (P − lower)/(upper − lower); bandwidth = (upper − lower)/mid. Fade: touch the band then close back inside; target = mid.
+- Data: OHLC, 1–15 min or daily.
+- Sources: Any OHLCV vendor.
+- Horizon: minutes to 1–2 days.
+- Citations: Bollinger, *Bollinger on Bollinger Bands*.
+- Coverage: G, T, C.

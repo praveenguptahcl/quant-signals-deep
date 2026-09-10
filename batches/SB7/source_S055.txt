@@ -1,0 +1,8 @@
+**55. Johansen VECM cointegration** [D]
+- Intuition: Multivariate generalization of Engle–Granger: find all cointegrating vectors among N legs jointly.
+- Formula: VECM ΔX_t = ΠX_{t−1} + Σ_{i=1..k} Γ_i·ΔX_{t−i} + ε_t; rank(Π) = cointegrating rank via trace/max-eigenvalue tests; spreads = β′X_t for each cointegrating vector β.
+- Data: Synchronized prices, N legs.
+- Sources: Same as entries 49–50.
+- Horizon: spread half-lives.
+- Citations: Johansen (1988, 1991).
+- Coverage: G.

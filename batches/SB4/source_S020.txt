@@ -1,0 +1,12 @@
+**20. Retail & odd-lot order imbalance** [D]
+- Intuition: Odd lots (<100 shares, excluded from the consolidated tape) and identifiable retail flow carry attention/informed flow that predicts near-term returns.
+- Formula: Odd-lot IMB = (odd-lot buys − odd-lot sells)/total odd-lot volume (quote-rule classified), 5-min to daily windows. Retail IMB (BJZZ): sub-penny fraction in (0.6,1.0]¢ → retail buy; [0,0.4)¢ → retail sell; (0.4,0.6) excluded. Retail IMB = (buys − sells)/(buys + sells).
+- Data: TAQ trades flagged as odd lots + NBBO; TAQ with sub-penny prints + exchange/TRF codes.
+- Sources: TAQ, Databento.
+- Horizon: minutes–days.
+- Citations: O'Hara, Yao & Ye (2014) on odd lots; Boehmer, Jones, Zhang & Zhang (2021) on retail identification.
+- Coverage: G.
+
+---
+
+# Family B — Intraday Momentum & Breakout (21–34)

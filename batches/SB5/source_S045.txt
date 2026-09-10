@@ -1,0 +1,8 @@
+**45. Stretched-move z-score & market-internals extremes** [SR]
+- Intuition: A move of k realized-vol units without matching volume/news is a liquidity excursion; market-wide tick/advance-decline extremes mark intraday capitulation.
+- Formula (reconstruction): z = (P − VWAP_session)/(σ_realized·√t); fade when |z| > 2–3 and volume is not expanding; cover at z → 0 or a time stop. Market internals: TICK = (#NYSE uptick stocks − #downtick); TRIN = (Advances/Declines)/(AdvVol/DecVol); fade extreme TICK readings (±800–1000, desk-specific) or TRIN spikes.
+- Data: Mid/last + session VWAP + realized vol; internals from NYSE TICK/TRIN feeds.
+- Sources: Any intraday feed; dxFeed, Databento, broker feeds for internals.
+- Horizon: 10 min–few hours (fades fast).
+- Citations: Standard z-score mean reversion; Arms index (TRIN). Exact internals levels are desk-specific.
+- Coverage: G.

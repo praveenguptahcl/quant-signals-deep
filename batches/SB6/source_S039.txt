@@ -1,0 +1,8 @@
+**39. Idiosyncratic (residual) short-term reversal** [D/SR]
+- Intuition: After stripping market/sector factors, large idiosyncratic jumps reverse intraday as liquidity provision gets compensated.
+- Formula: r_idio = r − β·r_mkt − sector terms; signal = −r_idio over the last 30–60 min, market- and sector-hedged.
+- Data: Intraday bars + factor returns (ETF proxies).
+- Sources: Any intraday vendor + sector ETF prices.
+- Horizon: minutes to hours.
+- Citations: Intraday extension of Lehmann (1990)/Jegadeesh (1990); Heston et al. (2010) document the sub-hour reversal component.
+- Coverage: R1, S.

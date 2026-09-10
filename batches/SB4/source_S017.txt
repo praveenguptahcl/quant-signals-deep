@@ -1,0 +1,8 @@
+**17. Hawkes self-excitation intensity of order flow** [D]
+- Intuition: Book events self-excite — a market buy raises the intensity of the next market buy; the conditional intensity forecasts bursts of activity and short-run volatility.
+- Formula: λ(t) = μ + ∫ φ(t−s) dN(s); exponential-kernel recursion: κ_{t+1} = decay·(κ_t + α·x_t), λ_t = μ + κ_t (x_t = event mark: count, signed flow, or 0/1). Bivariate buy/sell Hawkes: signal = λ^b_t − λ^s_t, z-scored (adverse-selection predictor, Cartea et al. 2018). Empirical kernel ≈ power law.
+- Data: Event timestamps (trades, quote changes, mid moves), sub-second.
+- Sources: Full-depth LOB feeds (Databento MBO), exchange ITCH/PITCH.
+- Horizon: seconds to minutes; milliseconds for the intensity forecast itself.
+- Citations: Hawkes (1971); Bacry, Mastromatteo & Muzy (2015), arXiv:1502.04592; Bowsher (2007).
+- Coverage: R1, G, M, S.

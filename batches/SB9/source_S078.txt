@@ -1,0 +1,8 @@
+**78. AR(1)/ARMA short-horizon return forecast & innovations** [D/SR]
+- Intuition: At 1–5 minute horizons, mid-price returns retain small but significant autocorrelation; strip the predictable part and trade the surprise.
+- Formula: r_t = φ·r_{t−1} + ε_t (or ARMA(p,q): r_t = c + Σφ_i r_{t−i} + Σθ_j ε_{t−j} + ε_t); signal = sign(forecast) with |forecast| > cost threshold; innovation form: signal = standardized residual z_t = ε_t/σ̂_ε (long z < −2, short z > +2, exit at 0 — a research framing, not a documented paper rule). Parameters re-estimated on rolling windows; model order via AIC/BIC. Use on returns/spreads, not raw prices.
+- Data: 1–5 min mid-price returns; intraday spread series.
+- Sources: Any intraday feed.
+- Horizon: minutes; 1–20 steps ahead.
+- Citations: Box & Jenkins; Tsay, *Analysis of Financial Time Series*. The innovation-trading rule is [SR].
+- Coverage: R1, S, G.

@@ -1,0 +1,8 @@
+**68. VIX term structure** [D]
+- Intuition: The slope of the implied-vol term structure prices the vol risk premium and IV mean-reversion.
+- Formula: Level = VIX (or VIX9D); slope = VIX − VIX3M or VX1−VX2 futures spread; contango/backwardation = F_2/F_1 − 1; VRVP = IV − E[RV]. Front-month vs second-month IV inversion (backwardation) = stress (regime feature).
+- Data: Cboe VIX/VIX9D + VX futures (CFE).
+- Sources: Cboe live, Databento CFE.
+- Horizon: days–weeks for term-structure trades; intraday on VX vs ES.
+- Citations: Cboe VIX white paper (model-free 30-day variance); Carr & Wu; vol-risk-premium literature.
+- Coverage: G, S.

@@ -1,0 +1,8 @@
+**88. Purged / embargoed cross-validation** [D]
+- Intuition: In overlapping financial labels, standard K-fold leaks; purge training samples whose label interval overlaps the test set, and embargo after each test fold.
+- Formula: Purge: drop train samples with [t0,t1] ∩ test interval ≠ ∅; embargo: drop train samples within H (label horizon) after each test fold's end; then K-fold on the remainder.
+- Data: Any labeled dataset with overlapping horizons.
+- Sources: Any (validation layer).
+- Horizon: a validation procedure, not a signal.
+- Citations: López de Prado, *AFML* (2018), ch. 7.
+- Coverage: G.

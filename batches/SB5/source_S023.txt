@@ -1,0 +1,8 @@
+**23. Gap-and-go** [SR]
+- Intuition: An overnight gap that holds, then breaks the opening drive in the gap direction, reflects unfilled institutional demand.
+- Formula (practitioner reconstruction, example thresholds): gap > 2–4% (or > k×ATR); opening print holds the gap (no immediate fill); trigger = break of the first 1–5 min high (go), else the fade variant; filters: premarket volume, float, news flag.
+- Data: Daily OHLC + first RTH minutes + premarket volume.
+- Sources: Polygon, Alpaca.
+- Horizon: minutes–hours; often flattened by lunch/close.
+- Citations: Practitioner/prop playbook; discussed in Crabel (1990).
+- Coverage: G.

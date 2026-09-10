@@ -1,0 +1,8 @@
+**29. Keltner / Bollinger breakouts** [D]
+- Intuition: A close outside a volatility envelope = expansion; trade the expansion.
+- Formula: Keltner: EMA(n) ± k×ATR(n). Bollinger: SMA(n) ± k×σ(n) (n=20, k=2 conventional). Breakout: close outside band in the break direction; exit on reversion to mid or a time stop.
+- Data: OHLC bars (ATR needs high/low), 1–15 min.
+- Sources: Any OHLCV vendor.
+- Horizon: minutes–hours.
+- Citations: Keltner (1960, modern Raschke form); Bollinger (1980s); Wilder (1978, ATR).
+- Coverage: G, T, C.

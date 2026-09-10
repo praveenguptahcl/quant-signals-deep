@@ -1,0 +1,8 @@
+**87. Fractional differentiation** [D]
+- Intuition: Integer differencing kills memory; fractionally differentiate just enough (d*) to pass stationarity while preserving predictive memory.
+- Formula: (1−B)^d = Σ_{k=0..∞} ω_k B^k, ω_k = −ω_{k−1}·(d−k+1)/k; find the minimal d with ADF p < threshold on a fixed-width window; truncate weights below tolerance.
+- Data: Price series at any frequency.
+- Sources: Any price feed.
+- Horizon: feature-engineering step for ML inputs.
+- Citations: López de Prado, *AFML* (2018), ch. 5.
+- Coverage: G.

@@ -1,0 +1,8 @@
+**15. Spread decomposition — Huang–Stoll (Glosten–Harris family)** [D]
+- Intuition: Splits the traded spread into adverse-selection vs inventory/order-processing components; the adverse-selection share is the toxicity signal.
+- Formula: Huang–Stoll: ΔM_t = (S/2)·Q_{t−1} + (α+β)·(S/2)·Q_t + e_t, M = midquote, Q = trade direction, α = adverse-selection component, β = inventory component, estimated by OLS/GMM. Glosten–Harris predecessor: Δp_t = c_0·ΔQ_t + c_1·ΔQ_t·V_t + z_0·Q_t + z_1·Q_t·V_t + ε_t (z-terms = adverse selection, c-terms = transitory costs; size interaction allows volume dependence).
+- Data: Quote midpoints + signed trades.
+- Sources: TAQ.
+- Horizon: intraday estimation; component shares as slow-moving toxicity gauges.
+- Citations: Huang & Stoll (1997); Glosten & Harris (1988).
+- Coverage: R1, M.

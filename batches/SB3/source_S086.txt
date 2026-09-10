@@ -1,0 +1,8 @@
+**86. Meta-labeling** [D]
+- Intuition: One (primary) model picks side; a second model predicts whether the primary is correct and sizes — or drops — the bet, raising precision without changing the strategy.
+- Formula: Primary emits side s_t ∈ {−1,+1}; label y_t = 1 if the triple-barrier (entry 85) on side s_t is a win, else 0; train a classifier on features at t to predict y_t; position = s_t·p̂(y=1) (or bet only if p̂ > threshold).
+- Data: Features from families A–E + primary side + triple-barrier outcomes.
+- Sources: Any (model layer).
+- Horizon: same as the primary.
+- Citations: López de Prado, *AFML* (2018); SSRN lecture notes.
+- Coverage: G.

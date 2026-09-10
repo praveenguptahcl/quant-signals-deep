@@ -1,0 +1,8 @@
+**36. Overnight-gap fade (overnight→intraday reversal)** [D]
+- Intuition: Large overnight price moves (news/liquidity gaps) partially revert once regular-session trading restores liquidity — opening price formation overshoots.
+- Formula: r_overnight = open/close_{t−1} − 1; r_intraday = close/open − 1. Panel regression r_intraday = α + β·r_overnight + FE + ε with β < 0 robustly. Trading form: fade the gap, position −sign(r_overnight) sized by |r_overnight|. **Caveat:** Alvarez (2026) finds net alpha after costs is negative — costs dominate. The mirror hypothesis (gap continuation, entry 23) must be estimated per instrument rather than assumed.
+- Data: Daily open/close (official auction prints preferred); minute bars for exit timing.
+- Sources: TAQ, Polygon, Alpaca, Databento.
+- Horizon: one session (enter at open, exit at close).
+- Citations: Alvarez (2026), "Overnight Returns and Intraday Reversals"; Lou, Polk & Skouras (2019) on the overnight/intraday split.
+- Coverage: R1, G, T, S.

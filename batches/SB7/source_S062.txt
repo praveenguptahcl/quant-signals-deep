@@ -1,0 +1,12 @@
+**62. Sector/industry momentum** [D/SR]
+- Intuition: Industries — not just individual stocks — exhibit intermediate-horizon momentum; buying winning industries and shorting losing ones earns a premium.
+- Formula: Form value-weighted industry portfolios; rank by prior-period return; long the top group / short the bottom group (documented: top/bottom 3 of 20 industries; 6-month formation original; 1-month formation/holding in factor-momentum work). Intraday adaptation [SR]: rank sector ETFs by open-to-current return; trade continuation (long top-sector constituents' residual momentum or the ETF itself) over the remaining session; flatten at close.
+- Data: Industry classifications + returns; sector ETF prices for the tradable implementation.
+- Sources: CRSP/Compustat (academic); sector ETF minute bars (XLK, XLF, XLE, …).
+- Horizon: 1–6 months in the literature (**not a day-trading strategy as published**); the remainder-of-session form is the intraday adaptation.
+- Citations: Moskowitz & Grinblatt (1999); Ehsani & Linnainmaa (2019) factor momentum.
+- Coverage: T, R1.
+
+---
+
+# Family E — Volatility & Options-Informed (63–76)

@@ -1,0 +1,8 @@
+**74. Gamma exposure (GEX) & dealer positioning** [SR]
+- Intuition: Dealers net long gamma buy dips/sell rips (pinning); net short gamma amplifies moves — GEX estimates that book from public OI.
+- Formula (practitioner reconstruction; true dealer books are proprietary): per-contract dollar gamma for a 1% spot move = Γ·OI·100·S·0.01; net GEX = Σ ± that under a positioning assumption (common published convention: customers net long options → add call GEX, subtract put GEX, or the reverse — sign convention is the model). Gamma flip = strike where cumulative net GEX changes sign. Regime: above flip (positive gamma) → fade moves; below flip → momentum/vol expansion. Max-pain pinning: MaxPain = argmin_strike Σ payout(strike); gamma walls = strikes with peak |GEX|; fade moves away from walls into expiry (0DTE/Friday). 0DTE charm/vanna: charm = ∂Δ/∂t, vanna = ∂Δ/∂σ per strike × OI; aggregate signed dealer delta to hedge over the remaining session; trade with the implied hedging flow 15:00–16:00.
+- Data: Full option chains with OI + underlying price; intraday snapshots (EOD standard; intraday delayed). **Cannot be honestly built from price data alone.**
+- Sources: OPRA (Databento/Cboe LiveVol) + Cboe OI; vendor dashboards (SpotGamma, SqueezeMetrics).
+- Horizon: intraday regime (hours) around GEX walls; daily for net-GEX sign.
+- Citations: Practitioner constructions (SpotGamma, SqueezeMetrics methodology notes).
+- Coverage: G, R1.

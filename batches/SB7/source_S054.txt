@@ -1,0 +1,8 @@
+**54. Copula pairs trading** [D]
+- Intuition: Linear correlation misses tail dependence; the copula of the joint return distribution flags mispricings that conditional probabilities catch.
+- Formula: Fit marginals + copula C(u,v) on pair returns (e.g., t-copula) in formation; signal = conditional probability P(U_A < u | U_B = v) deviating from 0.5 (or a mispricing index = conditional − unconditional); enter/exit on conditional-quantile extremes.
+- Data: Return series, daily or intraday.
+- Sources: Any OHLCV vendor.
+- Horizon: hours–days.
+- Citations: Academic copula-pairs literature (Liew & Wu; Stander, Marais & Botha).
+- Coverage: R1, G.

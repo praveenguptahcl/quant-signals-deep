@@ -52,11 +52,14 @@ vwap = np.round(np.cumsum(tp * vol) / np.cumsum(vol), 2)
 dev_bps = np.round((close - vwap) / vwap * 1e4, 1)
 above = close > vwap
 
-# Cross trigger: first bar where price crosses above VWAP and stays above for N=3 bars
+# Cross + hold rule (matches the chapter text): the cross is DETECTED at the close
+# of bar t* (s flips from <=0 to +1); the N-bar hold is the N bars AFTER the cross
+# bar (t*+1 .. t*+N) all closing above VWAP. Confirmation completes at the close
+# of bar t*+N; the earliest honest fill is the open of bar t*+N+1.
 N = 3
 trigger = None
-for i in range(1, 12 - N + 1):
-    if (not above[i - 1]) and above[i] and above[i:i + N].all():
+for i in range(1, 12 - N):
+    if (not above[i - 1]) and above[i] and above[i + 1:i + 1 + N].all():
         trigger = i
         break
 # Anchored VWAP re-set at the cross bar (0-based trigger index)
@@ -77,7 +80,8 @@ for i in range(12):
         mark = "<- holds"
     print(f"{i+1:>2} | {close[i]:6.2f} | {vol[i]:6d} | {tp[i]:6.2f} | {vwap[i]:6.2f} | {av} | "
           f"{dev_bps[i]:7.1f} | {'Y' if above[i] else 'n':^5} | {mark}")
-print(f"\nCross trigger (N=3 hold): bar {trigger+1 if trigger is not None else 'NONE'}")
+print(f"\nCross detected (N=3 hold): bar {trigger+1 if trigger is not None else 'NONE'}; "
+      f"hold bars {trigger+2}-{trigger+N+1}; earliest honest fill: bar {trigger+N+2} open")
 
 x = np.arange(1, 13)
 plt.plot(x, close, marker="o", color=PALETTE["price"], label="Synthetic close price")
@@ -85,8 +89,15 @@ plt.plot(x, vwap, color=PALETTE["signal"], linewidth=2, label="Session VWAP (fro
 plt.plot(x, anch_vwap, linestyle="--", color=PALETTE["signal2"],
          label=f"Anchored VWAP (re-set at cross bar {anchor_label})")
 if trigger is not None:
-    plt.axvline(trigger + 1, color=PALETTE["profit"], linestyle=":",
-                label=f"Cross trigger: bar {trigger + 1} (N={N} hold)")
+    plt.axvline(trigger + 1, color=PALETTE["volume"], linestyle="--", linewidth=1.4,
+                label=f"Cross detected: bar {trigger + 1} close (not yet tradable)")
+    plt.axvline(trigger + N + 1, color=PALETTE["profit"], linestyle="-", linewidth=1.6,
+                label=f"Hold confirmed (N={N}): bar {trigger + N + 1} close")
+    plt.annotate(f"earliest honest fill:\nbar {trigger + N + 2} open",
+                 xy=(trigger + N + 2, close[trigger + N + 1]),
+                 xytext=(trigger + N + 2.6, close[trigger + N + 1] + 0.03),
+                 fontsize=9, color=PALETTE["signal"], weight="bold",
+                 arrowprops=dict(arrowstyle="->", color=PALETTE["signal"], lw=1.4))
 plt.xlabel("Synthetic minute bar (09:31–09:42)")
 plt.ylabel("Price ($)")
 plt.title("S024 — VWAP cross & anchored VWAP: 12-bar synthetic tape")

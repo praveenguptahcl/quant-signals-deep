@@ -1,0 +1,8 @@
+**12. Roll implied effective spread** [D]
+- Intuition: Bid–ask bounce induces negative lag-1 covariance in transaction-price changes; that covariance identifies the spread from prices alone.
+- Formula: Spread = 2√(−Cov(Δp_t, Δp_{t−1})); convention: floor at 0 (or use |·|, Harris 1990) when covariance ≥ 0.
+- Data: Transaction prices only — no quotes needed.
+- Sources: Any trade tape, Polygon.
+- Horizon: estimated over minutes to a day; liquidity/cost feature, not a directional trigger.
+- Citations: Roll (1984).
+- Coverage: R1, G, M, C.

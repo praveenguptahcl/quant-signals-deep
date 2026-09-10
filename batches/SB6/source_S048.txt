@@ -1,0 +1,12 @@
+**48. LOB resiliency & block-trade temporary-impact reversion** [D]
+- Intuition: After a liquidity shock widens the spread/thins depth, the speed of recovery is tradeable — slow resiliency invites fading the shock, fast resiliency confirms the move; block prints cause temporary (liquidity) plus permanent (information) impact and the temporary leg partially reverses.
+- Formula: Estimate mean-reversion speed κ of spread/depth after aggressive-order events (AR(1) on spread deviations or survival analysis of time-to-recovery). Block decomposition: total impact = permanent + temporary; fade the temporary fraction over minutes–hours, net of direction.
+- Data: L2 book + event tape (resiliency); tick trades + NBBO (blocks).
+- Sources: LOBSTER, Databento MBO; TAQ/Databento for blocks.
+- Horizon: seconds–minutes (resiliency); minutes–hours (blocks).
+- Citations: Degryse, de Jong, van Ravenswaaij & Wuyts (2005) on resiliency; Kraus & Stoll (1972); Keim & Madhavan on block decomposition.
+- Coverage: G, S.
+
+---
+
+# Family D — Pairs & Cross-Sectional Arbitrage (49–62)

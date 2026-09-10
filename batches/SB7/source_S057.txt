@@ -1,0 +1,8 @@
+**57. Index futures cash-and-carry arbitrage** [D]
+- Intuition: Futures must trade at cost-of-carry fair value; deviations beyond transaction bounds are locked in by program trading.
+- Formula: Fair value F* = S·e^{(r−q)T} (discrete: F* = S·(1 + r·T/365) − dividends). Mispricing m = F − F*. If m > +bound: buy the cash basket (or replicating portfolio), sell futures, hold to expiry. If m < −bound: short basket / buy futures. Annualized basis signal: (F − S)/S × (365/DTE).
+- Data: Spot index (or replicating basket), futures quotes, expiry calendar, risk-free rate, dividend forecasts.
+- Sources: Databento CME, CQG, dxFeed.
+- Horizon: minutes to expiry (convergence guaranteed only if held to settlement).
+- Citations: Cost-of-carry model; Mackinlay & Ramaswamy (1988) on the basis; index-arbitrage literature (1987-crash lineage).
+- Coverage: G, T.

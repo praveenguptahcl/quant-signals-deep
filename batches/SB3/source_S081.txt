@@ -1,0 +1,8 @@
+**81. Hawkes buy/sell intensity imbalance** [D]
+- Intuition: The difference between buy-side and sell-side Hawkes intensities forecasts the next trade's side and short-run price direction; spikes flag adverse selection.
+- Formula: Bivariate Hawkes with intensities λ^b_t, λ^s_t (self- and cross-excitation, exponential or power-law kernels); signal = λ^b_t − λ^s_t, z-scored. (The univariate intensity form is entry 17.)
+- Data: Signed trade/market-order event timestamps.
+- Sources: Full-depth LOB feeds (Databento MBO), LOBSTER.
+- Horizon: seconds to minutes.
+- Citations: Bacry et al. (2015); Cartea et al. (2018) application to adverse selection in the LOB.
+- Coverage: R1, S, G.

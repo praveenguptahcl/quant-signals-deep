@@ -1,0 +1,8 @@
+**69. Implied-vs-realized spread / variance risk premium** [D]
+- Intuition: Options embed a variance risk premium — IV exceeds subsequently realized vol on average; extremes vs history are tradable.
+- Formula: VRP = IV² − E[RV²] (variance points) or IV − RV (vol points, Yang–Zhang RV); forward variant uses forward IV. Trade vol (straddles/variance) when the spread is extreme vs its own history. **Caveat:** documented predictability is strongest at multi-month horizons for index returns; intraday long/short-vol uses are adaptations.
+- Data: IV from OPRA/IV surfaces + RV from equity ticks.
+- Sources: Databento OPRA, Cboe LiveVol, Polygon Options, OptionMetrics IvyDB (research).
+- Horizon: to option expiry or daily mark; VRP is a swing filter.
+- Citations: Carr & Wu; Bollerslev, Tauchen & Zhou (2009).
+- Coverage: G, R1, S.

@@ -1,0 +1,8 @@
+**5. Multi-level book pressure (static depth imbalance)** [SR]
+- Intuition: Aggregate bid vs ask depth across the first *L* levels captures latent supply/demand beyond the touch.
+- Formula: BP = (Σ_{l=1..L} Q^b_l − Σ_{l=1..L} Q^a_l)/(Σ_{l=1..L} Q^b_l + Σ_{l=1..L} Q^a_l).
+- Data: L2 snapshot, 5–10 levels, seconds frequency.
+- Sources: Databento MBP-10, exchange depth feeds, dxFeed.
+- Horizon: seconds to minutes.
+- Citations: Practitioner standard; academic grounding in multi-level OFI (entry 2).
+- Coverage: R1, G, M.

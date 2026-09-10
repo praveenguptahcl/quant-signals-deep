@@ -1,0 +1,8 @@
+**75. Dispersion trading** [D]
+- Intuition: Index implied correlation mean-reverts; buy index vol and sell constituent vol (or vice versa) to trade correlation, not direction.
+- Formula: ρ_implied = (σ_I² − Σw_i²σ_i²)/(Σ_{i≠j} w_i w_j σ_i σ_j) from index and single-stock IVs; trade when ρ_implied vs realized correlation spread is extreme (long index straddle / short constituent straddles, or reverse). The Cboe Implied Correlation Index (KCJ/ICJ) is the disseminated market price of expected 1-year SPX constituent correlation — a ready-made dispersion-regime gauge.
+- Data: Options IVs for index + constituents (OPRA) + index weights.
+- Sources: Databento OPRA, Cboe.
+- Horizon: days–weeks.
+- Citations: Practitioner/academic dispersion literature; Cboe methodology.
+- Coverage: G.

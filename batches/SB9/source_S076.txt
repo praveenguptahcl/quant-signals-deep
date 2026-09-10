@@ -1,0 +1,12 @@
+**76. Volatility breakout / squeeze positioning** [D/SR]
+- Intuition: A bar whose range is a multiple of its recent average marks volatility-regime expansion; compression (squeeze) precedes expansion.
+- Formula: Range expansion: signal when range_t > k·mean(range_{t−1..t−N}) (k ≈ 1.5–2, an example); enter in the bar's direction, time stop. Bollinger bandwidth squeeze: bandwidth = (upper − lower)/mid; squeeze when at a low percentile of 6-month history (entry 30).
+- Data: 1–5 min bars.
+- Sources: Any OHLCV vendor.
+- Horizon: minutes to 1 hour (expansion); hours (squeeze).
+- Citations: Practitioner standard (Crabel-style expansion); Bollinger.
+- Coverage: R1, G.
+
+---
+
+# Family F — Statistical/ML Infrastructure (77–90)

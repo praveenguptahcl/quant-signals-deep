@@ -1,0 +1,8 @@
+**49. Distance-method pairs — Gatev–Goetzmann–Rouwenhorst** [D]
+- Intuition: Pairs whose normalized prices tracked tightly are substitutes; a 2σ divergence is temporary mispricing.
+- Formula: Normalized price P̃_{i,t} (cumulative return index = 1 at formation start). Distance D_{ij} = Σ_{t∈F}(P̃_{i,t} − P̃_{j,t})² over a 12-month formation; take smallest-distance pairs (GGR: top 20). Trade the next 6 months: spread_t = P̃_A − P̃_B; open when |spread| ≥ 2·σ_formation (long the laggard, short the leader); exit at 0. Dollar-neutral 1:1 on normalized prices.
+- Data: Daily total-return prices; 1-min for the intraday port.
+- Sources: CRSP, Polygon, Stooq; Databento/Polygon minutes.
+- Horizon: days–months (GGR); hours–days intraday port. **Horizon mismatch:** published at daily/monthly; intraday uses are adaptations.
+- Citations: Gatev, Goetzmann & Rouwenhorst (2006).
+- Coverage: R1, G, T, C.

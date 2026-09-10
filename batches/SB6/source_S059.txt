@@ -1,0 +1,8 @@
+**59. Futures–spot lead-lag prediction** [D]
+- Intuition: Index futures incorporate systematic news before the cash index (stale constituent quotes); the cash leg catches up. **Distinct from entry 57** (fair-value arbitrage).
+- Formula: Documented: S&P 500 futures lead cash-index returns by ~5 minutes on average (longer lags in some samples). Tradable reconstruction: synchronized futures/cash midquote returns, lagged predictive regression as in entry 60, cost-filtered execution; flatten by close.
+- Data: Index futures ticks + cash index values, synchronized to the minute/second.
+- Sources: Databento CME + equity feeds.
+- Horizon: minutes.
+- Citations: Kawaller, Koch & Koch (1987); intraday futures/cash lead-lag literature.
+- Coverage: R1, G, T.

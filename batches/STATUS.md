@@ -4,11 +4,40 @@
 |-------|--------|-------|---------|--------|--------|-------------|
 | SB1 | 1–40 (S001,S003,S004,S006,S008,S014,S024,S025,S035,S040) | review DONE: 0/10 APPROVED — rework attempt 1/2 | R1:S004/S008/S014/S024 DONE (re-derived: Stoikov G*, bar-level BVC fires, spread labels corrected, lookahead resolved) R2 DONE | re-review running | 0 | 0 |
 | SB2 | 11–83 (S011,S013,S021,S027,S032,S042,S043,S063,S066,S083) | writing (3 workers) | A:S011/S013/S063 DONE (chapters+plots+PNGs verified, V4/C4 fixed) B:S021/S027/S032 DONE C:S042/S043/S066/S083 (running) | pending | 0 | 0 |
-| SB5 | 22–45 (S022,S023,S026,S028,S029,S030,S031,S033,S044,S045) | writing (3 workers) | A:S022/S023/S026 DONE (verified on disk; HKS figures verified vs paper) B:S028/S029/S030 DONE C:S031/S033/S044/S045 (running) | pending | 0 | 0 |
-| SB4 | 2–47 (S002,S005,S007,S010,S012,S015,S017,S018,S020,S047) | writing (3 workers) | A:S002/S005/S007 DONE (verified on disk; Xu-Gould-Howison Table 10 cross-checked) B:S010/S012/S015 (running) C:S017/S018/S020/S047 (running) | pending | 0 | 0 |
+| SB6 | 34–60 (S034,S036,S037,S038,S039,S041,S046,S048,S059,S060) | writing (3 workers) | A:S034/S036/S037 (running) B:S038/S039/S041/S046 (running) C:S048/S059/S060 DONE (verified on disk; HY=17 caveat flagged) | pending | 0 | 0 |
+| SB5 | 22–45 (S022,S023,S026,S028,S029,S030,S031,S033,S044,S045) | writing (3 workers) | A:S022/S023/S026 DONE B:S028/S029/S030 DONE C:S031/S033/S044/S045 DONE (verified on disk; 12-31% over word target, flagged) | reviewer running | 0 | 0 |
+| SB4 | 2–47 (S002,S005,S007,S010,S012,S015,S017,S018,S020,S047) | writing (3 workers) | A:S002/S005/S007 DONE B:S010/S012/S015 (running) C:S017/S018/S020/S047 DONE (verified on disk; all in word band) | pending | 0 | 0 |
 | SB3 | 49–94 (S049,S050,S056,S079,S081,S085,S086,S088,S091,S094) | writing (3 workers) | A:S049/S050/S056 DONE (verified on disk; 18-30% over word target, flagged) B DONE C DONE | reviewer running | 0 | 0 |
 
 ## Chatbot channels
 - grok-answers.md / cursor-answers.md: async from another chat — fold when present, never block.
 - duckai-answers.md: same protocol (duck.ai verified anonymous 2026-09-10).
 - SB1: duckai-answers.md present (OFI deep-dive) → folding into S001. Grok SB1 COMPLETE 2026-09-10 17:46 UTC: all 3 questions asked one at a time post-login, full verbatim answers saved in SB1/grok-answers.md (Q1: CKS OFI/queue-imbalance/Stoikov microprice formulas + 10-event worked tape; Q2: M5 Max build stack — Databento MBP-1, ~80-160h, $199/mo default; Q3: after-cost verdict — no clean US-equity after-cost Sharpe for imbalance takes; quoting input, not trigger). Cursor BLOCKED 2026-09-10 16:50 UTC (no chat UI on cursor.com; /agent behind sign-in wall, no saved session; header logged in SB1/cursor-answers.md).
+
+## SB7 — WRITING (2026-09-10)
+- duck.ai answers COMPLETE (GPT-5.6 Luna, all 3 bank questions, 2026-09-10); Grok/Cursor pending
+- Verification: S090 VR(2) arithmetic corrected (Σ sq dev 22.0, s_2² 3.142857, VR(2)=1.5714, Ĥ(2)≈0.826 — interpretation unchanged); Q-SB7-2 eng-hour totals are approximate ranges (max overruns); Q-SB7-3 claims = research leads
+- Chapters: S051 OU half-life, S052 Kalman hedge, S053 zero crossings, S054 copula, S055 Johansen, S057 cash-and-carry, S058 calendar spread, S061 ADR premium, S062 sector momentum, S090 VR/Hurst
+- 3 writers running (2026-09-10)
+
+## SB8 — WRITING (2026-09-10)
+- duck.ai answers COMPLETE (GPT-5.6 Luna, all 3 bank questions, 2026-09-10); Grok/Cursor pending
+- Verification: Q-SB8-1 fully verified (RV=0.00011422, BV=0.00004483, RV-BV=69.39e-6, GEX total=$91,000, per-strike all check); Q-SB8-2 hour totals CORRECTED — use per-component sums prototype 500-1,265 / production 1,770-4,330 (bot's 250-600/1,200-3,000 wrong); compute/RAM arithmetic verified (982.8M returns~7.9GB, SPX snapshot 3.2MB, Greeks 72MB); 2 garbled renders flagged (vol-premium sqrt ambiguity, 25D tolerance +-0.5-1.0) — reconfirm from canonical sources; Q-SB8-3 claims = research leads
+- Chapters: S064 jump-robust RV, S065 GARCH, S067 diurnal vol, S068 VIX term, S069 VRP, S070 straddle move, S071 risk reversal, S072 put/call, S073 UOA, S074 GEX
+- 3 writers running (2026-09-10)
+
+- SB7 UPDATE (2026-09-10): 2/3 writer reports in (S051/S052/S053, S061/S062/S090); S054/S055/S057/S058 report pending. CORRECTION: writer recomputed OU half-life = 3.1063 days (operator-verified 3.1067 was a 4th-decimal slip; chapter discloses it). S052: 2026 Kalman walk-forward study (OLS -0.157 vs Kalman -2.080) could NOT be independently verified — quarantined to Unverified leads in S9/S12 with framing preserved in prose. All 10 SB7 files on disk; strict SB7 reviewer pending final report.
+
+- SB7 UPDATE (2026-09-10): 3/3 writer reports in. WRITING COMPLETE — all 10 chapters + 10 PNGs + 10 plot scripts on disk. Strict SB7 reviewer dispatched (full 22-item QC; review files batches/SB7/<ID>.review.md; quarantine log lines). Next: rework attempt 1/2 for failures, merge after SB6.
+
+- SB8 UPDATE (2026-09-10): All 10 SB8 chapter files + 10 PNGs + 10 plot scripts verified on disk (headings, provenance, PNG sizes 116-215KB, 12 sections, source logs, garbled-render flags, corrected hour framing, VRP horizon + GEX/UOA honesty framings present). Writer A (S064/S065/S067) final report is terse (dismissed its own notification as duplicate of background plot run) — deliverables verified directly on disk instead. Writers B (S068-S071) and C (S072-S074) final reports pending; strict SB8 reviewer to be spawned after both land.
+
+- SB8 ISSUES FOUND ON DISK CHECK (2026-09-10, flag for reviewer): (a) source-log sentence ("Duck.ai answered Q-SB8-1..3...") present ONLY in S064/S065/S067 — MISSING in S068-S074; (b) batches/SB8/S071.md (18:01) is NEWER than images/S071_example.png (17:58) — chart/table sync risk; reviewer must hand-verify S071 chart numbers == table numbers; (c) Writer C's terse handoff mentions an "S071 delta-column fix" though S071 was Writer B's chapter — possible cross-work/confusion, reviewer to verify S071 integrity.
+
+## SB9 — WRITING (2026-09-10)
+- duck.ai answers COMPLETE (GPT-5.6 Luna, reasoning mode Fast, all 3 bank questions, 2026-09-10); Grok/Cursor pending
+- Verification: S080 PCA panel INTERNALLY INCONSISTENT (col A mean 0.35, col B mean -0.65, not zero; sample cov 1.3611/1.6944 vs displayed 1.0833/1.0833; only off-diagonal 0.9722 matches) — writers use stated-Sigma route or corrected zero-mean panel, never the printed panel; A-S spread ln(1+gk) render was wrong, correct ln(1+g/k); Q-SB9-2 "216M snapshots/day" wrong (10x500x23400=117M) — treat as order-of-magnitude; Kalman worked example verified (4th-decimal noise only); Q-SB9-3 numbers internally consistent but literature summaries = research leads
+- Chapters: S075 dispersion, S076 vol breakout, S077 Kalman fair value, S078 AR/ARMA, S080 PCA residual, S082 DeepLOB/ML, S084 Hasbrouck VAR, S087 fracdiff, S089 A-S skew, S016 info share
+- 3 writers running (2026-09-10)
+
+- SB8 UPDATE (2026-09-10): All 10 SB8 plots re-ran exit 0 (independent confirmation). Strict SB8 reviewer dispatched (full 22-item QC; review files batches/SB8/<ID>.review.md; quarantine log lines) with flagged issues: missing source-log in S068-S074; S071 md-newer-than-PNG sync risk + delta-column confusion; S074 tolerance-comparison change; terse writer reports (extra-strict chart/table verification required). Next: rework attempt 1/2 for failures, merge after SB7.

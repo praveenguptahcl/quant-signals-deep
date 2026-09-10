@@ -1,0 +1,8 @@
+**80. PCA / statistical-factor residual reversal (incl. eigenportfolios)** [D]
+- Intuition: Returns = a few statistical factors + idiosyncratic noise; the residual is the purest mean-reverting component.
+- Formula: PCA on the return panel: R = B·F + ε (F = top PCs); residual ε_i,t = r_i,t − b_i′F_t; signal = −ε_i,t (or z-scored), traded market-neutral. Eigenportfolio form (Avellaneda–Lee 2010): correlation eigendecomposition ρ = Σ_k λ_k v_k v_kᵀ; eigenportfolio weights Q_{ki} = v_{ki}/σ_i; factor returns F_{kt} = Σ_i Q_{ki} r_{it}; residual X_{it} = r_{it} − Σ_k β_{ik}F_{kt}; OU s-score s_{it} = (X_{it} − μ_i)/(σ_i/√(2κ_i)); allocate −1 if s > c_thresh and R²_OU > c_crit, +1 if s < −c_thresh, else 0.
+- Data: Intraday bars for a broad panel; 1-year estimation window for the eigenportfolio form.
+- Sources: Any intraday vendor with broad coverage.
+- Horizon: minutes to hours (PCA residuals); 1–5 days (eigenportfolios).
+- Citations: Connor & Korajczyk (asymptotic PCA); Avellaneda & Lee (2010); restated in arXiv 2106.04028.
+- Coverage: R1, S, G.

@@ -1,0 +1,8 @@
+**10. Kyle's lambda (price impact / illiquidity)** [D]
+- Intuition: λ is the market maker's price response per unit of net order flow; rising λ = thin/toxic flow, expensive to trade.
+- Formula: Δp_t = α + λ·q_t + ε_t, q_t = signed flow. Through-origin rolling estimate: λ̂ = Σ_t q_t Δp_t / Σ_t q_t². Common empirical form: ΔP_t = α + λ·sign(trade_t)·√|volume_t| + ε_t over a trailing window (e.g., 300 s). Kyle–Obizhaeva invariance: impact ∝ σ√(Q/(V·L)).
+- Data: Trade prices, volumes, signed direction (Lee–Ready).
+- Sources: TAQ, tick feeds.
+- Horizon: estimated on 1–30 min bins; used as a state (how much to trade, how wide to quote).
+- Citations: Kyle (1985); Hasbrouck (2009); Goyenko, Holden & Trzcinka (2009).
+- Coverage: R1, G, M, C, S.

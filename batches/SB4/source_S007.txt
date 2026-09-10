@@ -1,0 +1,8 @@
+**7. Trade classification: Lee–Ready & Bulk Volume Classification** [D]
+- Intuition: Nearly every flow signal needs a buy/sell label; quote rules use quotes, BVC uses bar price change (robust to coarse clocks).
+- Formula/Procedure: Lee–Ready — quote rule: trade price vs mid ≥5 s before the trade (above = buy, below = sell); tick rule for mid prints: uptick = buy, downtick = sell, zero-tick inherits prior direction. Modern practice: use contemporaneous quotes, not the 5 s lag, and validate. BVC: V^B_τ = V_τ·Φ(ΔP_τ/σ_{ΔP}), V^S_τ = V_τ − V^B_τ (Φ = standard normal CDF).
+- Data: Trades + time-stamped NBBO (Lee–Ready); trades only (BVC).
+- Sources: TAQ, Databento, Polygon.
+- Horizon: instantaneous; downstream signals inherit the bar window (1 s–5 min).
+- Citations: Lee & Ready (1991); Easley, López de Prado & O'Hara (2012, BVC). **Caveat:** the 5-second quote lag is obsolete in modern data.
+- Coverage: R1, G, M.

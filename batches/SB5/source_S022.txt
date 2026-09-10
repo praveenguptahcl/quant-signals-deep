@@ -1,0 +1,8 @@
+**22. First-hour range expansion / initial balance** [D]
+- Intuition: Same auction logic as ORB on the RTH first hour; expansion beyond the initial balance marks a Market-Profile trend day.
+- Formula: IB_H/IB_L = first-60-min high/low; expansion = close/excursion outside IB ± volume confirmation.
+- Data: 1–5 min OHLC.
+- Sources: Any intraday OHLCV vendor.
+- Horizon: remainder of the session.
+- Citations: Steidlmayer/Dalton Market-Profile literature.
+- Coverage: G.

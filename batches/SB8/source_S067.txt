@@ -1,0 +1,8 @@
+**67. Intraday vol seasonality / diurnal deseasonalization** [D]
+- Intuition: Clock-time vol is U-shaped (open/close high); any intraday vol model on raw returns is misspecified unless deseasonalized — a preprocessing layer for every other vol signal.
+- Formula: Estimate deterministic factor s_b per bin (median |r| or RV share); deseasonalize r̃_t = r_t/s_b before estimation. Andersen–Bollerslev form: R_{t,n} = E(R_{t,n})/√N + σ_t·s_{t,n}·Z_{t,n}, s_{t,n} = periodic component scaled to mean 1. The U-shape is documented across NYSE/London/Tokyo equities and Chicago futures; in FX the pattern follows geographic sessions (no U-shape for NY-only participants).
+- Data: Intraday bars, multi-week history.
+- Sources: Any intraday vendor.
+- Horizon: a feature for every other vol model, not a standalone trade.
+- Citations: Andersen & Bollerslev (1997/1998); Wood, McInish & Ord (1985).
+- Coverage: R1, G, S.

@@ -1,0 +1,8 @@
+**72. Put/call ratio** [D]
+- Intuition: Extreme put-vs-call volume is a crowding/hedge-demand gauge — contrarian at extremes, confirmatory in trend.
+- Formula: P/C = put volume (or OI)/call volume (or OI), often as a 5–10 day SMA; equity-only vs index-only (Cboe) separated. Percentile form: rank P/C in its trailing 1-year distribution; fade > 90th/< 10th percentile. Folklore thresholds (Investopedia): P/C < 0.7 bullish, > 1.0 bearish — treat as sentiment folklore, not an estimated rule. **Caution:** put volume includes hedging, not just speculation; 0DTE flow has changed intraday dynamics (0DTE ≈ half of SPX volume by 2023).
+- Data: Options volume by underlying, daily (Cboe daily market statistics, public); intraday from OPRA.
+- Sources: Cboe, OCC, OPRA feeds.
+- Horizon: 1–10 days (swing filter); intraday for 0DTE-aware variants.
+- Citations: Cboe put/call series (industry standard).
+- Coverage: G, R1, S.

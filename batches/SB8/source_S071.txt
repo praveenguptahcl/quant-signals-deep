@@ -1,0 +1,8 @@
+**71. 25-delta risk reversal / skew change** [D]
+- Intuition: The 25Δ risk reversal prices crash fear vs upside chase; a sudden steepening of put skew signals institutional hedging demand ahead of downside.
+- Formula: RR_25Δ = IV(25Δ put) − IV(25Δ call) (sometimes call−put); butterfly = IV(25Δ call) + IV(25Δ put) − 2·IV(50Δ); skew = IV(90% put) − IV(110% call). Signal = z-scored change in RR/skew; negative shock → defensive tilt / long-gamma.
+- Data: IV surface from options quotes, intraday snapshots; vendor surfaces for research.
+- Sources: OPRA (Databento/Cboe LiveVol), Cboe LiveVol, OptionMetrics.
+- Horizon: hours–days; regime/tail feature.
+- Citations: FX-options market convention (Malz; Reiswich–Wystup); equity analog in Cboe SKEW/dealer notes.
+- Coverage: G, R1.

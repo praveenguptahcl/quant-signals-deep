@@ -1,0 +1,8 @@
+**60. Cross-asset lead-lag via Hayashi–Yoshida** [D]
+- Intuition: In asynchronous ticks, OLS covariance is biased toward 0; the HY estimator recovers integrated covariance without synchronization — then find the lag that maximizes it and trade the laggard.
+- Formula: HY covariance = Σ_{i,j} r^X_i·r^Y_j·1_{overlap(i,j)≠∅} over tick returns with overlapping intervals; shift one series by lag *l*, maximize HY correlation(l); trade the laggard in the leader's direction. Sector-ETF variant: r_ETF,5min vs constituent residuals; signal_i = sign(r_ETF) for constituents with |r_i − β_i·r_ETF| small; hedge with the ETF. Calendar-spread variant: near-month leads deferred tick-by-tick; trade the spread toward zero (arXiv 2501.03171).
+- Data: Tick trades of both legs, exchange timestamps (asynchronous OK).
+- Sources: Databento, LOBSTER, TAQ.
+- Horizon: seconds–minutes (liquid ETF–futures); longer for ADR–ordinary across time zones.
+- Citations: Hayashi & Yoshida (2005); Hoffmann, Rosenbaum & Yoshida; Chordia, Sarkar & Subrahmanyam (2011) on liquid-leads-illiquid; arXiv 2501.03171.
+- Coverage: R1, G, T.

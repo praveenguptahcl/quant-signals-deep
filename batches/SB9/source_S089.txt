@@ -1,0 +1,8 @@
+**89. Avellaneda–Stoikov market-making skew** [D]
+- Intuition: Optimal quotes shade with inventory and volatility; the reservation price is itself a short-horizon fair-value signal.
+- Formula: Reservation price r(s,q,t) = s − q·γ·σ²·(T−t); optimal spread δ^a+δ^b = γσ²(T−t) + (2/γ)·ln(1+γ/κ), with inventory q, risk aversion γ, order-book depth parameter κ. Quotes: r ± δ; skew around r, not mid.
+- Data: Mid-price, inventory, vol estimate.
+- Sources: Any intraday feed (quoting engine).
+- Horizon: continuous quoting, seconds–minutes.
+- Citations: Avellaneda & Stoikov (2008).
+- Coverage: R1, G.

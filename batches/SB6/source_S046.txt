@@ -1,0 +1,8 @@
+**46. Intraday seasonality / U-shape reversal** [D]
+- Intuition: Returns, volatility, and spreads follow a predictable intraday clock (U-shaped activity; institutional flows cluster at open/midday/close).
+- Formula: For each instrument and minute bucket *b*, estimate E[r_b] from prior sessions only; demean by date/session effects; trade only buckets whose sign and magnitude are stable out of sample and exceed costs. Documented example: the "lunch effect" midday dip in US indices. **Never hard-code a universal direction** — estimate per instrument.
+- Data: Months of minute bars per instrument.
+- Sources: Any intraday vendor.
+- Horizon: the traded bucket(s), minutes to an hour.
+- Citations: Heston, Korajczyk & Sadka (2010) — intraday periodicity; Wood, McInish & Ord (1985) — U-shaped spread; Quantpedia "lunch effect."
+- Coverage: G, T, R1.

@@ -1,0 +1,8 @@
+**31. Consecutive-bar streaks (runs)** [SR]
+- Intuition: A run of one-directional closes is either continuation (momentum) or, after calibration, an exhaustion fade.
+- Formula (standard reconstruction): streak S_t = S_{t−1}+1 if sign(r_t) = sign(r_{t−1}) else 1; enter with the streak at S ≥ k_1 (continuation) or fade at S ≥ k_2 with range/volume filter (exhaustion). Variants: up/down volume streaks, consecutive bars above VWAP.
+- Data: OHLC bars.
+- Sources: Any OHLCV vendor.
+- Horizon: 3–20 bars (3–60 min on typical grids).
+- Citations: Classical runs testing (Cowles–Jones; Fama); thresholds are implementation examples.
+- Coverage: G.

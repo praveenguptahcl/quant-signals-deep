@@ -1,0 +1,8 @@
+**91. Machine-readable news sentiment (first-minute reaction)** [D]
+- Intuition: Signed news flow moves prices with a short lag after the timestamp, then mean-reverts as it is digested.
+- Formula: Event Sentiment Score ESS ∈ [−1,1] (RavenPack-style); signal = sign(ESS) for highly relevant, novel stories; enter within seconds, exit in minutes as the reaction completes. Groß-Klußmann & Hautsch (2011) document the high-frequency price/volume/volatility response to machine-readable news: sentiment s ∈ {+1, 0, −1} per story plus a relevance score predicts high-frequency returns, vol, and liquidity. Tetlock (2007): pessimism = fraction of negative/weak words; high pessimism predicts next-day decline, reversing within 2–5 days — the fade leg. Reconstruction [SR]: aggregate Σ(sentiment × relevance) per name per 15-min bucket; z-score vs trailing; trade with the sign on minutes–hours, fade on multi-day. Use the Loughran–McDonald finance dictionary (preferred over Harvard — ~3/4 of Harvard "negatives" aren't negative in finance).
+- Data: Newswires with firm tagging and timestamps; sentiment via vendor ESS or public NLP.
+- Sources: RavenPack, Refinitiv News Analytics, Bloomberg SENT; cheaper: Benzinga/Polygon news + public NLP.
+- Horizon: seconds (headline arb, mostly dead) to 1–5 days.
+- Citations: Groß-Klußmann & Hautsch (2011); Tetlock (2007); Loughran & McDonald (2011).
+- Coverage: R1, G, S.

@@ -1,0 +1,8 @@
+**16. Hasbrouck information share (venue price discovery)** [D]
+- Intuition: When the same instrument trades on multiple venues, decompose which venue's innovations drive the common efficient price — a cross-venue lead-lag feature.
+- Formula: Fit a VECM on cointegrated venue mids; from long-run impact vector ψ and innovation covariance Ω = FF′: venue-j share = ([ψF]_j)²/(ψΩψ′); bounds via Cholesky order permutation. Complement: Gonzalo–Granger component share.
+- Data: Synchronized mids/trades across venues, ≤1 s.
+- Sources: TAQ multi-exchange quotes, Databento multi-venue.
+- Horizon: estimated on minutes–days; used as a venue-routing/lead-lag feature.
+- Citations: Hasbrouck (1995).
+- Coverage: G, M.

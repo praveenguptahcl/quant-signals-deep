@@ -1,0 +1,8 @@
+**26. First half-hour → last half-hour momentum** [D]
+- Intuition: The market's first-half-hour return (overnight-news digestion) positively predicts the last-half-hour return (late-informed and close-driven flows pile on).
+- Formula: r_{13,t} = α + β·r_{1,t} + ε_t (13 half-hour buckets/day). Documented: β̂×100 = 6.94, p < 1%, R² = 1.6%. Trading form: at ~15:30 take position sign(r_first) (or the recursively estimated regression forecast) for the final 30 minutes; flatten at close. Documented extension adds the second-to-last half hour: r_last = α + β_1·r_first + β_2·r_penultimate + ε.
+- Data: Half-hour (or minute-aggregated) bars; 1-min for volatility conditioning.
+- Sources: Index/ETF feeds (SPY, QQQ, ES), Polygon, Databento.
+- Horizon: ~30 minutes, once per day.
+- Citations: Gao, Han, Li & Zhou (2018), "Intraday Momentum," RFS.
+- Coverage: R1, G, T, S.

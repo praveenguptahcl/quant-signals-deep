@@ -1,0 +1,8 @@
+**30. Bollinger bandwidth squeeze → expansion** [SR]
+- Intuition: Compression of the bandwidth precedes volatility expansion; the subsequent band break has directional follow-through.
+- Formula: Bandwidth = (upper − lower)/mid; when bandwidth sits at a low percentile of its recent history (squeeze), enter on a close outside the band in the break direction. (TTM Squeeze adds a Keltner confirmation — vendor overlay.)
+- Data: OHLC, 1–15 min or daily.
+- Sources: Any OHLCV vendor.
+- Horizon: hours on 15-min bars; days on daily.
+- Citations: Bollinger; squeeze rule is a standard practitioner reconstruction.
+- Coverage: G, T, C.

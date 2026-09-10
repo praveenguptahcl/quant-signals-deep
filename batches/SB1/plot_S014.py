@@ -44,18 +44,18 @@ bid = midwalk[:N] - spread / 2
 ask = midwalk[:N] + spread / 2
 P = midwalk[:N] + D * spread / 2 + slip               # trade price
 
-DELTA = 3  # realized spread vs mid DELTA trades later (example — not an institutional standard)
+DELTA = 3  # price impact vs mid DELTA trades later (example — not an institutional standard)
 eff = 2 * D * (P - midwalk[:N])                       # effective spread
-rlz = 2 * D * (midwalk[DELTA:N + DELTA] - midwalk[:N]) # realized spread
-imp = eff - rlz                                       # price impact (adverse selection)
+imp = 2 * D * (midwalk[DELTA:N + DELTA] - midwalk[:N]) # price impact (adverse selection)
+rlz = eff - imp                                       # realized spread (kept) = 2*D*(P - mid_fwd)
 
 # Print the worked-example table (copy into chapter S4)
-print("tr | bid | ask | mid | D | price | eff | rlz | impact   (cents)")
+print("tr | bid | ask | mid | D | price | eff | impact | rlz   (cents)")
 for i in range(N):
     print(f"{i+1:>2} | {bid[i]:6.3f} | {ask[i]:6.3f} | {midwalk[i]:6.3f} | {D[i]:+d} "
-          f"| {P[i]:6.3f} | {100*eff[i]:+.2f} | {100*rlz[i]:+.2f} | {100*imp[i]:+.2f}")
-print(f"avg effective: {100*eff.mean():+.2f} c, avg realized: {100*rlz.mean():+.2f} c, "
-      f"avg impact: {100*imp.mean():+.2f} c")
+          f"| {P[i]:6.3f} | {100*eff[i]:+.2f} | {100*imp[i]:+.2f} | {100*rlz[i]:+.2f}")
+print(f"avg effective: {100*eff.mean():+.2f} c, avg impact: {100*imp.mean():+.2f} c, "
+      f"avg realized: {100*rlz.mean():+.2f} c")
 
 # ---- Plot: stacked bars — realized (bottom) + impact (top) = effective ----
 x = np.arange(1, N + 1)

@@ -1,0 +1,8 @@
+**52. Kalman-filter dynamic hedge ratio** [D]
+- Intuition: The hedge ratio wanders; static OLS goes stale — Kalman updates β online.
+- Formula: State-space: observation y_t = α + β_t·x_t + ε_t (obs variance R); state β_t = β_{t−1} + η_t (process variance Q, tuned offline). Standard Kalman predict–update recursion; trade the standardized innovation/spread.
+- Data: Sequential mids of the pair, 1-min or daily.
+- Sources: Any intraday vendor.
+- Horizon: the spread half-life; β updates every bar.
+- Citations: Kalman (1960); Chan, *Algorithmic Trading* (finance application). Tuning is [SR].
+- Coverage: R1, G, T, C, S.

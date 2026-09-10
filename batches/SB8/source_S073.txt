@@ -1,0 +1,8 @@
+**73. Unusual options activity (incl. signed options volume)** [D/SR]
+- Intuition: Contracts trading far above standing open interest indicate fresh informed positioning; sweep prints (multi-exchange) indicate urgency; signed call/put volume is a directional flow proxy.
+- Formula: UOA flag when volume/OI > threshold (e.g., > 1.5–3×, an example) and volume ≫ trailing average; direction from call/put mix and premium; follow for 1–3 sessions. Signed options-volume reconstruction [SR]: classify OPRA trades via quote rule; imbalance = (call buys − put buys)/total. True bought-to-open needs open/close flags; OPRA lacks perfect aggressor information — reconstructions are approximate. Options unusual-volume rule (documented, Stanford CS229 project on OptionMetrics): volume > 2× daily average AND ≥ 500 contracts (institutional-size block rule).
+- Data: Options trades/quotes, OI; OPRA intraday for sweeps.
+- Sources: Databento OPRA, Cboe, Polygon Options.
+- Horizon: hours to days.
+- Citations: Pan & Poteshman (2006) for the informed-options-volume concept; unusual-options-flow definitions in vendor docs.
+- Coverage: G, R1, S.

@@ -1,0 +1,8 @@
+**2. Multi-level / integrated OFI (MLOFI)** [D]
+- Intuition: Deeper book levels carry additional, partially independent price-impact information beyond the touch.
+- Formula: Size-based OFI computed per level over the first *L* levels (level-wise event-flow bid minus ask), summed or combined into one regressor (integrated OFI, Cont–Cucuringu–Zhang).
+- Data: L2 depth event stream, ≥5–10 levels.
+- Sources: Databento MBP-10, LOBSTER, exchange ITCH/PITCH.
+- Horizon: seconds to minutes.
+- Citations: Xu, Gould & Howison (2018/2019), arXiv:1907.06230.
+- Coverage: R1, G, M.

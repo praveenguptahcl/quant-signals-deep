@@ -1,0 +1,8 @@
+**85. Triple-barrier labeling** [D]
+- Intuition: Fixed-horizon "did price go up?" labels ignore path and stops; label by which barrier is hit first.
+- Formula: For event time t: upper = P_t·(1+σ·k), lower = P_t·(1−σ·k), vertical barrier t+H (σ = vol estimate, e.g., ATR or daily vol); scan the path; first touch wins (+1/−1/0); optionally volatility-scale barriers and drop 0 labels or keep a hold class.
+- Data: Price path at execution granularity (tick or 1-min).
+- Sources: Any intraday feed.
+- Horizon: H = the chosen vertical barrier; a labeling procedure, not a signal.
+- Citations: López de Prado, *AFML* (2018), ch. 3.
+- Coverage: G.

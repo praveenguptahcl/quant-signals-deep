@@ -1,0 +1,8 @@
+**56. ETF vs basket / iNAV arbitrage** [D/SR]
+- Intuition: ETF price vs its intraday NAV (or vs the replicating basket) cannot deviate beyond creation/redemption costs; deviations snap back via AP arbitrage.
+- Formula: premium_t = (P_ETF,t − iNAV_t)/iNAV_t (intraday iNAV/iOPV at ~15-sec cadence); residual = P_ETF − Σ w_i·P_i (weights from official PCFs). If premium > cost bound: buy the creation basket in index weights, deliver to issuer, receive creation units, sell ETF shares (and reverse for discounts). Non-AP desks trade the statistical proxy: short the rich leg / buy the cheap leg into convergence. **Access note:** true creation/redemption requires AP status.
+- Data: Real-time ETF quotes + iNAV feed; constituent prices and index weights; creation-unit sizes and fee schedules.
+- Sources: Exchange feeds, Databento multi-venue, ETF issuer PCFs.
+- Horizon: minutes (liquid ETFs) to end-of-day.
+- Citations: ETF creation/redemption mechanics (VanEck/issuer docs; exchange literature).
+- Coverage: R1, G, T.

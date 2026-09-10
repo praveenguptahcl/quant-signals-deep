@@ -1,0 +1,8 @@
+**65. GARCH(1,1) intraday volatility** [D]
+- Intuition: Conditional variance clusters and mean-reverts; today's shock feeds tomorrow's vol — a fast parametric vol forecast for sizing and VaR gates.
+- Formula: σ²_t = ω + α·ε²_{t−1} + β·σ²_{t−1} (α+β < 1); EGARCH/GJR add leverage asymmetry: ln σ²_t = ω + α(|z_{t−1}| − E|z|) + γz_{t−1} + β ln σ²_{t−1}. Intraday: fit on deseasonalized returns (entry 71) or scale daily GARCH σ by the diurnal U-shape. **Caution:** the plain GARCH-on-minutes setup is an adaptation, not a paper result; intraday score-driven extensions exist (arXiv 2211.12376).
+- Data: Returns (daily standard; 5–30 min intraday with diurnal adjustment).
+- Sources: Any OHLCV vendor.
+- Horizon: 1-day (or 1-bar) ahead forecast; minutes-to-hours for sizing/VaR.
+- Citations: Engle (1982); Bollerslev (1986).
+- Coverage: G, C, S.

@@ -1,0 +1,8 @@
+**53. Pair-quality filter — zero crossings (Do–Faff)** [D]
+- Intuition: Among candidate pairs, those whose spread crossed zero most often in formation have the most reliable mean reversion.
+- Formula: Count zero-crossings of the formation spread; rank pairs by crossings; trade only top-ranked pairs with the entry-49/50 rules.
+- Data: Same as entry 49.
+- Sources: Same as entry 49.
+- Horizon: same as entry 49.
+- Citations: Do & Faff (2010, 2012).
+- Coverage: R1.

@@ -1,0 +1,8 @@
+**77. Kalman-filtered fair value (local-level trend)** [D]
+- Intuition: Observed prices = latent efficient price + microstructure noise; the Kalman smoother extracts the efficient price and the gap is the signal.
+- Formula: State space: x_t = x_{t−1} + trend + w_t (local linear trend), y_t = x_t + v_t. Kalman predict/update recursion yields filtered x̂_{t|t}; signal = x̂_{t|t} − mid_t (fade) or momentum on Δx̂. Pairs use: y_t = [x_t, 1]θ_t + ε_t, θ_t = θ_{t−1} + w_t, θ_t = [β_t, μ_t]ᵀ; innovation e_t = y_t − H_t θ̂_{t|t−1}; gain K_t = P_{t|t−1}H_tᵀ/S_t; spread s_t = y_t − β̂_t x_t − μ̂_t; signal on z-scored spread (entry 52).
+- Data: Tick or 1-min prices; bar closes of two cointegrated names for the pairs form.
+- Sources: Any intraday feed.
+- Horizon: seconds to minutes (fair value); hours–days (pairs spread).
+- Citations: Kalman (1960); Harvey structural time series; HF stat-arb (arXiv 2210.15448).
+- Coverage: R1, S, G.

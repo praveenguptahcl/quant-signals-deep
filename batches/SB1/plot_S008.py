@@ -1,3 +1,14 @@
+"""Plot + worked-example generator for S008 (VPIN, bar-level BVC).
+
+Follows Easley-Lopez de Prado-O'Hara: classification is at the VOLUME-BAR level.
+Within each equal-volume bar tau, with bar price change dP_tau = P_last,tau -
+P_last,tau-1 and sigma = std of bar price changes:
+    V^B_tau = V * Phi(dP_tau / sigma),   V^S_tau = V - V^B_tau
+Buckets hold EXACTLY V shares: trades straddling a bucket boundary are split
+(ELO convention). VPIN over n bars = sum |OI| / (n * V).
+
+Run with cwd=~/workspace/quant-signals-deep.
+"""
 import math
 import matplotlib
 matplotlib.use("Agg")  # headless render on the Mac/VM
@@ -35,46 +46,67 @@ PALETTE = {
 
 rng = np.random.default_rng(7)  # seed 7 — stated in chapter text
 
-NB, PER = 10, 6  # 10 volume buckets, 6 trades per bucket (synthetic)
-dp_all = rng.normal(0, 0.015, size=(NB, PER))      # price changes per trade
-sizes_all = rng.integers(20, 150, size=(NB, PER))  # trade sizes
-sigma = dp_all.std(ddof=1)
+# ---- Synthetic trade tape: trade 0 is the reference price for bar 1's dP ----
+NTR = 120
+prices = np.empty(NTR)
+prices[0] = 100.00
+prices[1:] = np.round(100.00 + np.cumsum(rng.normal(0, 0.015, NTR - 1)), 2)
+sizes = rng.integers(20, 150, size=NTR)
+
+V = 500          # bucket size in shares — every bucket holds EXACTLY V
+NB = 10          # number of buckets
+
+# Volume-clock bucketing with boundary trades split (ELO convention)
+closes = []      # closing (last-trade) price of each bucket
+fill = 0.0
+for v, p in zip(sizes[1:], prices[1:]):
+    need = V - fill
+    if v < need:
+        fill += v
+    else:
+        closes.append(float(p))   # this trade's price closes the bucket
+        fill = v - need           # remainder starts the next bucket
+        if len(closes) == NB:
+            break
+assert len(closes) == NB, "tape too short for 10 buckets"
+
+dP = np.diff(np.concatenate([[prices[0]], closes]))  # bar price changes ($)
+sigma = float(dP.std(ddof=1))
 
 def Phi(x):
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
-V, B, S = [], [], []
-for b in range(NB):
-    bv = sum(v * Phi(dp / sigma) for v, dp in zip(sizes_all[b], dp_all[b]))
-    tot = float(sizes_all[b].sum())
-    V.append(tot); B.append(bv); S.append(tot - bv)
-V, B, S = map(np.array, (V, B, S))
-OI = np.abs(B - S)
+frac = np.array([Phi(d / sigma) for d in dP])
+VB = V * frac
+VS = V - VB
+OI = np.abs(VB - VS)
 ratio = OI / V
 
 # Rolling VPIN over n=4 buckets (example — not an institutional standard)
 n = 4
-vpin = np.array([OI[i-n+1:i+1].sum() / V[i-n+1:i+1].sum() for i in range(n-1, NB)])
+vpin = np.array([OI[i - n + 1:i + 1].sum() / (n * V) for i in range(n - 1, NB)])
 
-# Print the worked-example table (copy into chapter S4)
-print(f"sigma(dp)={sigma:.5f}")
-print("bucket | Vtot | Vbuy | Vsell | |OI| | |OI|/V")
+print(f"sigma(bar dP) = {sigma:.5f}  (ddof=1 over the {NB} bar price changes)")
+print("bucket | V(sh) | dP($)  | Phi(dP/s) | Vbuy   | Vsell  | |OI|   | |OI|/V")
 for i in range(NB):
-    print(f"{i+1:>2} | {V[i]:>5.0f} | {B[i]:>6.1f} | {S[i]:>6.1f} | {OI[i]:>6.1f} | {ratio[i]:.3f}")
+    print(f"{i+1:>2} | {V:>5d} | {dP[i]:+6.3f} | {frac[i]:9.4f} | {VB[i]:6.1f} | "
+          f"{VS[i]:6.1f} | {OI[i]:6.1f} | {ratio[i]:.3f}")
 for i, v in enumerate(vpin, n):
-    print(f"VPIN rolling n=4 ending at bucket {i}: {v:.4f}")
+    print(f"VPIN rolling n={n} ending at bucket {i}: {v:.4f}")
+print(f"max VPIN = {vpin.max():.4f} vs example gate 0.30 -> "
+      f"{'FIRES' if vpin.max() > 0.30 else 'never fires'}")
 
 # ---- Plot: per-bucket imbalance ratio bars + rolling VPIN line (0..1 axis) ----
 x = np.arange(1, NB + 1)
 fig, ax = plt.subplots()
 ax.bar(x, ratio, color=PALETTE["volume"], alpha=0.8,
-       label="Bucket imbalance |Vbuy−Vsell|/V (BVC)")
+       label="Bucket imbalance |Vbuy-Vsell|/V (bar-level BVC)")
 ax.plot(np.arange(n, NB + 1), vpin, color=PALETTE["signal"], marker="o",
         linewidth=2.4, label=f"VPIN, rolling {n} buckets")
 ax.axhline(0.30, color=PALETTE["signal2"], linestyle="--", linewidth=1.2,
            label="Toxicity gate (example threshold 0.30)")
 ax.set_ylim(0, 1.05)
-ax.set_title("S008 — VPIN flow toxicity: 10 synthetic volume buckets (BVC classification)")
+ax.set_title("S008 — VPIN flow toxicity: 10 equal-volume synthetic buckets (bar-level BVC)")
 ax.set_xlabel("Volume bucket # (equal-volume, event time)")
 ax.set_ylabel("Imbalance ratio / VPIN (0–1)")
 ax.set_xticks(x)

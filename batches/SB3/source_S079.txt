@@ -1,0 +1,8 @@
+**79. HMM regime-switching (trend & volatility states)** [D]
+- Intuition: Returns/vol are drawn from latent regimes; the filtered regime probability gates or reweights all other signals — a lag-free trend flip and a vol-risk dial.
+- Formula: Hidden s_t ∈ {1..K}, transition matrix P, emissions N(μ_k, σ²_k); parameters via Baum–Welch (forward–backward) or MCMC; online prediction via the forward algorithm; signal = E[r_{t+1}] under filtered states. Vol form (Hamilton 1989): r_t = μ_{s_t} + σ_{s_t}·ε_t; position scale ∝ 1/σ̂_{s_t}. Three-state practitioner form: bull/range/bear with emissions on (return, realized vol) pairs. One-step-ahead bear probability p̂_{t+1} = Σ_i p_{i,bear}·P(S_t=i|I_t). **Caveats:** 1–2 period detection lag; states are unlabeled (must map from emission parameters); 2 states usually suffice for tactical use.
+- Data: 1-min bars (ES futures in the HMM-momentum paper); returns ± RV, daily or 5-min.
+- Sources: Any intraday feed.
+- Horizon: minutes (momentum states); regime label valid minutes–hours (vol states).
+- Citations: Christensen, Godsill & Turner (arXiv 2006.08307); Hamilton (1989).
+- Coverage: R1, S, G.

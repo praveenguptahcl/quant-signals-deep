@@ -1,0 +1,8 @@
+**44. Stochastic oscillator & Williams %R** [D]
+- Intuition: In a trading range, closes near the high/low extreme of the recent range revert as momentum exhausts.
+- Formula: %K = 100·(C − L_n)/(H_n − L_n); %D = SMA(%K, 3) (n=14 standard). Fade: short when %K crosses down through %D above 80; long symmetrically below 20. Williams %R = −100·(H_n − C)/(H_n − L_n) (n=14); fade below −80 / above −20 crosses.
+- Data: OHLC bars.
+- Sources: Any OHLCV vendor.
+- Horizon: minutes–hours.
+- Citations: Lane (stochastic); Williams (%R).
+- Coverage: G.

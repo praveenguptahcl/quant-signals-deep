@@ -34,7 +34,7 @@ PALETTE = {
 
 # ---- SYNTHETIC TICK TAPE (rng-drawn, seed stated) ----
 rng = np.random.default_rng(83)
-N_TRADES = 48
+N_TRADES = 15
 prices = np.round(100.0 + np.cumsum(rng.normal(0, 0.35, N_TRADES)), 2)
 sizes = rng.choice([100, 200, 300, 500, 800, 1000, 1500], N_TRADES)
 # tick-rule sign: +1 if uptick, -1 if downtick, carry forward on zero ticks
@@ -52,7 +52,7 @@ print("Trade  Price    Size  TickSign")
 for i in range(N_TRADES):
     print(f"T{i+1:<4d} {prices[i]:>6.2f} {sizes[i]:>6d}  {signs[i]:>+3d}")
 
-# ---- Standard bars: tick bars (every 6 trades), volume bars (every 3000 shares) ----
+# ---- Standard bars: tick bars (every 5 trades), volume bars (every 3000 shares) ----
 def boundaries(closes_idx, counts, threshold):
     bounds, cum = [0], 0
     for i, c in enumerate(counts):
@@ -61,9 +61,9 @@ def boundaries(closes_idx, counts, threshold):
             bounds.append(i + 1); cum = 0
     return bounds
 
-tick_bounds = boundaries(range(N_TRADES), np.ones(N_TRADES, int), 6)
+tick_bounds = boundaries(range(N_TRADES), np.ones(N_TRADES, int), 5)
 vol_bounds = boundaries(range(N_TRADES), sizes, 3000)
-print(f"Tick bars (6 trades each): {len(tick_bounds)-1} bars, boundaries {tick_bounds}")
+print(f"Tick bars (5 trades each): {len(tick_bounds)-1} bars, boundaries {tick_bounds}")
 print(f"Volume bars (3000 shares each): {len(vol_bounds)-1} bars, boundaries {vol_bounds}")
 
 # ---- Imbalance bars: close when |theta| >= THETA_IMB (signed-share example) ----
@@ -91,7 +91,7 @@ for k, (a, b) in enumerate(zip(imb_bounds[:-1], imb_bounds[1:])):
 
 # ---- Chart: trade prices with the three bar-clock boundary sets ----
 fig, ax = plt.subplots()
-ax.set_title("S083 — Bar clocks on a 48-trade synthetic tape")
+ax.set_title("S083 — Bar clocks on a 15-trade synthetic tape")
 idx = np.arange(N_TRADES)
 ax.plot(idx, prices, marker=".", color=PALETTE["price"], lw=1.2, label="Trade price ($, synthetic)")
 for b in tick_bounds[1:-1]:
@@ -103,7 +103,7 @@ for b in imb_bounds[1:-1]:
 from matplotlib.lines import Line2D
 ax.legend(handles=[
     Line2D([0], [0], color=PALETTE["price"], marker=".", label="Trade price"),
-    Line2D([0], [0], color=PALETTE["signal"], ls=":", label="Tick-bar close (every 6 trades)"),
+    Line2D([0], [0], color=PALETTE["signal"], ls=":", label="Tick-bar close (every 5 trades)"),
     Line2D([0], [0], color=PALETTE["profit"], ls="--", label="Volume-bar close (every 3000 sh)"),
     Line2D([0], [0], color=PALETTE["signal2"], ls="-", label="Imbalance-bar close (|θ|≥thr)"),
 ], loc="best")
