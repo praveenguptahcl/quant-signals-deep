@@ -32,28 +32,45 @@ PALETTE = {
     "zero":    "#2c3e50",  # baseline
 }
 
-# ---- WORKED EXAMPLE: chatbot-provided tiny synthetic tape (Duck.ai Q-SB7-1),
-# ---- arithmetic OPERATOR-VERIFIED on 2026-09-10 with ONE correction applied.
-# The bot's k=2 block had a single arithmetic error:
-#   bot wrote 2*(-2.5)^2 = 12  ->  correct 2*6.25 = 12.5
-# Corrected chain: sum of squared deviations = 9 + 12.5 + 0.5 = 22.0 (bot: 21.5);
-#   s_2^2 = 22.0/7 = 3.142857 (bot: 3.07143);
-#   VR(2) = 3.142857/(2*1.0) = 1.5714 (bot: 1.5357);
-#   H_hat(2) = 0.5*[1 + ln(1.5714)/ln2] = 0.826 (bot: 0.808).
-# Everything else verified: s_1^2 = 1.0; VR(4) = 0.5667; H_hat(4) = 0.295.
-rng = np.random.default_rng(7)  # set for reproducibility (this tape is hand-specified)
+# ---- WORKED EXAMPLE (S090 S4): hand-specified synthetic tape, no RNG draws ----
+# r = (1, 1, 1, -1, -1, -1, 1, 1, 1). Everything below is COMPUTED from this tape
+# with the chapter's own formulas — nothing is hard-coded.
+# CORRECTED 2026-09-10: an earlier version hard-coded the bot's false k=4 block
+# (VR(4)=0.5667, H^=0.295). Operator re-verification gives VR(4)=0.8000, H^=0.4195.
+r = np.array([1, 1, 1, -1, -1, -1, 1, 1, 1], dtype=float)
 
-ks   = np.array([1, 2, 4])                      # horizons plotted
-vrs  = np.array([1.0, 1.5714, 0.5667])          # VR(1)=1 by definition; VR(2), VR(4) corrected/verified
-hs   = np.array([0.5, 0.826, 0.295])            # H_hat = 0.5*[1 + ln(VR(k))/ln k]
 
-# Sanity: H mapping recomputes from VR to machine precision (k>=2)
-hs_check = 0.5 * (1 + np.log(vrs[1:]) / np.log(ks[1:]))
-assert np.allclose(hs[1:], hs_check, rtol=1e-3, atol=1e-3), hs_check
+def vr_and_h(r, k):
+    """Lo-MacKinlay variance ratio and implied Hurst from the chapter's S3 formulas."""
+    s1 = r.var(ddof=1)                       # s_1^2 (ddof=1, per the chapter)
+    rk = np.array([r[i:i + k].sum() for i in range(len(r) - k + 1)])  # overlapping k-returns
+    sk = rk.var(ddof=1)
+    vr = sk / (k * s1)
+    h = 0.5 * (1 + np.log(vr) / np.log(k))
+    return vr, h, s1, rk
+
+
+ks = np.array([1, 2, 4])
+vrs, hs = [], []
+for k in ks:
+    if k == 1:
+        vr, h = 1.0, 0.5                     # by definition
+    else:
+        vr, h, _, _ = vr_and_h(r, k)
+    vrs.append(vr)
+    hs.append(h)
+vrs = np.array(vrs)
+hs = np.array(hs)
 
 print("k, VR(k), H_hat(k)")
 for k, v, h in zip(ks, vrs, hs):
     print(f"{k}, {v:.4f}, {h:.3f}")
+
+# Operator hand-verification anchors (the chapter's S4 block)
+assert abs(vrs[1] - 1.5714) < 1e-3, vrs[1]     # VR(2)
+assert abs(hs[1] - 0.826) < 1e-3, hs[1]       # H^(2)
+assert abs(vrs[2] - 0.8000) < 1e-3, vrs[2]    # VR(4), corrected 2026-09-10
+assert abs(hs[2] - 0.4195) < 1e-3, hs[2]      # H^(4), corrected 2026-09-10
 
 # Illustrative VR-toggle sizing overlay (bot suggestion, labelled illustrative in text)
 def g_illustrative(vr4):
@@ -79,11 +96,11 @@ ax1.set_ylabel("VR(k) = Var(r_t(k)) / [k * Var(r_t)]")
 ax1.set_title("Variance ratio vs horizon (corrected chain)")
 ax1.set_ylim(0, 2.1)
 ax1.legend()
-ax1.annotate("VR(2)=1.5714\nH^=0.826\n-> momentum label",
+ax1.annotate(f"VR(2)={vrs[1]:.4f}\nH^={hs[1]:.3f}\n-> momentum label",
              xy=(1, vrs[1]), xytext=(0.05, 1.85),
              arrowprops=dict(arrowstyle="->", color=PALETTE["signal"]),
              fontsize=9, color=PALETTE["signal"])
-ax1.annotate("VR(4)=0.5667\nH^=0.295\n-> reversal label",
+ax1.annotate(f"VR(4)={vrs[2]:.4f}\nH^={hs[2]:.3f}\n-> reversal label",
              xy=(2, vrs[2]), xytext=(2.15, 1.25),
              arrowprops=dict(arrowstyle="->", color=PALETTE["signal2"]),
              fontsize=9, color=PALETTE["signal2"])
@@ -99,7 +116,8 @@ ax2.set_ylim(0, 1.0)
 ax2.legend(loc="upper right")
 fig.suptitle("S090 — VR/Hurst regime test: corrected synthetic example", y=1.02)
 fig.text(0.5, 0.02,
-         "Tiny-sample lesson: k=2 says momentum (H^=0.826), k=4 says reversal (H^=0.295) — diagnostic, not a standalone rule.",
+         f"Tiny-sample lesson: k=2 says momentum (H^={hs[1]:.3f}), k=4 says reversal "
+         f"(H^={hs[2]:.3f}) — diagnostic, not a standalone rule.",
          ha="center", fontsize=9, style="italic", color=PALETTE["zero"])
 
 # ---- SYNTHETIC WATERMARK (mandatory) ----

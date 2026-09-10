@@ -1,0 +1,12 @@
+Batch: SB10 | Date: 2026-09-10 | Bots used: Duck.ai (GPT-5.6 Luna, anonymous, no login)
+Q1 answered by: Duck.ai (Q-SB10-1) | Q2 answered by: Duck.ai (Q-SB10-2) | Q3 answered by: Duck.ai (Q-SB10-3)
+Verifiable citations captured: Tetlock 2011 RFS (RePEc + Columbia PDF + DOI 10.1093/rfs/hhq141);
+  Chan 2003 JFE (syllabus record); Tetlock/Saar-Tsechansky/Macskassy 2008 (Tetlock CV);
+  Wang/Cohen/Ma 2024 FININ (ACL Anthology); RavenPack (vendor site); GDELT (project site)
+Unverified claims quarantined: Duck.ai novelty formula variants, vendor price specifics
+  (Benzinga quote-based, RavenPack $thousands-$tens of thousands/yr), news eng 155-370h,
+  redistribution-restriction list -> all in chapter S12 "Unverified leads"
+Notes: STANDING DIRECTIVE (2026-09-10): Grok-only going forward; no more Duck.ai/Cursor
+  collection. Source-log sentence in chapter: "Duck.ai answered Q-SB10-1-Q-SB10-3 (2026-09-10);
+  Grok answers pending (checked 2026-09-10)." Duck.ai material treated as research leads only.
+  Novelty hand-computation: E (stale) = 1-1.00 = 0.00; F (novel) = 1-0.00 = 1.00.

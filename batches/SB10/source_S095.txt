@@ -1,0 +1,11 @@
+Batch: SB10 | Date: 2026-09-10 | Bots used: Duck.ai (GPT-5.6 Luna, anonymous, no login)
+Q1 answered by: Duck.ai (Q-SB10-1) | Q2 answered by: Duck.ai (Q-SB10-2) | Q3 answered by: Duck.ai (Q-SB10-3)
+Verifiable citations captured: Makarov & Schoar 2020 JFE (LSE PDF + DOI 10.1016/j.jfineco.2019.07.001);
+  Binance Futures API funding-rate docs; ccxt funding-rate docs; CoinGlass; Laevitas;
+  CoinDesk Data derivatives; ue/awesome-derivatives-data (all URLs captured verbatim from web search)
+Unverified claims quarantined: Duck.ai funding/basis framing, contrarian regression, R_net
+  decomposition, vendor prices (aggregators tens-hundreds/mo, Tardis hundreds-thousands/mo),
+  eng 115-230h direct / 35-80h aggregator -> all in chapter S12 "Unverified leads"
+Notes: Worked Example B numbers operator-verified and used exactly: funding $6.00, R_24h 0.060%,
+  f_ann 21.9% simple, fees $16.00, net -$10.00 (-0.10%). All three MANDATORY framing sentences
+  quoted verbatim in S2/S4. Grok answers pending (checked 2026-09-10).

@@ -1,0 +1,13 @@
+Batch: SB10 | Date: 2026-09-10 | Bots used: Duck.ai (GPT-5.6 Luna, anonymous, no login)
+Q1 answered by: Duck.ai (Q-SB10-1) | Q2 answered by: Duck.ai (Q-SB10-2) | Q3 answered by: Duck.ai (Q-SB10-3)
+Verifiable citations captured: CoinGlass API v3 endpoints doc (ckaraca/coinglass-apiv3);
+  CoinGlass; Laevitas CLI + laevitas.ch; trading-hypothesis DATA.md (forceOrder WS, Data Vision,
+  Tardis, Kaiko notes); ue/awesome-perp-trading; TradingView derivatives indicators blog
+  (all URLs captured verbatim from web search)
+Unverified claims quarantined: Duck.ai censored-data caveat details (stated explicitly in
+  source - kept as lead), cascade loop mechanics, contrarian regression, vendor prices,
+  liquidations eng 15-30h -> all in chapter S12 "Unverified leads"
+Notes: MANDATORY CENSORED-DATA CAVEAT stated explicitly in S2 + carried through S4/S6/S8/S10
+  with reported_* field labels. Provenance [SR] (heuristic family) - no peer-reviewed spec
+  of this exact rule claimed. Hand-checks: OI h49->h50 -6.1%; price -1.62%; liq spike 40x;
+  funding flip h52->h53 +0.00020 -> -0.00030; fade bounce +1.61%. Grok answers pending (2026-09-10).
