@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 40/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 50/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -49,6 +49,16 @@
 - Stage 18/200 — S018 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
 - Stage 20/200 — S020 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
 - Stage 47/200 — S047 merged 2026-09-10 · reviewer: c1afbd3e · plot verified (seed n/a)
+- Stage 22/200 — S022 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 22)
+- Stage 23/200 — S023 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 23)
+- Stage 26/200 — S026 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 26)
+- Stage 28/200 — S028 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 28)
+- Stage 29/200 — S029 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 29)
+- Stage 30/200 — S030 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 30)
+- Stage 31/200 — S031 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 31)
+- Stage 33/200 — S033 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 33)
+- Stage 44/200 — S044 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 44)
+- Stage 45/200 — S045 merged 2026-09-10 · reviewer: strict-reviewer-02 · plot verified (seed 45)
 
 
 ## Table of contents
@@ -106,6 +116,19 @@
 - [x] Stage 18/200 — [S018 — Order-sign autocorrelation / sequential trade correlation](#stage-18200--s018-order-sign-autocorrelation--sequential-trade-correlation)
 - [x] Stage 20/200 — [S020 — Retail & odd-lot order imbalance](#stage-20200--s020-retail--odd-lot-order-imbalance)
 - [x] Stage 47/200 — [S047 — Bid–ask bounce exploitation](#stage-47200--s047-bidask-bounce-exploitation)
+
+**Batch SB5** — Breakout/session-pattern family.
+
+- [x] Stage 22/200 — [S022 — First-hour range expansion / initial balance](#stage-22200--s022-first-hour-range-expansion--initial-balance)
+- [x] Stage 23/200 — [S023 — Gap-and-go](#stage-23200--s023-gap-and-go)
+- [x] Stage 26/200 — [S026 — First half-hour → last half-hour momentum](#stage-26200--s026-first-half-hour--last-half-hour-momentum)
+- [x] Stage 28/200 — [S028 — Donchian breakout](#stage-28200--s028-donchian-breakout)
+- [x] Stage 29/200 — [S029 — Keltner / Bollinger breakouts](#stage-29200--s029-keltner--bollinger-breakouts)
+- [x] Stage 30/200 — [S030 — Bollinger bandwidth squeeze → expansion](#stage-30200--s030-bollinger-bandwidth-squeeze--expansion)
+- [x] Stage 31/200 — [S031 — Consecutive-bar streaks (runs)](#stage-31200--s031-consecutive-bar-streaks-runs)
+- [x] Stage 33/200 — [S033 — Open-auction imbalance continuation](#stage-33200--s033-open-auction-imbalance-continuation)
+- [x] Stage 44/200 — [S044 — Stochastic oscillator & Williams %R](#stage-44200--s044-stochastic-oscillator--williams-r)
+- [x] Stage 45/200 — [S045 — Stretched-move z-score & market-internals extremes](#stage-45200--s045-stretched-move-z-score--market-internals-extremes)
 
 ### Strategy chapters
 
@@ -8251,6 +8274,1853 @@ flowchart LR
 5. Chatbot source (labeled, per question-bank protocol): Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10) answered Q-SB4-1–Q-SB4-3; Grok/Cursor answers pending (checked 2026-09-10). Spread-estimate dependency and gross-edge-bound points used above as *labeled leads*.
 
 **Unverified leads** (chatbot-only, not independently confirmed): Roll window guidance (100–5,000 transactions; 1–15 min bars); "corrected estimator (drift, discreteness, asymmetry)" as remedies for non-negative autocovariance.
+
+---
+## Stage 22/200 — S022: First-hour range expansion / initial balance
+
+*Batch SB5 · Signal 22/100 · Provenance [D] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | First-hour (Initial Balance) high/low; a close or excursion beyond the band marks a likely trend day — trade the expansion. |
+| **When it works** | High-conviction news/volatility days where institutions commit directionally after the open. |
+| **When it dies** | Chop, low-volume bracket days, and late entries after the expansion leg is spent. |
+| **Build-or-buy in one line** | Build: it is a Tier L calculation on 1–5 min bars; buy the bars, not the signal. |
+
+### S2. How it works — plain human explanation
+
+**Initial balance (IB)** is a Market Profile term (Steidlmayer/Dalton): the high and low established during the first hour of regular trading (09:30–10:30 ET), i.e. the first twelve 5-minute bars. **IBH** = Initial Balance High (the hour's highest high); **IBL** = Initial Balance Low (the hour's lowest low); **IBR** = Initial Balance Range (IBH − IBL). Picture it: overnight, thousands of orders pile up — earnings reactions, macro news, portfolio rebalancing. The opening auction clears that backlog, and the first hour is the market's price-discovery session: buyers and sellers negotiate a reference range. If, after 10:30, price pushes *beyond* that range and holds, it means the marginal institutional flow has picked a side. Pit traders called the result a **trend day** — a session where the day's range keeps extending in one direction.
+
+A concrete vignette: 09:47:03, AAPL bid 231.40 × 800 / ask 231.41 × 300. By 10:30 the tape has printed a first-hour high of 232.10 (IBH) and low of 230.55 (IBL). At 11:05, on a sector headline, a 5-minute bar closes at 232.42 — $0.32 above IBH, about 21% of the IB range. The signal says the morning's balance is broken; you enter long on the next bar's open, never at the print that broke the level — in live trading you cannot trade a bar that has already closed.
+
+Why should this work economically? First, **overnight information asymmetry**: informed flow accumulates while the market is closed; the first hour absorbs it, and a break of the resulting range means absorption failed — imbalance remains. Second, **institutional participation**: large desks benchmark to VWAP (volume-weighted average price — the day's volume-weighted average trade price) and commit once the day's direction resolves; their own flow then extends the move. Third, **behavioral anchoring**: the first hour's extremes are visible reference points; breaks trigger stop-loss cascades.
+
+- **Mental model:** the first hour draws a box the market negotiated; a sustained break of the box means the negotiation failed and one side is winning.
+- **Mental model:** expansion is a *regime* statement (trend day vs bracket day) first, an entry trigger second — size and hold time should follow the regime call.
+- **Mental model:** the edge lives in the *confirmation* (close beyond the band + volume), not in touching the line; touches are noise, closes are commitment.
+
+### S3. The math — exact formula
+
+Let bars 1…K be the first K 5-minute bars of RTH (regular trading hours — the 09:30–16:00 ET equity session; K = 12 for a 60-minute IB), with bar i having high H_i and low L_i, and let C_t be the close of bar t > K.
+
+$$\text{IBH} = \max_{i=1..K} H_i, \qquad \text{IBL} = \min_{i=1..K} L_i, \qquad \text{IBR} = \text{IBH} - \text{IBL}$$
+
+Expansion (bullish) at bar t, with buffer δ ≥ 0 and optional volume multiple m_v:
+
+$$\text{Expand}_t^{\text{up}} = \big[\, C_t > \text{IBH} + \delta \,\big] \;\; \text{AND} \;\; \big[\, V_t > m_v \cdot \bar{V} \,\big]$$
+
+where V_t is bar-t volume and V̄ is the mean volume of the IB bars. Bearish expansion mirrors with C_t < IBL − δ. A common normalization expresses the excursion as a fraction of the range:
+
+$$e_t = \frac{C_t - \text{IBH}}{\text{IBR}} \quad \text{(bullish; } e_t > q \text{ triggers, e.g. } q = 0.25\text{)}$$
+
+The buffer is often set from volatility: δ = q·ATR(A), where **ATR** (Average True Range) is the N-bar mean of True Range TR_i = max(H_i − L_i, |H_i − C_{i−1}|, |L_i − C_{i−1}|). **Causal timing:** IBH/IBL are known only after bar K closes (10:30 ET); the expansion signal is computed at the close of bar t (t > K) using only data ≤ t, and is tradable no earlier than the open of bar t+1.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| IB window | K (5-min bars) | 6–18 bars (30–90 min) | noisy box, whipsaws | late regime call, gives up the move | 12 bars / 60 min, *example — not an institutional standard* |
+| Buffer | δ or q | 0–0.5×ATR | false breaks on touches | misses the expansion leg | q = 0.1×ATR(14), *example* |
+| Excursion fraction | q_e | 0.1–0.5 of IBR | trades noise | never triggers | 0.25, *example* |
+| Volume multiple | m_v | 1.0–2.0× | no confirmation value | filters out real breaks on quiet names | 1.5×, *example* |
+
+**Named variants.** (1) **Crabel ORB** (opening-range breakout; Crabel, 1990): shorter window (15–30 min), breakout of the opening range itself — faster but noisier than IB. (2) **Fisher ACD** (Fisher, 2002): builds "A-up/A-down" pivot points (ACD = Fisher's "A/C down" pivot-entry framework) from the opening range plus N points; a mechanical entry/exit system around the same idea. (3) **IB + squeeze confirmation**: require a volatility squeeze (see S030) during the IB hour — compression before expansion selects for larger trend days.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 30-bar 5-minute tape, seed 22 (volumes jittered with `np.random.default_rng(22)`; OHLC hand-specified). Bars 1–12 are the first hour; bars 13–29 are flat; bar 30 is the expansion bar.
+
+| bar | time | O | H | L | C | Vol |
+|---|---|---|---|---|---|---|
+| 1 | 09:30 | 100.00 | 100.20 | 99.90 | 100.05 | 858 |
+| 2 | 09:35 | 100.05 | 100.35 | 99.95 | 100.15 | 839 |
+| 3 | 09:40 | 100.15 | 100.50 | 100.00 | 100.30 | 842 |
+| 4 | 09:45 | 100.30 | 100.70 | 100.10 | 100.35 | 821 |
+| 5 | 09:50 | 100.35 | 100.60 | 100.20 | 100.40 | 838 |
+| 6 | 09:55 | 100.40 | 100.80 | 100.25 | 100.45 | 804 |
+| 7 | 10:00 | 100.45 | 100.70 | 100.30 | 100.42 | 804 |
+| 8 | 10:05 | 100.42 | 100.60 | 100.10 | 100.30 | 810 |
+| 9 | 10:10 | 100.30 | 100.90 | 100.20 | 100.60 | 783 |
+| 10 | 10:15 | 100.60 | 101.20 | 100.40 | 100.80 | 791 |
+| 11 | 10:20 | 100.00 | 100.80 | 99.80 | 100.20 | 774 |
+| 12 | 10:25 | 100.00 | 100.80 | 99.80 | 100.20 | 794 |
+| 13–29 | 10:30–11:55 | 100.00 | 100.80 | 99.80 | 100.20 | ~665–777 |
+| 30 | 12:00 | 100.20 | 102.50 | 100.00 | 102.00 | 2500 |
+
+Step 1 — IB levels (bars 1–12): IBH = max high = **101.20** (bar 10); IBL = min low = **99.80** (bars 11–12); IBR = 101.20 − 99.80 = **1.40**.
+
+Step 2 — expansion check at bar 30: C_30 = 102.00 > IBH = 101.20 → breakout. Excursion e = (102.00 − 101.20)/1.40 = 0.80/1.40 = **57.14% of IBR**, well above the 25% example threshold. Volume 2500 ≈ 3.5× the IB-hour mean (~810) — confirmation passes at m_v = 1.5.
+
+Step 3 — tradability: signal computed at 12:00 close; entry no earlier than the next 5-minute bar open (~102.00). (These figures reproduce the operator-verified Q-SB5-1 worked example: IBH 101.20, IBL 99.80, IBR 1.40, excursion 0.80 = 57.14% of IBR — all hand-checked, no arithmetic errors.)
+
+**What to notice.** The long flat midday (bars 13–29) is the bracket regime: price sits *inside* the IB box and no signal fires — correctly, the method stays flat. The bar-30 break arrives with a volume surge, the classic expansion signature. **Limits:** no fees, no spread, a single hand-picked expansion bar — real breaks often retest IBH and shake out early entries. Nothing here is a backtest.
+
+### S5. Strategies that use this signal
+
+- **T061 — Initial-Balance Expansion Trader** — *primary entry trigger (direction)*: S022 defines the IB box and fires the expansion entry; S030 (squeeze) confirms compression inside the box; S032 (RVOL — relative volume, i.e. volume vs its time-of-day average) gates for institutional participation.
+- **T005 — RVOL-Filtered Opening-Range Breakout** — *conceptual-fit reference (not a plan-defined consumer of S022)*: after 10:30, require price beyond IBH (or below IBL) before taking late ORB entries; veto counter-trend entries while price is trapped inside the IB box.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| OHLCV | float/int | 1–5 min bars, RTH | Tier 0–1 | SIP-consolidated (Securities Information Processor); exchange timestamps required |
+| Corporate actions | events | daily | Tier 0–1 | splits/dividends; IB levels must be split-adjusted point-in-time |
+| Halt/status flags | enum | per bar | Tier 1 | exclude halted bars from the IB window |
+| Session calendar | dates | daily | Tier 0 | half-days invalidate a 60-min IB; fall back to 30-min |
+
+Collection: Polygon Stocks Advanced (`/v2/aggs/ticker/{t}/range/5/minute/...`) or Databento `ohlcv-1m`; Alpaca IEX free tier suffices for prototyping. Ingest sketch (≤20 lines, polars):
+
+```python
+import polars as pl
+bars = pl.read_parquet("bars_1m/*.parquet").filter(
+    pl.col("symbol") == "AAPL").sort("ts")                    # exchange ts, RTH only
+bars = bars.with_columns(pl.col("ts").dt.date().alias("day"))
+ib = bars.group_by("day").agg([                               # first 12 five-min bars
+    pl.col("high").head(12).max().alias("IBH"),               # 09:30-10:30 ET
+    pl.col("low").head(12).min().alias("IBL")]).with_columns(
+    (pl.col("IBH") - pl.col("IBL")).alias("IBR"))
+sig = bars.join(ib, on="day").with_columns(
+    ((pl.col("close") > pl.col("IBH") + 0.1 * pl.col("atr14"))
+     & (pl.col("volume") > 1.5 * pl.col("ib_vol"))).alias("expand_up"))
+```
+
+Storage: 1-min bars for 500 symbols ≈ 50 MB/day, ~3 GB per 60 days (per `notes/cost-model.md` §4) — archive freely. **Data-quality checklist:** exchange timestamps (SIP vs direct skew); point-in-time splits/dividends; drop halted bars from the window; DST and early closes (shorten K or skip); reject stale/zero-volume bars.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** IBH/IBL is a 12-bar rolling max/min plus a close comparison — O(1) per bar with running state. Per `notes/cost-model.md` §2, a 500-symbol 1-minute universe produces 500 bars/min (8.33 bars/sec average; design for 500-bar bursts at the minute boundary) — each update is microseconds; the full 60-day feature table (11.7M rows) recomputes in well under a second in polars (~10–50M rows/sec simple ops). The S022 signal alone is Tier L; the Q-SB5-2 chatbot lead prices a *full multi-signal session-pattern engine* far higher (185–385 h prototype / 705–1,530 h research-grade, rows verified to sum exactly), with point-in-time correctness the dominant cost.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | Default: IB/ATR/z logic is vectorized rolling ops; fastest to write and audit |
+| Rust | Only if you need tick-level break detection across thousands of symbols in real time |
+| DuckDB | Ad-hoc research queries over partitioned Parquet history |
+
+RAM: 60 days × 500 symbols of 1-min bars is ~3 GB on disk per cost-model §4 and far less as a compact numeric frame — trivial against the 77 GB working budget (cost-model §3). Engineering: **Tier L, 4–12 h → $600–1,800** at $150/hr loaded-cost estimate (cost-model §5), for the signal plus replay harness; the point-in-time bar store is the real work. **Bottleneck:** data correctness (corporate actions, halt handling), not compute. **Breaks at:** full-universe tick-level expansion monitoring (millions of events/sec) — then move break detection to Rust per cost-model §2 (5–50M events/sec).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / Stooq | Free 1-min/daily bars | ~$0 | zero cost, fine for prototyping | IEX-only or delayed; no venue detail |
+| Tier 1: Polygon Stocks Advanced | SIP 1-min bars, splits, 20+ yrs | ~$30–200/mo | clean history, corp actions | SIP timestamps only |
+| Tier 2: Databento Standard | L1 (top-of-book quotes)/L2 (full depth-of-book) + OHLCV schemas, replay | ~$200/mo + usage | honest timestamps, venue data | usage meter runs on history pulls |
+| Academic: LOBSTER / TAQ | MBO (market-by-order)/ITCH (Nasdaq's direct-feed order message protocol) replay, TAQ (Trade and Quote — the consolidated equity tick database) history | ~hundreds/yr academic; institutional $$$$ | microstructure-grade research | licensing friction, heavy storage |
+
+All prices *indicative — verify before budgeting*. **Verdict: build.** Data tier ≤ 1, eng Tier L — buy the bars (Tier 1), build the IB logic, thresholds, and replay yourself, per the Q-SB5-2 chatbot verdict (buy normalized data; build bar construction, indicator state, and point-in-time replay). Buy deeper history only if you extend to cross-sectional IB studies.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Holmberg, Lönnbark & Lundström (2013), "Assessing the profitability of intraday opening range breakout strategies", *Finance Research Letters* 10(1) | Crude oil futures | ORB returns significantly > 0; success rate above a fair game | Before-cost | Futures, not equities; fixed rule, no regime filter |
+| "Enhancing Opening Range Breakout Strategies with LSTM-Based True Range Prediction" (Springer, 2026) | S&P 500 index futures (ES) | LSTM (long short-term memory — a neural-network architecture)-forecast true range: ~+70% cumulative return vs ATR-based ORB baseline | Before-cost; oracle upper-bound labeled | Method paper; ML overlay, not the raw IB signal |
+
+**Regimes where it fails:** range-bound/bracket days (repeated false breaks — the principal failure mode per practitioner sources); low-liquidity names where the "IB" is market-maker noise; news-spike expansions that reverse by midday; late entries after the expansion leg is spent. **Documented decay:** the raw rule is decades old (Crabel 1990) and widely published — expect the naive version to be competed away; conditioning (squeeze, RVOL, higher-timeframe trend) is where any residual edge lives. **Bottom line:** as a standalone trigger, a weak-to-moderate, cost-sensitive edge; as a *regime filter* (trend-day vs bracket-day) feeding sized entries, moderate — the honest use case.
+
+### S10. Failure modes & pitfalls
+
+1. **Mixed bar-inclusion conventions (live-implementation pitfall — mandatory flag).** The Q-SB5-1 worked example mixed conventions: Donchian(20) at bar 30 used *prior* bars only (10–29), while EMA (exponential moving average)/Bollinger/ATR/z windows *included* bar 30 (bars 11–30). In live code this silently moves every threshold: ATR(20) including the expansion bar's TR of 2.50 is 1.075, but a completed-bar convention (TR of bars 10–29) gives 1.00 — an 8% band-width swing from a bookkeeping choice. **Mitigation — one consistent convention:** compute all rolling windows from *fully closed bars only* (at bar t's close, windows cover bars t−N..t−1); monitor the *live* bar for the break; fill at the next bar's open. **Cost:** you surrender the intrabar excursion and pay one bar of lag — the price of zero lookahead and identical live/replay behavior.
+2. **Lookahead on IBH/IBL:** using the 10:30 IB levels before 10:30, or re-estimating them with revised bars. Mitigate: freeze the IB at bar-K close; store raw messages and derive bars yourself (Q-SB5-2 verdict).
+3. **Late-entry slippage:** entering minutes after the break at the extended price. Mitigate: cap entry at IBH + 0.5×IBR; skip if already extended.
+4. **Half-days and news halts:** a 60-min IB on Thanksgiving Friday is meaningless. Mitigate: session calendar; fall back to 30-min IB or stand down.
+5. **Overfit IB window/buffer:** mining K ∈ {6,…,18} × q grids on one year. Mitigate: pick K = 60 min for the Market-Profile reason, validate out-of-sample, purge/embargo (see S088).
+6. **Cost blowup:** breakout entries cross the spread and chase; on a 1.40-range name with a 2–3 bp spread and 5–10 bp chase slippage, a 30–50 bp excursion target is half consumed. Mitigate: model spread + fees + impact per trade (H5); require excursion target ≥ 3× round-trip cost.
+7. **Crowding on round IB levels:** everyone sees the same first-hour high. Mitigate: buffer q > 0, volume confirmation, or time-delay the entry.
+8. **Stale corporate-action data:** an unadjusted split halves IBH overnight and fabricates a breakout. Mitigate: point-in-time security master (the Q-SB5-2 "biggest hidden item").
+
+### S11. Visuals
+
+![S022 worked example — synthetic 30-bar 5-min tape with Initial Balance band and expansion bar](images/S022_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(Polygon SIP 1-min bars)"] -->|"1-min bars"| ING["Ingest + normalize\n(exchange ts, splits, halts)"]
+    ING -->|"clean 1-min bars"| FEAT["Feature compute\n(IBH/IBL over bars 1-12,\nATR(14) rolling)"]
+    FEAT -->|"IB levels + expansion state\n(5-min bars)"| SIG["Signal S022\nIB expansion trigger"]
+    SIG -->|"signal events (5-min)"| GATE{"Cost / RVOL\ngate?"}
+    GATE -->|"pass: entry orders (5-min)"| OUT["Downstream consumer\n(T061 entry / T005 gate)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Crabel, T. (1990). *Day Trading with Short Term Price Patterns and Opening Range Breakout.* Traders Press (ISBN 0934380171). Practitioner source for ORB; computer-tested short-term patterns.
+- Steidlmayer, J. P. & Dalton, J. (1992/2007). *Mind Over Markets.* The Initial Balance / Market Profile framework.
+- Fisher, M. (2002). *The Logical Trader.* Wiley. ACD method: opening-range-based pivot entries/exits.
+- Holmberg, U., Lönnbark, C. & Lundström, C. (2013). "Assessing the profitability of intraday opening range breakout strategies." *Finance Research Letters* 10(1), 27–33. https://www.econbiz.de/Record/assessing-the-profitability-of-intraday-opening-range-breakout-strategies-holmberg-ulf/10010818902
+- "Enhancing Opening Range Breakout Strategies with LSTM-Based True Range Prediction." Springer (2026). https://link.springer.com/chapter/10.1007/978-981-92-0074-0_23
+- Dalton, J. F., Dalton, R. B. & Jones, E. T. (2007). *Markets in Profile: Profiting from the Auction Process.* Wiley. https://www.econbiz.de/Record/markets-in-profile-profiting-from-the-auction-process-dalton-james/10013489965 — Auction-theory treatment of Market Profile: value-area/fair-price migration and the Initial Balance as the opening auction's balance area, the framework behind IBH/IBL construction in S2.
+
+**Unverified leads**
+- Duck.ai (GPT-5.6 Luna) answered Q-SB5-1–Q-SB5-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10). The Q-SB5-1 30-bar example (IBH 101.20 / IBL 99.80 / IBR 1.40 / excursion 57.14% of IBR) was operator-verified with no arithmetic errors; its mixed bar-inclusion convention is flagged in S10. Q-SB5-3's qualitative assessments are research leads, not confirmed facts.
+
+---
+## Stage 23/200 — S023: Gap-and-go
+
+*Batch SB5 · Signal 23/100 · Provenance [SR] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | An overnight gap that holds through the open, then breaks the first minutes' high — a footprint of unfilled institutional demand. |
+| **When it works** | News-driven gaps with heavy premarket volume and wide market/sector tailwinds. |
+| **When it dies** | Small no-news gaps, thin premarket prints, and extended gaps that mean-revert into the open. |
+| **Build-or-buy in one line** | Build the classifier; buy the news feed if you want the news/no-news split that makes it work. |
+
+### S2. How it works — plain human explanation
+
+An **overnight gap** is the difference between today's opening print and yesterday's close: G = (O_t − C_{t−1})/C_{t−1}. Overnight, news accumulates while nobody can trade; the open is where it all reprices at once. **Gap-and-go** says: if a stock gaps up on real news, holds the gap (doesn't immediately fall back to fill it), and then breaks above the high of its first few minutes of trading, the institutions that wanted to buy couldn't finish overnight — they will keep buying into the morning. **Gap fade** is the mirror: small, no-news gaps tend to get "filled" as price drifts back toward the prior close.
+
+A concrete vignette: 08:47, premarket. XYZ closed at 100.00; on an earnings beat it trades 103.00 on 4× its normal premarket volume. At 09:30 the opening print is 103.00 — a +3.0% gap. The first five minutes hold between 103.00 and 103.60. At 09:36 a 1-minute bar closes at 103.65, above the first-5-minute high. Go: the gap held, the opening drive broke upward — buy the continuation, targeting the morning extension, and flatten by lunch if momentum stalls. Contrast: ABC gaps +1.5% to 101.50 on no news with thin premarket volume; by 10:00 it is back at 100.40 — the fade was the trade, not the go.
+
+Why should either leg exist? **Overnight information asymmetry**: news arrives around the clock but can only be traded at the open, so the opening auction is a coarse, liquidity-constrained repricing — large gaps often under-adjust initially, leaving a drift (the go). **Institutional urgency**: desks with VWAP (volume-weighted average price — the day's volume-weighted average trade price) benchmarks or rebalance mandates must complete size during the day, extending the move. Conversely, **liquidity provision**: market makers fade small uninformed gaps, and overnight index-futures noise mean-reverts once cash trading resumes (the fade).
+
+- **Mental model:** the gap is the market's first draft of the news; the first 30 minutes are the editing process — go trades the drafts that get *confirmed*, fade trades the drafts that get *rejected*.
+- **Mental model:** there is no universal "gaps continue X% of the time" — continuation probability is a function of gap size (in ATR — Average True Range, the trailing mean of True Range), news, and premarket volume.
+- **Mental model:** the go is a positive-skew, low-hit-rate trade; the fade is a high-hit-rate, negative-skew trade — evaluate by expected value net of costs, not by win rate.
+
+### S3. The math — exact formula
+
+Gap and gap size in volatility units (**ATR** = Average True Range, the trailing mean of True Range):
+
+$$G_t = \frac{O_t - C_{t-1}}{C_{t-1}}, \qquad g_t^{\text{ATR}} = \frac{O_t - C_{t-1}}{\text{ATR}_{t-1}(14)}$$
+
+**Hold condition** (up gap; down gap mirrors): the gap is "held" if the low of the first M minutes stays above the prior close: min_{i≤M} L_i > C_{t-1}. **Go trigger**: close of a 1-minute bar above the first-N-minute high:
+
+$$\text{Go}_t = \big[\, g_t^{\text{ATR}} > k \,\big] \;\; \text{AND} \;\; \big[\, \min_{i \le M} L_i > C_{t-1} \,\big] \;\; \text{AND} \;\; \big[\, C_{\tau} > \max_{i \le N} H_i \,\big]$$
+
+for the first bar τ > N. **Fade trigger**: the gap fills, i.e. price touches C_{t-1}, or the first-N-minute low breaks with falling **RVOL** (Relative Volume — the ratio of current volume to the same time-of-day historical average). **Causal timing:** the gap is known at the 09:30 opening print; the hold condition needs M minutes of tape; the trigger is tradable at the close of bar τ, filled at bar τ+1's open at the earliest. Filters: premarket volume multiple, float, news flag, opening spread.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Gap threshold | k (×ATR) or % | 1.5–2.5×ATR or 2–4% | fades dominate, whipsaws | almost never triggers | 2.0×ATR, *example — not an institutional standard* |
+| Hold window | M (min) | 5–15 | gap-fill noise triggers | misses the move | 10 min, *example* |
+| Breakout window | N (min) | 1–5 | microstructure noise | late entry | first 5-min high, *example* |
+| Premarket vol mult. | m_pm | 2–5× normal | no-news gaps pass | filters real earnings gaps on quiet premarkets | 3×, *example* |
+| RVOL gate | m_r | 1.5–3× | weak participation | only mega-caps qualify | 2×, *example* |
+
+**Named variants.** (1) **Earnings-gap go**: require a material-news flag — the highest-conviction subset. (2) **Index-gap fade**: gap driven by overnight index-futures moves with no stock-specific news. (3) **Gap-and-reverse**: gap fills *and* keeps going through the prior close — the fade's trend variant.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Three synthetic 1-minute scenarios, seed 23 (`np.random.default_rng(23)`; anchor values pinned, small noise between). Prior close C_{t−1} = 100.00; synthetic ATR(14) = 1.50. Prices shown at minutes after the 09:30 open.
+
+| min | A: gap-and-go | B: gap fade | C: gap-and-reverse |
+|---|---|---|---|
+| 0 (open) | 103.00 | 101.50 | 102.50 |
+| 5 | 103.60 | 101.65 | 102.90 |
+| 30 | 103.45 | 101.30 | 102.60 |
+| 60 | 103.90 | 100.80 | 101.80 |
+| 120 | 104.20 | 100.40 | 100.60 |
+| 240 | 104.05 | 99.95 | 99.90 |
+| 390 (close) | 103.80 | 99.90 | 99.50 |
+
+Step 1 — gap sizes: A: +3.00% = 2.00×ATR (passes the 2.0× example threshold); B: +1.50% = 1.00×ATR (fails — fade candidate); C: +2.50% = 1.67×ATR (borderline).
+
+Step 2 — hold check: A never trades below 103.00 (holds); B's low drifts under the prior close by minute 240 (99.95 — gap filled); C pushes to 102.90 then collapses through the prior close to 99.50 (gap-and-reverse).
+
+Step 3 — go trigger on A: first-5-minute high = 103.60; the first 1-minute close above it prints at minute 6 at **103.65** — entry no earlier than minute 7's open.
+
+**What to notice.** Scenario B is the mandatory lesson: a +1.5% gap on no news fades *through* the prior close — the naive "buy every gap" rule loses on both legs here. Scenario C shows why stops exist: a 2.5% gap that initially pushes higher still ends −0.5% on the day. **Limits:** hand-picked anchors; no spreads (the opening spread is the day's widest — often 5–20 bps (basis points, 1 bp = 0.01%) on mid-caps), no chase slippage, no fees. Mechanics illustration, not a backtest.
+
+Expected-value framing (illustrative *example* parameters, not a claim): a go strategy winning 45% of trades, averaging +1.80% on wins and −1.20% on losses, with 8 bps all-in costs: E[return] = 0.45×1.80 − 0.55×1.20 − 0.08 = **+0.07% per trade**. Report this — not "gaps continue 55% of the time" — because the win rate alone hides the skew.
+
+### S5. Strategies that use this signal
+
+- **T018 — RVOL-Gated Gap-and-Go** — *primary entry trigger (direction)*: S023 defines the gap/hold/break; S032 (RVOL) gates for institutional participation; S094 (block footprints) confirms real size behind the move.
+- **T012 — Jump-Filtered Overnight-Gap Fade** — *conceptual-fit reference (not a plan-defined consumer of S023)*: if S023's go conditions confirm (news flag + RVOL + first-minutes high break), veto the fade — the gap is informed and fading it is picking up pennies in front of a steamroller.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Daily OHLC | float | daily | Tier 0–1 | prior close; must be split/dividend-adjusted point-in-time |
+| Opening print | float | per day | Tier 1 | official open auction print, not first trade |
+| 1-min OHLCV | float/int | 1-min, first 60–90 min | Tier 1 | SIP (Securities Information Processor — the consolidated feed) bars suffice |
+| Premarket volume | int | premarket session | Tier 1–2 | not all vendors carry it; verify coverage |
+| News flags | events | per symbol-day | Tier 2 | earnings/ guidance/ M&A; Benzinga-class feeds |
+
+Collection: Polygon (`/v2/aggs/...` + premarket flag) or Alpaca (free tier covers SIP bars; premarket volume via extended-hours bars). Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+d = pl.read_parquet("daily/*.parquet").sort(["symbol", "day"])
+d = d.with_columns((pl.col("open") / pl.col("close").shift(1) - 1).over("symbol").alias("gap"),
+    ((pl.col("open") - pl.col("close").shift(1)) / pl.col("atr14")).over("symbol").alias("gap_atr"))
+pm = pl.read_parquet("premarket/*.parquet")          # premarket volume per symbol-day
+cand = d.join(pm, on=["symbol", "day"]).filter(
+    (pl.col("gap_atr") > 2.0) & (pl.col("pm_vol_mult") > 3.0))   # example thresholds
+mins = pl.read_parquet("bars_1m/*.parquet")          # first-5-min high, hold check
+go = cand.join(mins.group_by(["symbol", "day"]).agg(
+    pl.col("high").head(5).max().alias("h5"),
+    pl.col("low").head(10).min().alias("l10")), on=["symbol", "day"])
+```
+
+Storage: daily bars trivial; 1-min bars for 500 symbols ≈ 50 MB/day, ~3 GB/60 days (per `notes/cost-model.md` §4). **Data-quality checklist:** official opening-auction print (not first trade); point-in-time adjustments (a split fabricates a −50% "gap"); premarket volume comparability across vendors; halted/delayed opens excluded.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** A handful of daily-bar arithmetic plus a first-5-minute high/low scan — O(1) per symbol-day. Per `notes/cost-model.md` §2, the 500-symbol 1-minute universe (195k bars/day) is trivially handled by polars batch ops; the daily gap screen is milliseconds. S023 alone is Tier L; the Q-SB5-2 chatbot lead prices the *full session-pattern engine* at 185–385 h prototype / 705–1,530 h research-grade.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | Default: gap screens and first-N-minute stats are trivially vectorized |
+| DuckDB | Research queries over partitioned daily/minute history |
+| Rust | Unneeded at this granularity |
+
+RAM: daily + 1-min history for 500 symbols over years fits in single-digit GB — far under the 77 GB working budget (cost-model §3). Engineering: **Tier L, 4–12 h → $600–1,800** at $150/hr loaded-cost estimate (cost-model §5) for the signal + replay; the news-flag pipeline is the only part that can push toward Tier M. **Bottleneck:** premarket-volume coverage and news-flag licensing, not compute. **Breaks at:** full-universe real-time premarket scanning across fragmented venues — then the constraint is data licensing, not the M5 Max.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / Stooq | Free daily + SIP 1-min bars | ~$0 | zero cost | no premarket volume detail, no news flags |
+| Tier 1: Polygon Stocks Advanced | SIP bars, premarket, splits | ~$30–200/mo | single-vendor gap pipeline | news flags are an add-on |
+| Tier 2: Benzinga Pro-class news | Machine-readable headlines | ~$100–200/mo | the news/no-news split that stratifies gaps | redistribution limits; headline ≠ materiality |
+| Tier 2: Databento Standard | L1 (top-of-book quotes) + imbalance + OHLCV | ~$200/mo + usage | honest auction prints, venue detail | overkill for a daily-gap signal |
+
+All prices *indicative — verify before budgeting*. **Verdict: build the classifier, buy the bars; buy the news feed only if the earnings-gap variant is core.** The crossover: if you need licensed redistribution of news (e.g. serving signals to others), you are buying regardless — building means re-licensing anyway (cost-model §6).
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Stübinger & Schneider (2019), "Statistical Arbitrage with Mean-Reverting Overnight Price Gaps", *J. Risk Financ. Manag.* 12(2):51 | S&P 500 constituents, 1998–2015, high-frequency | Jump-detected overnight-gap strategy: +51.47% p.a., Sharpe 2.38 | **After transaction costs** (authors' model) | This is a **fade**, not a go — the documented edge is mean-reversion of gaps |
+| Caporale & Plastun (2017); Plastun et al. (2020); weekend-gap follow-up (MDPI, 2025) | DJIA/NASDAQ, weekend gaps | Prices continue in the gap's direction for several hours after Monday's open | Before-cost, index level | Continuation subsides quickly; varies by index |
+| Berkman, Koch & Tuttle (2009), "Dispersion of Opinions, Limits to Arbitrage, and Overnight Returns", SSRN | 3,000 largest US stocks, 9 yrs intraday | Overnight gains reverse during the day, concentrated in high-disagreement / hard-to-short names | Before-cost | Explains the fade leg; limits-to-arbitrage names are the least tradable |
+
+**Regimes where it fails:** low-volume no-news gaps (fade eats the go); gap into a halted/volatile open; crowded first-5-minute-high entries (every retail screener sees the same level); macro-gap days where the *index* mean-reverts and drags single names. **Documented decay:** the simple gap-fade is a decades-old prop-desk staple — heavily competed; the news-conditioned go retains more plausibility because it keys on genuine information events. **Bottom line:** as a standalone trigger, a *conditional* edge — weak unconditionally, plausible when stratified by news × size × volume; as a *classifier* (go vs fade vs reverse) feeding execution, moderate. The honest statistic is E[return] = P(win)·E[win] − P(loss)·E[loss] − costs.
+
+### S10. Failure modes & pitfalls
+
+1. **Entry slippage on gaps:** chasing the open means paying the day's widest spread plus momentum slippage. Mitigate: enter on the confirmed break (minute 6+, not the print), cap chase at 0.5×ATR beyond the trigger.
+2. **Lookahead on the opening print:** using a vendor's "open" that is actually a revised or late print. Mitigate: use the official auction print with its publication timestamp; never the first trade.
+3. **Auction cutoffs:** MOO/LOO (market/limit-on-open) orders must beat the cutoff; after it, you are a price-taker on the book. Mitigate: model the cutoff explicitly; assume regular-session fills after 09:30:01.
+4. **News misclassification:** "no news" gaps that are actually informed. Mitigate: treat unexplained large gaps as informed by default — require the go, never fade blindly.
+5. **Halts and delayed opens:** the first-5-minute window is undefined. Mitigate: skip delayed opens and LULD (limit-up/limit-down) halts.
+6. **Survivorship bias:** gap-downs that never recover belong to delisted names your universe file dropped. Mitigate: point-in-time universe including delisted securities.
+7. **Overfit thresholds:** mining k × M × N grids. Mitigate: fix k from ATR economics (1.5–2.5), validate on untouched years, embargo around earnings seasons.
+8. **Cost blowup:** the go's positive skew comes with poor hit rate; two full-stop losses erase a week of small wins. Mitigate: size by the E[return] equation with the full per-trade cost stack (spread + fees + slippage/impact); hard daily loss stop.
+
+### S11. Visuals
+
+![S023 worked example — synthetic 1-min gap scenarios: gap-and-go, gap fade, and gap-and-reverse](images/S023_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(Polygon daily + 1-min bars,\npremarket volume)"] -->|"daily bars + 1-min bars"| ING["Ingest + normalize\n(auction print, splits,\npremarket coverage)"]
+    ING -->|"clean daily + 1-min bars"| FEAT["Feature compute\n(gap %, gap in ATR,\nfirst-5-min high/low)"]
+    FEAT -->|"gap features\n(1-min bars)"| SIG["Signal S023\ngo / fade / reverse"]
+    SIG -->|"signal events (1-min)"| GATE{"Cost / news /\nRVOL gate?"}
+    GATE -->|"pass: entry orders (1-min)"| OUT["Downstream consumer\n(T018 entry / T012 veto)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Stübinger, J. & Schneider, L. (2019). "Statistical Arbitrage with Mean-Reverting Overnight Price Gaps on High-Frequency Data of the S&P 500." *Journal of Risk and Financial Management* 12(2):51. https://www.mdpi.com/1911-8074/12/2/51/ (FAU record: https://open.fau.de/items/4ae97dde-36f5-4c61-965b-3dc87dafe294/full)
+- Caporale, G. M. & Plastun, O. (2017) and follow-ups; weekend-gap continuation evidence summarized in "Price Gaps and Volatility: Do Weekend Gaps Tend to Close?" (MDPI, 2025). https://www.mdpi.com/1911-8074/18/3/132
+- Berkman, H., Koch, P. D. & Tuttle, L. (2009). "Dispersion of Opinions, Limits to Arbitrage, and Overnight Returns." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1214564
+- Crabel, T. (1990). *Day Trading with Short Term Price Patterns and Opening Range Breakout.* Traders Press. Practitioner gap/playbook discussion (source entry's citation).
+- Frazzini, A. (2006). "The disposition effect and underreaction to news." *Journal of Finance* 61(4), 2017–2046. http://ideas.repec.org/a/bla/jfinan/v61y2006i4p2017-2046.html — Behavioral mechanism for drift after news-driven gaps: post-announcement drift varies with unrealized capital gains (the disposition effect), motivating the news-conditioned go variant in S4.
+- Tetlock, P. C. (2007). "Giving content to investor sentiment: The role of media in the stock market." *Journal of Finance* 62(3), 1139–1168. https://econpapers.repec.org/article/blajfinan/v_3a62_3ay_3a2007_3ai_3a3_3ap_3a1139-1168.htm — Overnight news sentiment predicts downward price pressure followed by reversion; one of the documented drivers of overnight gaps.
+
+**Unverified leads**
+- Duck.ai (GPT-5.6 Luna) answered Q-SB5-1–Q-SB5-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10). Q-SB5-3's gap framework (no universal continuation %, stratify by ATR size/news/premarket volume, report E[return]) is used as a *labeled chatbot lead* consistent with the papers above; its qualitative verdicts are not independently confirmed facts. Provenance stays [SR]: practitioner reconstruction, not upgraded.
+
+---
+## Stage 26/200 — S026: First half-hour → last half-hour momentum
+
+*Batch SB5 · Signal 26/100 · Provenance [D] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The market's first-30-minute return positively predicts its last-30-minute return — a documented intraday time-series momentum. |
+| **When it works** | High-volatility, high-volume, and macro-news days, on liquid index ETFs. |
+| **When it dies** | Quiet midday-type days, single illiquid names, and after realistic transaction-cost and auction-cutoff modeling. |
+| **Build-or-buy in one line** | Build: one regression on 1-minute bars; buy nothing beyond a clean ETF bar feed. |
+
+### S2. How it works — plain human explanation
+
+Divide the trading day into thirteen 30-minute **buckets**: bucket 1 is 09:30–10:00 (including the overnight move from the prior close), bucket 13 is 15:30–16:00. **Time-series momentum** means the market's own past return predicts its own future return (as opposed to **cross-sectional** momentum, where *stocks'* relative returns predict each other). S026 is time-series: if the S&P 500 ETF (SPY) rallies in the first half hour, it tends — statistically — to drift further up in the last half hour.
+
+A concrete vignette: 15:28, SPY bid 512.40 / ask 512.41. The day opened strong on a CPI print: bucket 1 returned +0.45%. The tape has chopped sideways since, but the morning's buyers never got flushed. The rule says: buy SPY now, hold into the close, flatten at 16:00 — the last-half-hour drift should rhyme with the morning's direction. You exit into the **MOC** (market-on-close) auction, not after the closing print, because as a price-taker you cannot trade at a print that has already happened.
+
+Why should this exist? Two documented economic stories (Gao, Han, Li & Zhou, 2018). First, **daytrader unwinding with the disposition effect**: on good-news mornings, liquidity-providing daytraders go short early; reluctant to realize losses, they cover late — their buying lands in the last half hour. Second, **strategic informed trading** (Admati & Pfleiderer, 1988): informed traders concentrate in high-volume periods — the open and the close — so morning information keeps being impounded late in the day. Both stories predict the effect concentrates on high-volume, high-volatility, news-heavy days — which is what the paper finds.
+
+**Mandatory framing.** The closely related Heston–Korajczyk–Sadka (2010) result is *different*: it documents **cross-sectional** half-hour **periodicity** — stocks that outperform in a given half-hour bucket tend to outperform in the *same bucket on subsequent days*, at exact multiples of a trading day, persisting ≥40 trading days. It is *not* a "first-30-minutes predicts last-30-minutes" rule. The two effects share the U-shaped intraday volume clock as a mechanism, but they are different signals with different implementations.
+
+- **Mental model:** the morning sets the day's informational tone; the close is when the slow money finishes reacting to it.
+- **Mental model:** this is a *timing* feature (when to be exposed into the close), not a standalone fortune — its authors frame the value partly as execution-cost reduction.
+- **Mental model:** predictability concentrates where volume concentrates — the signal is weakest exactly when it is cheapest to trade.
+
+### S3. The math — exact formula
+
+Half-hour returns (p_{0,t} = prior day's 16:00 price, so bucket 1 includes the overnight return):
+
+$$r_{j,t} = \frac{p_{j,t}}{p_{j-1,t}} - 1, \qquad j = 1, \dots, 13$$
+
+Predictive regression (Gao et al., 2018):
+
+$$r_{13,t} = \alpha + \beta \, r_{1,t} + \varepsilon_t$$
+
+with the documented extension adding the twelfth (second-to-last) bucket:
+
+$$r_{13,t} = \alpha + \beta_1 r_{1,t} + \beta_2 r_{12,t} + \varepsilon_t$$
+
+Trading form: at ~15:30 compute the forecast r̂_{13,t} (or simply sign(r_{1,t})); take the position for the final 30 minutes; flatten at the close. HKS (cross-sectional) form, for contrast: sort stocks into deciles on bucket-h return at day t−k and hold through bucket h at day t, for k = 1…40+ days. **Causal timing:** the signal uses data ≤ 15:30 on day t (r_{1,t} is known by 10:00); the earliest fill is 15:30+; the exit must respect MOC/LOC (limit-on-close) auction cutoffs — you cannot exit "at the close" as a price-taker after 16:00.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Bucket width | — | 15–60 min | microstructure noise dominates | washes out the close effect | 30 min, *example — not an institutional standard* |
+| Formation | r_1 window | 1 bucket | misses overnight digestion | overlaps the holding period | bucket 1 incl. overnight, *example* |
+| Entry time | — | 15:00–15:30 | pays for dead midday chop | misses the drift | ~15:30, *example* |
+| Exit | — | MOC auction / 15:59 | leaves the drift on the table | after-print fills (lookahead) | flatten by 16:00 via MOC/LOC, *example* |
+| Vol conditioning | σ̂(r_1) | on/off | trades quiet days with no edge | halves the sample | scale by first-half-hour realized vol, *example* |
+
+**Named variants.** (1) **Sign-only timing**: position = sign(r_{1,t}) — no regression estimation. (2) **Recursive regression forecast**: re-estimate (α, β) on an expanding window each day. (3) **HKS cross-sectional quintile**: rank stocks on prior same-bucket returns; long top / short bottom quintile through the bucket — the periodicity trade, not the morning-to-close trade.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 13-bucket × 60-day panel, seed 26 (`np.random.default_rng(26)`). Design: same-bucket day-to-day AR(1) (first-order autoregressive) persistence φ = 0.35 for buckets 1 and 13, 0.05 elsewhere; U-shaped bucket volatility. The table below is the last 12 days (returns in basis points, 1 bp = 0.01%).
+
+| day | r₁ (first 30 min) | r₁₃ (last 30 min) |
+|---|---|---|
+| 49 | −12.11 | 126.76 |
+| 50 | 55.90 | 35.61 |
+| 51 | −72.58 | 50.50 |
+| 52 | −46.58 | 182.64 |
+| 53 | 1.47 | 103.80 |
+| 54 | 40.92 | 97.11 |
+| 55 | 18.83 | 130.42 |
+| 56 | 21.89 | 69.72 |
+| 57 | −9.51 | 6.46 |
+| 58 | 40.84 | 47.54 |
+| 59 | 9.24 | 29.89 |
+| 60 | −15.82 | −81.93 |
+
+Step 1 — means: r̄₁ = 2.71 bps, r̄₁₃ = 66.54 bps. Step 2 — sums: Σ(r₁−r̄₁)² = 15225.4, Σ(r₁−r̄₁)(r₁₃−r̄₁₃) = −2318.4. Step 3 — slope: β̂ = −2318.4/15225.4 = −0.1523, i.e. **β̂×100 = −15.23**; α̂ = 66.96 bps; R² = 0.68%; t-statistic = **−0.26** — statistically indistinguishable from zero.
+
+That negative, insignificant toy estimate is the honest point: **with 12 days you measure noise**. Gao et al. needed SPY 1993–2013 (~5,200 days) to estimate β̂×100 = 6.94 at the 1% level. The heatmap's second panel tells the complementary story on the full 60-day window: same-bucket day-to-day autocorrelations are 0.259 (bucket 1) and 0.271 (bucket 13) against a design truth of 0.35 (standard error ≈ 0.13) — persistence is *visible* once the sample is long enough, invisible in a two-week toy.
+
+**What to notice.** The synthetic design bakes in exactly the HKS-style claim (morning/close buckets persist day-to-day; midday doesn't) and the chart recovers it — but only with 60 days. **Limits:** the AR(1) design *assumes* the effect; nothing here estimates real predictability. No costs, no auction cutoffs, no bid-ask bounce (which mechanically creates short-horizon reversal — HKS's own caveat). This is a mechanics illustration, not evidence.
+
+### S5. Strategies that use this signal
+
+- **T015 — First-Half-Hour → Close Continuation** — *primary entry trigger (direction and timing)*: S026 is the core signal — morning winners held into the last-half-hour drift; S027 (end-of-day momentum) confirms the close leg; S046 (session seasonality) deseasonalizes the entry.
+- **T006 — Intraday Trend + Vol-Regime Allocator** — *conceptual-fit reference (not a plan-defined consumer of S026)*: the strategy rides intraday time-series momentum into the close; S026's first-half-hour conditioning decides *whether* to hold the afternoon position, scaled by the HMM (hidden Markov model — a regime-switching model) vol regime (S079).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| 1-min OHLCV | float/int | 1-min, RTH (regular trading hours) | Tier 1 | aggregate to 30-min buckets yourself |
+| Daily OHLC (adjusted) | float | daily | Tier 0–1 | splits/dividends; bucket 1 spans the close |
+| Session calendar | dates | daily | Tier 0 | early closes change bucket boundaries |
+| MOC imbalance (optional) | messages | per day | Tier 2 | for exit execution, not the signal |
+
+Collection: Polygon Stocks Advanced 1-min SIP (Securities Information Processor — the consolidated feed) bars for SPY/QQQ/IWM; Alpaca free tier suffices for the ETF-only variant. Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+bars = pl.read_parquet("bars_1m/SPY.parquet").sort("ts")     # exchange ts, RTH
+b = bars.with_columns(((pl.col("ts").dt.hour() * 60 +
+    pl.col("ts").dt.minute() - 570) // 30 + 1).alias("bucket"))  # 9:30->1 ... 15:30->13
+hh = b.group_by([pl.col("ts").dt.date().alias("day"), "bucket"]).agg([
+    pl.col("open").first().alias("o"), pl.col("close").last().alias("c")])
+r = hh.sort(["day", "bucket"]).with_columns(
+    (pl.col("c") / pl.col("c").shift(1) - 1).alias("r"))  # lag over full frame: bucket-1 row follows prior day's close, so r1 includes the overnight move
+sig = r.filter(pl.col("bucket") == 1).select(["day", pl.col("r").alias("r1")])
+```
+
+Storage: 1-min bars for a handful of ETFs are megabytes per year — trivial (per `notes/cost-model.md` §4). **Data-quality checklist:** buckets anchored to 09:30 ET (DST-safe); early-close days re-bucketed or excluded; adjusted closes so splits don't fabricate bucket-1 "gaps"; auction prints flagged separately; one timezone end-to-end.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** Thirteen bucket returns per day and one OLS (ordinary least squares) regression — the entire 20-year SPY history is ~5,200 × 13 numbers; the regression is microseconds in numpy. Per `notes/cost-model.md` §2, even a 500-symbol 1-minute universe (195k bars/day) is trivial for polars batch ops (~10–50M rows/sec). S026 alone is Tier L; the Q-SB5-2 chatbot lead prices the *full session-pattern engine* at 185–385 h prototype / 705–1,530 h research-grade.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars/numpy | Default: bucketing + regression is a one-liner |
+| DuckDB | Cross-sectional HKS extension over thousands of names × 40 days |
+| Rust | Unneeded at this granularity |
+
+RAM: the full research dataset (decades of ETF 1-min bars) is < 1 GB — negligible against the 77 GB working budget (cost-model §3). Engineering: **Tier L, 4–12 h → $600–1,800** at $150/hr loaded-cost estimate (cost-model §5) for the signal, replay, and cost accounting; the HKS cross-sectional extension (thousands of names, decile sorts, 40-day lags) stays Tier L/M in polars. **Bottleneck:** transaction-cost and auction-cutoff realism, not compute. **Breaks at:** nothing on this machine — the constraint is statistical (you need decades of data for a 1.6% R²), not computational.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier 0: Alpaca IEX / Stooq | Free daily + 1-min ETF bars | ~$0 | enough for the Gao et al. replication | IEX-only prints; no auction detail |
+| Tier 1: Polygon Stocks Advanced | SIP 1-min, 20+ yrs, splits | ~$30–200/mo | full sample in one pull | SIP timestamps only |
+| Tier 2: Databento Standard | L1 (top-of-book quotes) + OHLCV, replay | ~$200/mo + usage | honest open/close auction data | overkill for a 13-bucket signal |
+| Academic: TAQ (Trade and Quote — the consolidated equity tick database) via WRDS (Wharton Research Data Services) | Publication-grade intraday | institutional/academic terms | the literature-standard source | access friction |
+
+All prices *indicative — verify before budgeting*. **Verdict: build.** Data Tier ≤ 1, eng Tier L, and the "parameters" are a regression you must estimate yourself — there is nothing to buy except the bars. Buy TAQ-grade history only for the HKS cross-sectional extension.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Gao, Han, Li & Zhou (2018), "Intraday Momentum", *Rev. Financ. Stud.* 31(1) | SPY, TAQ (Trade and Quote database), 1993–2013 | r₁₃ on r₁: β̂×100 = 6.94, p < 1%, R² = 1.6% (in-sample) / 1.2% (out-of-sample, OOS); with r₁₂: 2.6% / 1.8%. Timing strategy (sign of r₁): 6.67%/yr, Sharpe **1.08** vs 0.29 buy-and-hold | Before-cost; authors state gains survive "reasonable transaction costs" | Single most-liquid ETF; sample spans pre-decimalization years; SPY-only |
+| Heston, Korajczyk & Sadka (2010), *J. Finance* 65(4) | US stocks, post-decimalization intraday | Cross-sectional same-bucket continuation at exact daily multiples, ≥40 trading days; short-horizon reversal from liquidity imbalance + bid-ask bounce | Before-cost (draft: 3.11 bp top-minus-bottom decile, same bucket next day) | **Not** a first→last-30-min rule; authors' economic claim is execution-timing: "timing trades can reduce execution costs by the equivalent of the effective spread" |
+| Haendler, Heston, Korajczyk & Sadka (2025), SSRN working paper | US stocks, OOS of 2010 sample | Periodicity persists OOS; open ≈ VWAP (volume-weighted average price)-like trading, close ≈ MOC activity; institutional proxies explain all open + midday periodicity, up to 30% of close | Mechanism decomposition, not a return claim | Working paper (2025); explains *why*, doesn't add tradable alpha |
+| Li et al. (2020), *Finance Research Letters* 35 (OOS lead) | Chinese index futures | First-session return predicts last-session return; stronger at 60-min buckets, on high volume/vol/attention days | Before-cost | Futures, different market structure; confirms the time-series pattern travels |
+
+**Regimes where it fails:** low-volatility, low-volume days (Gao et al. show predictability concentrates in high-vol/volume, recession, and macro-news days); single illiquid names (the result is a *market*/liquid-ETF phenomenon); crowded MOC windows where the predictable flow is arbed by execution algos. **Documented decay:** the published sample ends 2013; the 2025 follow-up confirms the *periodicity* persists OOS but attributes it increasingly to institutional execution patterns (VWAP/MOC) — i.e., the mechanism is now the plumbing, and plumbing gets optimized. **Bottom line:** documented statistical predictability (R² ≈ 1–2%) on the most liquid ETF over 20 years; as a *standalone after-cost retail rule* — weak; as an *execution-timing / rebalance feature* — moderate, which is how its discoverers frame it.
+
+### S10. Failure modes & pitfalls
+
+1. **Confusing HKS with a first→last-30min rule.** HKS is cross-sectional periodicity across *days*; Gao et al. is time-series morning→close. Trading one with the other's implementation is a category error. Mitigate: implement each paper's specification separately.
+2. **MOC auction cutoff lookahead.** Backtests that "exit at the close" assume the 16:00 print; live, MOC/LOC orders face cutoffs (typically ~15:50–15:58) and imbalance risk. Mitigate: model the cutoff; assume exit at the 15:55 mid or via LOC with non-fill risk.
+3. **Transaction-cost decay.** A 1.6% R² on 30-minute returns is a few basis points of edge per day — one extra spread-crossing error kills it. Mitigate: full cost model (spread + fees + impact); the decisive test is point-in-time replay with realistic fills, not close-to-close backtests.
+4. **Single-name extrapolation.** Gao et al. is SPY; HKS is a broad cross-section. A mid-cap's bucket-1 return is mostly bid-ask bounce. Mitigate: restrict to liquid ETFs; deseasonalize by bucket volatility.
+5. **Bucket misalignment.** Using 16:00 prints in r₁₃ while the signal fires at 15:30, or mixing timezones. Mitigate: fixed 09:30-anchored buckets; the tradable r₁₃ estimate uses data ≤ 15:30 only.
+6. **Overfitting bucket width and entry time.** Mining 15/30/60-min × 15:00/15:15/15:30 grids. Mitigate: fix 30-min buckets for the literature reason; one untouched OOS decade.
+7. **Regime dependence.** Predictability lives in high-vol/news days; a rule traded every day dilutes the edge with noise days. Mitigate: condition on first-half-hour realized vol (the paper's own interaction).
+8. **Survivorship and adjustments.** ETF splits/dividends fabricate bucket returns. Mitigate: adjusted prices, point-in-time corporate actions.
+
+### S11. Visuals
+
+![S026 worked example — synthetic 13-bucket by 60-day half-hour return heatmap with per-bucket day-to-day persistence](images/S026_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed\n(Polygon SIP 1-min bars,\nSPY/QQQ)"] -->|"1-min bars"| ING["Ingest + normalize\n(09:30-anchored buckets,\nsplits, early closes)"]
+    ING -->|"clean 1-min bars"| FEAT["Feature compute\n(13 half-hour returns/day,\nrealized vol)"]
+    FEAT -->|"30-min bars"| SIG["Signal S026\nr13 forecast from r1"]
+    SIG -->|"signal events (30-min)"| GATE{"Cost / MOC-cutoff\ngate?"}
+    GATE -->|"pass: MOC/LOC orders (30-min)"| OUT["Downstream consumer\n(T015 entry / execution timing)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Gao, L., Han, Y., Li, S. Z. & Zhou, G. (2018). "Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return." *Review of Financial Studies* 31(1). SSRN 2552752. https://ssrn.com/abstract=2552752 — SPY TAQ 1993–2013; β̂×100 = 6.94 (p < 1%), R² = 1.6% IS / 1.2% OOS; timing Sharpe 1.08 vs 0.29.
+- Heston, S. L., Korajczyk, R. A. & Sadka, R. (2010). "Intraday Patterns in the Cross-Section of Stock Returns." *Journal of Finance* 65(4), 1369–1407. https://bauer.uh.edu/departments/finance/documents/Heston-Korajczyk-Sadka-jf-2010-01-07.pdf — cross-sectional half-hour periodicity at exact daily multiples, ≥40 trading days; execution-timing value ≈ effective spread. (Circulated draft with the 3.11 bp decile figure: https://conference.nber.org/confer/2008/mms08/korajczyk.pdf)
+- Haendler, C., Heston, S., Korajczyk, R. & Sadka, R. (2025). "The intra-day stock return periodicity puzzle." SSRN working paper. https://www.kellogg.northwestern.edu/academics-research/research/detail/2025/the-intra-day-stock-return-periodicity-puzzle/ — OOS persistence; open ≈ VWAP trading, close ≈ MOC; proxies explain all open/midday and up to 30% of close periodicity.
+- Li, Y., Shen, D., Wang, P. & Zhang, W. (2020). "Does intraday time-series momentum exist in Chinese stock index futures market?" *Finance Research Letters* 35. https://ideas.repec.org/a/eee/finlet/v35y2020ics1544612319304337.html — independent OOS confirmation on futures.
+- Admati, A. R. & Pfleiderer, P. (1988). "A theory of intraday patterns: Volume and price variability." *Review of Financial Studies* 1(1), 3–40. https://www.gsb.stanford.edu/faculty-research/working-papers/theory-intraday-trading-patterns-volume-price-variability — Canonical model of the U-shaped intraday volume/volatility pattern behind the morning signal window used in S2.
+- Wood, R. A., McInish, T. H. & Ord, J. K. (1985). "An investigation of transactions data for NYSE stocks." *Journal of Finance* 40(3), 723–739. http://ideas.repec.org/a/bla/jfinan/v40y1985i3p723-39.html — Early transactions-data evidence on intraday return/volume patterns; empirical foundation for session-bucket analysis.
+
+**Unverified leads**
+- Duck.ai (GPT-5.6 Luna) answered Q-SB5-1–Q-SB5-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10). Q-SB5-3's HKS summary figures ("≥40 trading days", "up to 30%") were verified above against the paper abstract and the Kellogg research page before quoting; remaining qualitative chatbot assessments are research leads, not confirmed facts.
+
+---
+## Stage 28/200 — S028: Donchian breakout
+
+*Batch SB5 · Signal 28/100 · Provenance [D] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Buy/sell signal when price *closes* beyond the highest high or lowest low of the prior N bars. |
+| **When it works** | Persistent intraday trends: genuine range expansion with follow-through, rising volume, supportive higher-timeframe trend. |
+| **When it dies** | Range-bound chop: repeated false breakouts bleed the account through spread, fees, and slippage. |
+| **Build-or-buy in one line** | Build — a rolling max/min over cheap 1-minute bars; nothing to buy. |
+
+Provenance **[D]** (documented: Richard Donchian, 1960s; Turtle rules via Curtis Faith) · Family **B — Intraday Momentum & Breakout**.
+
+### S2. How it works — plain human explanation
+
+Picture 10:15 on a normal Tuesday. A liquid large-cap has spent the morning shuffling between 99.80 and 101.20. The highest *high* of the last twenty 5-minute bars is 101.20, printed at 09:30. The lowest *low* is 99.80. Those two numbers are the **Donchian channel** — the Donchian channel is simply the range bracketed by the N-bar maximum high and the N-bar minimum low; the channel's upper rail is the highest high, its lower rail the lowest low, and its midline is the average of the two. At 10:15 a 5-minute bar closes at 102.00, above the upper rail. That is a **Donchian breakout**: the market just traded somewhere it has not traded in the last N bars.
+
+Why should that predict anything? Three overlapping mechanisms. First, *stop-loss cascades*: resting stop orders cluster just beyond visible highs and lows, so a push through them mechanically becomes buy or sell flow. Second, *participation*: many systematic desks are programmed to add to positions only on confirmed expansion, so the breakout recruits its own follow-through. Third, *information*: a genuine new high often means informed flow (earnings leak, sector move, large buyer) is still working. The dark twin of each mechanism is the **whipsaw** — a false breakout: price pokes through the rail on thin volume, no follow-through arrives, and the bar slumps back inside, trapping everyone who chased.
+
+The economic intuition is therefore conditional, not magical: *range expansion sometimes marks the start of a persistent move and sometimes marks exhaustion*. The signal's job is to timestamp the expansion; the strategy's job (see S5) is to filter the two cases.
+
+**Mental model:**
+- The channel is a *memory* of where price has recently been allowed to trade; a close outside it is a *regime-change candidate*.
+- Breakouts are *convexity* bets: small frequent losses (failed breaks) paid for occasional large wins (real trends) — the payoff only works if costs and sizing are controlled.
+- The midline is free information: it doubles as a natural trailing reference for exits.
+
+### S3. The math — exact formula
+
+Let $H_t, L_t, C_t$ be the high, low, close of bar $t$ (prices in dollars), and $N$ the lookback in bars. The channel is computed on **completed bars only** — the triggering bar $t$ is excluded, so it cannot reference itself:
+
+$$D^U_t(N) = \max_{i \in [t-N,\, t-1]} H_i \qquad
+  D^L_t(N) = \min_{i \in [t-N,\, t-1]} L_i \qquad
+  M_t = \frac{D^U_t + D^L_t}{2}$$
+
+Entry signals (example thresholds — not an institutional standard):
+
+$$\text{long}_t = \mathbf{1}\{C_t > D^U_t\}, \qquad
+  \text{short}_t = \mathbf{1}\{C_t < D^L_t\}$$
+
+where $\mathbf{1}\{\cdot\}$ is the indicator function (1 if true, 0 if false). Causal timing: the signal is fully determined at the **close of bar $t$** and is tradable no earlier than the **open of bar $t+1$**. The one-bar shift is not optional — without it, the triggering bar would be compared against a channel that includes its own high, making a breakout arithmetically impossible (StockCharts' ChartSchool documents exactly this completed-bar convention).
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Lookback | $N$ | 10–55 bars intraday | Constant whipsaws; channel hugs price | Rare signals; exits far from extremes | 20 *(example — not an institutional standard)* |
+| Entry trigger | — | close-through vs high/low-through | Close-through is late but cleaner | High-through fires mid-bar (intrabar lookahead risk) | Close-through *(example)* |
+| Exit | — | midline touch / opposite break / time stop | Exits inside noise | Gives back open profit | 10-bar time stop or midline *(example)* |
+
+**Normalization choices.** The raw channel is in price units — fine intraday within one symbol, but not comparable across names. Cross-sectional use typically normalizes channel *position*, e.g. $\%\text{position} = (C_t - D^L_t)/(D^U_t - D^L_t)$, or scales the channel width by **ATR** (average true range — the mean of per-bar true ranges; defined in S029) for volatility comparability.
+
+**Named variants.** (1) *Turtle System 1 / System 2* (Faith 2007): 20-day / 55-day Donchian entries with ATR-based unit sizing and pyramiding — the documented ancestor. (2) *Donchian width filter*: require channel width above its recent median before arming the breakout (a volatility-regime gate). (3) *Stop-entry vs close-entry*: place a stop just beyond the rail and let the market trigger it intrabar — earlier fill, worse adverse selection.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 30-bar 5-minute tape, seed 28 (fixed `numpy.random.default_rng(28)`; bars 11–30 hand-specified, bars 1–10 a seeded ramp). All numbers below were hand-verified against the operator-checked worked example; **this tape is synthetic — not market data — and no performance is claimed from it.**
+
+| Bar | Open | High | Low | Close | Volume |
+|-----|------|------|-----|-------|--------|
+| 22 | 100.00 | 100.80 | 99.80 | 100.20 | 780 |
+| 23 | 100.00 | 100.80 | 99.80 | 100.20 | 770 |
+| 24 | 100.00 | 100.80 | 99.80 | 100.20 | 760 |
+| 25 | 100.00 | 100.80 | 99.80 | 100.20 | 750 |
+| 26 | 100.00 | 100.80 | 99.80 | 100.20 | 740 |
+| 27 | 100.00 | 100.80 | 99.80 | 100.20 | 730 |
+| 28 | 100.00 | 100.80 | 99.80 | 100.20 | 720 |
+| 29 | 100.00 | 100.80 | 99.80 | 100.20 | 710 |
+| 30 | 100.20 | 102.50 | 100.00 | 102.00 | 2,500 |
+
+(Bars 1–10 ramp 99.70 → 100.50 with bar-10 high 101.20; bars 11–29 flat as above with volume declining 850 → 670.)
+
+**Step 1 — channel at bar 30 (completed-bar convention, prior 20 bars = bars 10–29):**
+$D^U_{30} = \max H = 101.20$ (bar 10); $D^L_{30} = \min L = 99.80$; midline $M_{30} = (101.20 + 99.80)/2 = 100.50$.
+
+**Step 2 — breakout test:** $C_{30} = 102.00 > 101.20$ → bullish close-breakout. The high (102.50) also exceeded the rail, but the signal is defined on the close.
+
+**Step 3 — context:** bar-30 volume (2,500) is ~3.3× the bars 11–29 average (~760); bar range 2.50 vs the 1.00 compression range — expansion with participation, exactly the shape the signal is designed to catch.
+
+**Step 4 — causal timing:** the signal is known only at bar 30's close; earliest fill is bar 31's open. Any "backtest" filling at 102.00 is fantasy — the realistic fill is the next bar's open plus spread and slippage (see S10).
+
+**What to notice.** The midline (100.50) sits 1.47% below the breakout close — a natural trailing reference that a strategy can use for exits. The compression (bars 11–29) made the channel narrow, so the breakout needed only a modest move — which is also why choppy markets manufacture false breaks from the same geometry. This toy tape has no fees, no partial fills, and no latency: it demonstrates the *computation*, not profitability.
+
+### S5. Strategies that use this signal
+
+- **T019 — Donchian/Keltner Breakout + Vol Sizing** — primary entry trigger (direction); positions sized by the volatility-breakout regime (S076).
+- **T003 — VPIN-Gated Breakout Trader** — *conceptual-fit reference (not a plan-defined consumer of S028)*: Donchian breaks are taken only when order-flow toxicity (VPIN — volume-synchronized probability of informed trading) is low; toxicity spikes veto the trade.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| OHLCV (open/high/low/close/volume) bars | float/int | 1–15 min bars (example: 5-min) | Tier 1 | Consolidated or single-venue; venue choice documented |
+| Corporate actions | events | as-occurring | Tier 1 | Splits/dividends must adjust the channel or it breaks on ex-dates |
+| Session calendar | reference | daily | Tier 0/1 | Half-days, halts, DST — channel spans must skip non-trading gaps |
+
+Ingest + feature sketch (Python/polars, ≤20 lines; the `.shift(1)` is the completed-bar convention):
+
+```python
+import polars as pl
+bars = pl.read_parquet("bars_5m/*.parquet").sort(["symbol", "ts"])  # [ts,symbol,o,h,l,c,v]
+N = 20  # example — not an institutional standard
+feat = bars.with_columns([
+    pl.col("high").rolling_max(N, min_periods=N).shift(1).over("symbol").alias("donchian_up"),
+    pl.col("low").rolling_min(N, min_periods=N).shift(1).over("symbol").alias("donchian_lo"),
+])
+sig = feat.with_columns([
+    (pl.col("donchian_up") + pl.col("donchian_lo")).truediv(2).alias("donchian_mid"),
+    (pl.col("close") > pl.col("donchian_up")).alias("long_break"),
+    (pl.col("close") < pl.col("donchian_lo")).alias("short_break"),
+])
+```
+
+**Storage:** 1-min bars run ~0.1 MB per symbol-day in Parquet (500 symbols ≈ 50 MB/day per `notes/cost-model.md` §4); 5-minute bars are ~5× lighter; 60 days × 500 symbols ≈ 3 GB — archive freely. **Data-quality checklist:** timezone/DST normalization; corporate-action adjustment before any rolling max; halt/limit-move bars flagged; late/corrected prints versioned; venue vs consolidated timestamps recorded.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** A Donchian channel is a rolling max/min — O(1) amortized per bar with deques, or a vectorized `rolling_max` at ~10–50M rows/sec in polars (`notes/cost-model.md` §2). A 500-symbol universe produces 500 × 390 = 195k 1-min bars/day; recomputing the whole day's features takes milliseconds. RAM: 500 symbols × 60 days of 1-min bars ≈ 12 MB (`notes/cost-model.md` §3) — three orders of magnitude under the ~77 GB working budget. As the batch's chatbot build review put it: the M5 Max will not be the constraint; data rights, exchange timestamps, and point-in-time correctness will be (labeled chatbot lead — see S12).
+
+| Stack | When to pick it |
+|---|---|
+| Python + polars | Default: more than fast enough for bar-level channels, best iteration speed |
+| Rust | Only if you drop to L1 (top-of-book quotes) tick events across hundreds of symbols (Python loop tops out ~100–500k events/sec per cost-model §2) |
+| DuckDB | Ad-hoc research queries over the Parquet archive |
+
+**Engineering band:** Tier L per `notes/cost-model.md` §5 (1-min bar signals) — **4–12 h ≈ $600–1,800** at $150/hr loaded cost. **What breaks first at 500 symbols or full OPRA:** nothing at bar granularity — but a tick-level Donchian (breakout on trade prints) would need Rust and per-symbol state, and full OPRA (Options Price Reporting Authority) is a different project entirely (Tier H).
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX / delayed exchange quotes | Daily bars, delayed quotes | ~$0 | Free history for prototyping | No real-time intraday; coarse timestamps |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP (Securities Information Processor consolidated feed) | Real-time 1-min SIP bars, corporate actions | ~$30–200/mo | Clean normalized bars; 7+ yrs history | SIP latency; no venue detail |
+| Tier 2: Databento Standard | L1/L2 (Level 1/2 market data; MBP-1/10 = market-by-price), imbalance feeds | ~$200/mo + usage | Honest timestamps; venue granularity | Overkill for bar-level channels |
+| Academic: LOBSTER / TAQ (Trade and Quote — the consolidated equity tick database) | MBO (market-by-order)/ITCH (Nasdaq's direct-feed order message protocol) replay, full tick history | ~hundreds/yr academic; institutional $$$$ | True microstructure research | Cost and complexity far beyond the signal's needs |
+
+All prices *indicative — verify before budgeting*. **Verdict: build.** The analytics are three lines; buy only the cheapest normalized bar feed that meets your latency needs (hybrid: buy bars, build channels). The crossover to buying more is venue-specific or sub-bar research — i.e., a different signal, not a better Donchian.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Curtis Faith (2007), *Way of the Turtle* — System 1 (20-day) / System 2 (55-day) Donchian entries, ATR unit sizing | Futures, 1983–88 cohort | Cohort track record described in the book; rules fully documented | Before-cost (gross practitioner account) | Daily futures trend-following, not intraday equities; 1980s regime; no portable Sharpe ratio (return per unit of volatility) |
+| Rayome, D. L. & Jain, A. (2008), "Do Turtles Have Fat Tails?", *J. of the Academy of Finance* | Soybeans; Donchian 20-day & 55-day systems | Academic examination of Turtle-style Donchian channels | Before-cost | Single-commodity study; tests the construction, not an intraday strategy |
+
+**Regimes where it fails:** range-bound chop (the documented principal failure mode — repeated false breakouts); low-liquidity names where the channel is gamed by wide spreads; crowded breakout levels at round numbers; news-driven spikes that reverse within the bar.
+
+**Honest bottom line:** as a *standalone intraday trigger* this is a weak, unproven edge — "reasonable hypothesis, not documented universal intraday alpha; the edge, if any, is in regime selection and execution, not the channel formula." As a *regime-conditioned trigger* (trend filter + cost gate, e.g. T019) it is plausible; as a *filter* (e.g. vetoing mean-reversion entries when a fresh breakout just fired) it is arguably more valuable than as a trigger.
+
+### S10. Failure modes & pitfalls
+
+- **Lookahead via forming-bar inclusion.** Computing the channel (or any co-feature like ATR/Bollinger) on windows that *include* the triggering bar, while Donchian excludes it, mixes conventions at the same timestamp — backtest fills then assume knowledge only available at the bar's close. *Mitigation:* pick ONE convention — completed-bar (features through $t-1$, signal on bar $t$, fill at $t+1$) or forming-bar estimate (explicitly simulated, fill at $t+1$ open) — and state its fill-timing cost: including the forming bar costs you roughly one full bar of slippage versus the fantasy fill.
+- **Whipsaw bleed.** Chop manufactures breakouts that reverse within 1–3 bars. *Mitigation:* volatility-regime gate (trade only when channel width or ADX — average directional index, a 0–100 trend-strength gauge — confirms a trending regime) and a per-day loss stop.
+- **Cost blowup.** A 20-bar intraday channel can fire several times a day; each round-trip pays spread + fees + impact. *Mitigation:* model costs per trade explicitly (S3's timing), require expected move > 2–3× round-trip cost before arming.
+- **Regime breaks.** Breakouts that worked in a trending tape fail when the market transitions to range-bound. *Mitigation:* higher-timeframe trend-slope filter; stand down after N consecutive failed breaks.
+- **Parameter mining.** N=20 vs 21 vs 55 will always have a "best" N in-sample. *Mitigation:* fix N from first principles (session fraction), validate out-of-sample with purged/embargoed splits (validation splits with near-in-time train/test overlap removed to prevent leakage).
+- **Data errors.** A bad tick prints a false N-bar high; an unadjusted split collapses the channel. *Mitigation:* bad-tick filters, corporate-action-adjusted series, halt flags.
+- **Microstructure noise vs signal.** On thin names the "breakout" is just the spread widening. *Mitigation:* minimum ADV (average daily volume)/liquidity screen; use mid-price or microprice confirmation before arming.
+
+### S11. Visuals
+
+![S028 worked example — Donchian(20) channel and the bar-30 breakout on a synthetic 30-bar 5-minute tape](images/S028_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(e.g. Polygon 5-min bars)"] -->|"5-min OHLCV bars"| ING["Ingest + normalize<br/>(tz, corp actions, halts)"]
+    ING -->|"5-min bars, cleaned"| FEAT["Feature compute<br/>Donchian(20) prior-bar max/min"]
+    FEAT -->|"per-bar channel features (5-min bars)"| SIG["Signal S028<br/>close beyond rail?"]
+    SIG -->|"breakout event per completed 5-min bar"| GATE{"Cost / whipsaw<br/>gate?"}
+    GATE -->|"pass: order intent (5-min bars)"| OUT["Downstream consumer<br/>(T019 entry; conceptual-fit refs)"]
+    GATE -->|"fail: no trade"| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. StockCharts ChartSchool — "Price Channels" (Donchian channels): formula, and the completed-bar convention ("the formula doesn't include the most recent period"). https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-overlays/price-channels (accessed 2026-09-10).
+2. Rayome, D. L. & Jain, A. (2008) — "Do Turtles Have Fat Tails? Donchian Channels and Turtle Trading: The Case of Soybeans," *Journal of the Academy of Finance*, Summer 2008. http://carrels.distantreader.org/journal-journalOfFinanceIssues-ojsoai/cache/jfi-2421.pdf
+3. Faith, Curtis M. (2007) — *Way of the Turtle: The Secret Methods that Turned Ordinary People into Legendary Traders*, McGraw-Hill. Documents the Turtle 20-day/55-day Donchian systems and ATR-based sizing.
+4. Brock, W., Lakonishok, J. & LeBaron, B. (1992) — "Simple technical trading rules and the stochastic properties of stock returns," *Journal of Finance* 47(5), 1731–1764. https://repository.hkust.edu.hk/ir/bitstream/1783.1-362/1/tech.pdf — Moving-average/breakout rules (including channel breakouts) show forecast power for the DJIA 1897–1986; the benchmark academic test of breakout-style rules.
+5. Sullivan, R., Timmermann, A. & White, H. (1999) — "Data-snooping, technical trading rule performance, and the bootstrap," *Journal of Finance* 54(5), 1647–1691. https://econpapers.repec.org/article/blajfinan/v_3a54_3ay_3a1999_3ai_3a5_3ap_3a1647-1691.htm — White's Reality Check over 7,846 rules including channel breakouts: the best rule's profits do not survive data-snooping adjustment out-of-sample — the caution behind the S10 overfitting warnings.
+6. Fama, E. F. & Blume, M. E. (1966) — "Filter rules and stock-market trading," *Journal of Business* 39(1), 226–241. https://doi.org/10.1086/294849 — Early evidence that mechanical trading rules (filters, close cousins of breakouts) do not beat buy-and-hold after costs.
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- duck.ai answers Q-SB5-1–Q-SB5-3 (GPT-5.6 Luna, 2026-09-10): the 30-bar worked-example numbers (operator hand-checked, no arithmetic errors); engineering-hour columns for a session-pattern platform (prototype 185–385 h, research-grade 705–1,530 h — column totals verified); evidence framing for intraday Donchian ("reasonable hypothesis, not documented universal intraday alpha").
+- A chatbot-cited SSRN study of daily Donchian/ATR on BTC (URL not captured — unverified): reported as positive but highly cost/parameter/regime-sensitive; not evidence of durable intraday US-equity edge.
+- A chatbot-cited practitioner article (altrady.com, URL not captured — unverified) identifying range-bound chop as the principal Donchian failure mode.
+
+---
+## Stage 29/200 — S029: Keltner / Bollinger breakouts
+
+*Batch SB5 · Signal 29/100 · Provenance [D] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Breakout signal when price *closes* outside a volatility envelope: Keltner = EMA (exponential moving average) ± k·ATR (average true range); Bollinger = SMA (simple moving average) ± k·σ (standard deviation of closes). |
+| **When it works** | Genuine volatility expansions with directional follow-through; envelopes adapt to the local regime instead of using fixed price levels. |
+| **When it dies** | Mean-reverting tapes where band tags get faded; fast markets where the lagging envelope is still catching up. |
+| **Build-or-buy in one line** | Build — EMA/ATR/SMA/std on cheap 1–15-minute bars; the only real choice is *which* envelope definition you standardize on. (EMA = exponential moving average; ATR = average true range; SMA = simple moving average; std = standard deviation.) |
+
+Provenance **[D]** (documented: Keltner 1960; Raschke 1980s rework; Bollinger 1980s; Wilder 1978 ATR) · Family **B — Intraday Momentum & Breakout**.
+
+### S2. How it works — plain human explanation
+
+Take the same 10:15 tape as S028. Two different envelopes are drawn around price. The **Keltner channel** (named for Chester Keltner, 1960; modern form popularized by Linda Raschke in the 1980s) centers on an **EMA** — an exponential moving average, which weights recent bars more heavily than old ones — and sets its rails at a multiple of **ATR**, the average true range (the mean per-bar price range including overnight gaps, defined below). The **Bollinger bands** (John Bollinger, 1980s) center on a simple moving average (**SMA** — the plain arithmetic mean) and set their rails at a multiple of **σ** (sigma), the standard deviation of closes — a statistical measure of how spread out recent closes are.
+
+At bar 30, price closes at 102.00. The Keltner upper rail sits at 102.44: *no* close-breakout — only the bar's high (102.50) poked through. The Bollinger upper rail sits at 101.0746: *yes*, a close-breakout. Same bar, same market, two different answers — because Keltner measures volatility with range (ATR) while Bollinger measures it with dispersion of closes (σ), and the two disagree exactly when a single wide bar dominates the window.
+
+The economic idea: a close beyond $k$ standard deviations (or $k$ ATRs) is a tail event under the *local* volatility model — either real information is arriving (trade the expansion, i.e. momentum) or the market just overreacted (fade the tag, i.e. mean reversion; see S041/T014). The envelope itself is direction-agnostic; the *trading rule* layered on top chooses the side. Which is precisely why the worked example's disagreement matters: the "signal" is as much a function of your envelope definition as of the market.
+
+**Mental model:**
+- Envelopes are *adaptive rulers*: they rescale the definition of "extreme" to current volatility, unlike fixed-price channels.
+- Keltner (range-based) and Bollinger (dispersion-based) are *two different volatility lenses* — they will disagree on wide-range single bars; that disagreement is information about the bar's character.
+- A band break is a *volatility event with a sign attached by your rule*, not a verdict from the market.
+
+### S3. The math — exact formula
+
+Let $H_t, L_t, C_t$ be bar $t$'s high, low, close. The **true range** of a bar (Wilder 1978) captures gaps as well as intrabar range:
+
+$$TR_t = \max\big(H_t - L_t,\; |H_t - C_{t-1}|,\; |L_t - C_{t-1}|\big)$$
+
+**ATR** (average true range) smooths it. Two conventions exist and must not be mixed silently: the simple average $ATR_t(N) = \frac{1}{N}\sum_{i} TR_i$ (used in this chapter's worked example), and Wilder's smoothed $ATR_t = \frac{(N-1)\,ATR_{t-1} + TR_t}{N}$.
+
+**Keltner channel** (modern Raschke/StockCharts form; $E_t$ = EMA with $\alpha = 2/(N+1)$, $E_t = \alpha C_t + (1-\alpha)E_{t-1}$):
+
+$$K^{U/L}_t = E_t(N) \;\pm\; m \cdot ATR_t(A)$$
+
+**Bollinger bands** ($\mu_t$ = SMA of closes, $\sigma_t$ = population standard deviation, $k$ = width multiplier):
+
+$$B^{U/L}_t = \mu_t(N) \;\pm\; k \cdot \sigma_t(N)$$
+
+Breakout rule (example — not an institutional standard): long when $C_t > \text{upper}_t$; short when $C_t < \text{lower}_t$; exit on reversion to the midline or a time stop. Causal timing: computed at bar $t$'s close from data $\le t$; tradable no earlier than bar $t+1$'s open.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Envelope lookback | $N$ | 10–30 bars | Bands hug price; constant tags | Dead-lagging; signals arrive exhausted | 20 *(example — not an institutional standard)* |
+| ATR window | $A$ | 10–30 (often = $N$) | Jittery rails | Rails ignore fresh volatility | 20 *(example)* |
+| Multiplier | $m$ / $k$ | 1.5–2.5 | Tags on noise | Almost never triggers | 2 *(example)* |
+
+**Normalization choices.** Both envelopes are self-normalizing (volatility-scaled), which is their advantage over fixed channels. For cross-sectional ranking, practitioners often convert the break into a z-like score, e.g. $(C_t - E_t)/ATR_t$ — a volatility-normalized distance from the midline.
+
+**Named variants.** (1) *Original Keltner (1960)*: SMA of **typical price** $(H+L+C)/3$ ± SMA of the plain daily range — no ATR, no EMA, no multiplier. Materially different from the modern form (a measured comparison found ~2.6% median relative difference in the upper band — choosing a variant is choosing a different indicator). (2) *Raschke/StockCharts modern*: EMA ± $m$·ATR, the version used here and in most platforms. (3) *Bollinger %B and bandwidth*: $(C - B^L)/(B^U - B^L)$ locates price inside the bands; bandwidth (see S030) measures their width — both are derived signals, not breakouts.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Same synthetic 30-bar 5-minute tape as S028, seed 29 (fixed `numpy.random.default_rng(29)`; bars 11–30 hand-specified: bars 11–29 flat at O=100.00/H=100.80/L=99.80/C=100.20, volume 850→670; bar 30: O=100.20/H=102.50/L=100.00/C=102.00, V=2,500). All numbers hand-verified against the operator-checked worked example; **synthetic — not market data — and no performance is claimed.**
+
+**Step 1 — true ranges (bars 11–30).** Bars 11–29: $TR = \max(1.00,\, 0.60,\, 0.40) = 1.00$ each. Bar 30: $TR_{30} = \max(2.50,\, |102.50-100.20|=2.30,\, |100.00-100.20|=0.20) = 2.50$.
+
+**Step 2 — ATR(20), simple average:** $ATR = (19 \times 1.00 + 2.50)/20 = 1.075$.
+
+**Step 3 — Keltner midline:** EMA(20) seeded with the SMA of closes over bars 11–30: $(19 \times 100.20 + 102.00)/20 = 100.29$. (SMA-seeding is an example convenience — production code needs a proper warmup; see S10.)
+
+**Step 4 — Keltner rails:** $100.29 \pm 2 \times 1.075$ → upper **102.44**, lower **98.14**. Verdict: $C_{30} = 102.00 < 102.44$ → **no Keltner close-breakout**; the high (102.50) pierced the rail, but the close did not — a high-through only.
+
+**Step 5 — Bollinger:** $\mu = 100.29$ (same window); deviations $-0.09$ (×19) and $+1.71$; population variance $0.1539$; $\sigma = 0.3923$; bands $100.29 \pm 2(0.3923)$ → upper **101.0746**, lower **99.5054**. Verdict: $C_{30} = 102.00 > 101.0746$ → **Bollinger close-breakout**.
+
+**What to notice.** One bar, two envelopes, opposite verdicts: the wide bar-30 range inflated ATR (range-based) far more than it inflated σ (dispersion-based, 19 of 20 closes identical). This is not a bug — it is the chapter's central lesson: *the breakout is defined by your volatility lens*. A strategy that "trades Bollinger breaks" and one that "trades Keltner breaks" will hold different positions off identical data. Also note the methodology: these windows *include* bar 30, unlike S028's completed-bar Donchian — the mixed-convention pitfall flagged in S10. This toy tape has no fees, no partial fills, no latency.
+
+### S5. Strategies that use this signal
+
+- **T019 — Donchian/Keltner Breakout + Vol Sizing** — primary entry trigger alongside S028; Keltner breaks add the volatility-scaled confirmation leg, sized by the vol-breakout regime (S076).
+- **T003 — VPIN-Gated Breakout Trader** — *conceptual-fit reference (not a plan-defined consumer of S029)*: Keltner/Bollinger close-breakouts as breakout-timing candidates, taken only when order-flow toxicity (VPIN — volume-synchronized probability of informed trading) is low; toxicity vetoes the trade.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| OHLC (open/high/low/close) bars (high/low required — ATR needs range) | float | 1–15 min bars | Tier 1 | Close-only feeds are insufficient |
+| Corporate actions | events | as-occurring | Tier 1 | Unadjusted splits corrupt σ and ATR identically |
+| Session calendar | reference | daily | Tier 0/1 | Overnight gaps enter TR via $\|H_t - C_{t-1}\|$ — handle half-days explicitly |
+
+Ingest + feature sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+bars = pl.read_parquet("bars_5m/*.parquet").sort(["symbol", "ts"])
+N, m = 20, 2.0  # example — not an institutional standard
+feat = bars.with_columns([
+    pl.max_horizontal(pl.col("high") - pl.col("low"),
+        (pl.col("high") - pl.col("close").shift(1).over("symbol")).abs(),
+        (pl.col("low") - pl.col("close").shift(1).over("symbol")).abs()).alias("tr"),
+    pl.col("close").rolling_mean(N).over("symbol").alias("sma"),
+    pl.col("close").rolling_std(N, ddof=0).over("symbol").alias("sd"),
+])
+sig = feat.with_columns([
+    (pl.col("tr").rolling_mean(N).over("symbol")).alias("atr"),
+    (pl.col("sma") + 2 * pl.col("sd")).alias("bb_up"),
+    (pl.col("sma") - 2 * pl.col("sd")).alias("bb_lo"),
+])
+# Keltner midline: EMA seeded after warmup; rails = ema ± m*atr
+```
+
+**Storage:** ~0.1 MB per symbol-day for 1-min bars in Parquet (500 symbols ≈ 50 MB/day per `notes/cost-model.md` §4); 60 days × 500 symbols ≈ 3 GB. **Data-quality checklist:** high ≥ max(open, close), low ≤ min(open, close) invariants; bad-tick filtering before TR; split-adjustment; warmup bars (≥N) before first valid envelope — no signal on partial windows.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** EMA, SMA, rolling std, and ATR are all O(1)-per-bar streaming updates; a full 500-symbol × 390-bar day recomputes in milliseconds with numpy/polars vectorization (~50–200M elements/sec per `notes/cost-model.md` §2). RAM: 500 symbols × 60 days of 1-min bars ≈ 12 MB (`notes/cost-model.md` §3) vs the ~77 GB working budget. Per the batch's chatbot build review: the machine is not the constraint — point-in-time-correct data, exchange timestamps, and corporate actions are (labeled chatbot lead).
+
+| Stack | When to pick it |
+|---|---|
+| Python + polars | Default: streaming state per symbol, millisecond 1-min batches |
+| Rust | Only for tick-level envelopes across hundreds of symbols in real time |
+| DuckDB | Research queries over the Parquet archive |
+
+**Engineering band:** Tier L per `notes/cost-model.md` §5 (1-min bar signals) — **4–12 h ≈ $600–1,800** at $150/hr loaded cost. One line of justification: the math is five rolling statistics; the work is the data-quality layer. **What breaks first at 500 symbols or full OPRA:** nothing at bar granularity; the percentile/squeeze overlay (S030) adds only O(log N) per bar. (OPRA = Options Price Reporting Authority.)
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX / delayed quotes | Daily bars, delayed quotes | ~$0 | Free prototyping | No real-time intraday |
+| Tier 1: Polygon Stocks Advanced / Alpaca SIP (Securities Information Processor consolidated feed) | Real-time 1–15 min SIP bars, corp actions | ~$30–200/mo | Normalized OHLCV; multi-year history | No venue granularity |
+| Tier 2: Databento Standard | MBP-1/10 (market-by-price Level 1/2), futures, OPRA research | ~$200/mo + usage | Exchange timestamps; honest bars-from-trades | Unneeded for envelope breakouts on bars |
+| Charting-platform overlays (TradingView etc.) | Pre-built Keltner/Bollinger studies | ~$15–60/mo | Instant visualization | Opaque variant definitions; weak reproducibility |
+
+All prices *indicative — verify before budgeting*. **Verdict: build.** Envelopes are five rolling statistics on cheap bars; the decision that matters — original vs modern Keltner, simple vs Wilder ATR, close vs high-through — is yours to standardize, and no vendor sells you that judgment. Buy the cheapest normalized bar feed that meets latency needs.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Keltner (1960), *How to Make Money in Commodities* — "ten-day moving average trading rule": close beyond the band = trend signal | Commodities, 1960s practitioner rule | Rule description; no returns reported | Before-cost (no P&L documented) | Practitioner convention, not a tested strategy |
+| Raschke 1980s ATR rework (via TradingView/StockCharts documentation) | Practitioner standard since the 1980s | Widespread adoption as the default envelope | Before-cost (no strategy returns documented) | Popularity ≠ edge; variant confusion is documented (original vs modern differ materially) |
+
+**Regimes where it fails:** low-volatility grinds where tags are faded (the mean-reversion use, S041, is the mirror image); volatility explosions where the lagging envelope is repriced for several bars after the move; correlated triggers — every envelope trader sees the same tag at the same bar.
+
+**Honest bottom line:** as a *standalone intraday trigger*, envelope breakouts inherit S028's verdict — plausible trend-following payoff, no documented universal after-cost alpha; the envelope choice (range- vs dispersion-based, close- vs high-through) moves the trigger more than most parameter tuning. As a *volatility-normalized ruler* feeding sizing, exits, and regime filters, the construction is more defensible than as a raw entry signal.
+
+### S10. Failure modes & pitfalls
+
+- **Mixed bar-inclusion conventions.** S028's Donchian excludes the triggering bar; the Keltner/Bollinger/ATR windows in this chapter's example *include* it. Mixing the two at the same timestamp in one strategy is a live-implementation pitfall: backtest fills assume information only finalized at the bar's close. *Mitigation:* one stated convention per strategy — e.g. all features on completed bars (through $t-1$), signal evaluated on bar $t$, fill at $t+1$ open — and price the fill-timing cost: a forming-bar estimate costs roughly a full bar of slippage versus the close-fill fantasy.
+- **EMA seeding / warmup.** Seeding the EMA with an SMA (as the example does) is a convenience; the first ~N bars of any EMA/ATR are contaminated by the seed. *Mitigation:* require ≥N (ideally 2–3×N) warmup bars before arming; never trust backtest P&L from the warmup region.
+- **ATR variant mismatch.** Simple-average ATR vs Wilder-smoothed ATR vs EMA-of-TR (some libraries) produce different rails — backtest in one variant, trade in another, and the trigger moves. *Mitigation:* pin the exact smoother in code and in the research log.
+- **Close-through vs high-through.** The example shows the two rules disagreeing on the same bar. *Mitigation:* pick one, document it, and never switch mid-research; high-through is earlier but suffers intrabar adverse selection.
+- **Lag in fast markets.** Envelopes are moving averages — they lag by construction; in a vertical move the band is repriced *by* the move it was supposed to detect. *Mitigation:* cap the signal's role to confirmation, not discovery, in jump regimes; consider jump filters (S064).
+- **Parameter mining across N/m/k.** Three free parameters mine beautifully in-sample. *Mitigation:* fix from session logic (e.g. N = half the RTH (regular trading hours) bar count), validate with purged/embargoed out-of-sample splits (validation splits with near-in-time train/test overlap removed to prevent leakage).
+- **Cost blowup on tag clusters.** Bands get tagged repeatedly in choppy tapes. *Mitigation:* cooldown (one signal per N bars), spread + fees + slippage/impact gate per trade.
+
+### S11. Visuals
+
+![S029 worked example — Keltner vs Bollinger on the same synthetic tape: no Keltner close-breakout (high-through only) but a Bollinger close-breakout at bar 30](images/S029_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(e.g. Polygon 1–15 min bars)"] -->|"1–15 min OHLC bars"| ING["Ingest + normalize<br/>(tz, corp actions, bad ticks)"]
+    ING -->|"1–15 min bars, cleaned"| FEAT["Feature compute<br/>EMA/ATR/SMA/sigma envelopes"]
+    FEAT -->|"per-bar envelope features (1–15 min bars)"| SIG["Signal S029<br/>close beyond rail?"]
+    SIG -->|"breakout event per completed 1–15 min bar"| GATE{"Cost / toxicity<br/>gate?"}
+    GATE -->|"pass: order intent (1–15 min bars)"| OUT["Downstream consumer<br/>(T019 / conceptual-fit refs)"]
+    GATE -->|"fail: no trade"| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Keltner, Chester W. (1960) — *How to Make Money in Commodities*. Original "ten-day moving average trading rule": SMA of typical price ± SMA of daily range.
+2. Wikipedia — "Keltner channel": documents the original formula and Linda Raschke's 1980s ATR/EMA rework. https://en.wikipedia.org/wiki/Keltner_channel (accessed 2026-09-10).
+3. TradingView — "Keltner Channels (KC)" support article: modern calculation (EMA ± 2×ATR) and history. https://www.tradingview.com/support/solutions/43000502266-keltner-channels-kc/ (accessed 2026-09-10).
+4. Wilder, J. Welles Jr. (1978) — *New Concepts in Technical Trading Systems*. Defines True Range and Average True Range.
+5. ta-lib proposal drafts, issue #41 — "(KC) Keltner Channels": measured comparison showing the 1960 original, StockCharts/Raschke, and pandas-ta variants differ materially (~2.6% median relative upper-band difference). https://github.com/ta-lib/ta-lib-proposal-drafts/issues/41 (accessed 2026-09-10).
+6. Bollinger, John (2001) — *Bollinger on Bollinger Bands*, McGraw-Hill. https://www.amazon.com/dp/0071373683 — The canonical reference for the σ-based envelope the Keltner construction is contrasted against in S4 (Bollinger = SMA ± kσ vs Keltner = EMA ± k·ATR).
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- duck.ai answers Q-SB5-1–Q-SB5-3 (GPT-5.6 Luna, 2026-09-10): the 30-bar worked-example numbers (operator hand-checked, no arithmetic errors; the mixed bar-inclusion convention flagged as a methodology caveat, not an arithmetic error); evidence framing for intraday envelope breakouts.
+
+---
+## Stage 30/200 — S030: Bollinger bandwidth squeeze → expansion
+
+*Batch SB5 · Signal 30/100 · Provenance [SR] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Volatility-*state* timing: when Bollinger bandwidth sits at a low percentile of its history (the "squeeze"), position for the expansion that statistically follows — *direction comes from the subsequent band break, never from the squeeze itself*. |
+| **When it works** | Volatility clustering regimes: quiet tapes that resolve into genuine directional expansions with follow-through. |
+| **When it dies** | Dead low-liquidity names that compress indefinitely; news-spike fake expansions; any use of the squeeze as a *directional* signal. |
+| **Build-or-buy in one line** | Build — bandwidth and a rolling percentile on cheap bars; vendor "squeeze" overlays add opacity, not edge. |
+
+Provenance **[SR]** (standard reconstruction: Bollinger documented the squeeze concept; the percentile-break rule is a practitioner reconstruction — never upgraded to [D]) · Family **B — Intraday Momentum & Breakout**.
+
+### S2. How it works — plain human explanation
+
+Return to the 10:15 tape. For twenty bars, price barely moved: the **Bollinger bandwidth** — bandwidth is simply the distance between the upper and lower Bollinger bands divided by the midline, i.e. how wide the envelope is *relative* to price, expressed as a percentage — drifted between 0.90% and 1.45%, near the lows of its recent history. Then bar 30 erupts: bandwidth jumps to 1.564%, the highest of the last 20 bars (a **percentile** — the percentage of prior readings at or below the current one — of 100%). The quiet period ended. The squeeze framework says: *compression precedes expansion; the expansion has now begun.*
+
+The economic logic is **volatility clustering** — the well-documented tendency of quiet periods to be followed by active ones and vice versa. When bands pinch, the market is in a low-disagreement equilibrium: market makers are comfortable, nobody is being forced to trade. That equilibrium is fragile. A catalyst — news, a large order, a sector move — breaks it, resting liquidity gets consumed, market makers widen quotes, and realized volatility jumps. The squeeze does not predict the catalyst; it identifies the *loaded spring*.
+
+Here is the mandatory honesty, stated plainly: **the squeeze predicts that *something* will happen, not *which direction* it goes.** Bollinger's own rule is "wait for a squeeze and go with the *first breakout*" — the direction comes from the break, confirmed by a separate directional read (band-break side, momentum, order flow). Any presentation of the squeeze as a directional signal is a misrepresentation. As one market commentator put it about a real S&P 500 bandwidth compression to its lowest since June 2021: a larger swing is likely on the horizon — "the question now is which way the market will move" (Reuters, 2026-09-10).
+
+**Mental model:**
+- The squeeze is a *volatility-state* indicator, not a *directional* one — it times *when*, never *which way*.
+- Bandwidth percentile converts an absolute width ("1.2%") into a regime-relative statement ("tighter than 90% of recent history").
+- The tradable object is the *transition* (compression → expansion + confirmed break), not the compression itself.
+
+### S3. The math — exact formula
+
+Bollinger bands as in S029: midline $\mu_t$ (SMA — simple moving average — of closes, window $N$), $\sigma_t$ (population standard deviation), rails $\mu_t \pm k\sigma_t$. **Bandwidth** (Barchart/Trading Technologies convention, ×100 for percent):
+
+$$BW_t = \frac{B^U_t - B^L_t}{\mu_t} = \frac{2k\,\sigma_t}{\mu_t}$$
+
+so with $k=2$, $BW_t = 4\sigma_t/\mu_t$. The **bandwidth percentile** over trailing window $R$ (prior bars only — the current bar is ranked against history, not against itself):
+
+$$P_t = 100 \times \frac{\#\{j \in [t-R,\, t-1] : BW_j \le BW_t\}}{R}$$
+
+**Squeeze** (all parameters example — not an institutional standard): $P_t \le p$, commonly $p \in \{5, 10, 20\}$. **Entry**: on the first close outside the band *in the break direction* after a squeeze — i.e. the squeeze arms the trade, the band break aims it. Causal timing: squeeze state known at bar $t$'s close; expansion entry no earlier than bar $t+1$.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Band lookback | $N$ | 15–30 bars | Bands chase noise | Squeeze rarely registers | 20 *(example — not an institutional standard)* |
+| Band width | $k$ | 1.5–2.5 | Bands inside normal noise | Squeeze never triggers | 2 *(example)* |
+| Percentile window | $R$ | 50–250 bars | Percentile flickers | Ancient regimes pollute the ranking | 125 *(example)* |
+| Squeeze threshold | $p$ | 5–20% | Almost never "on" | Always "on" — no information | 20 *(example)* |
+
+**Named variants.** (1) *Bollinger's "simple" squeeze*: current bandwidth at its 6-month minimum (the default he taught). (2) *Bollinger's "complicated" squeeze*: plot the 20-day standard deviation, then 125-day 1.5-σ Bollinger bands *of that standard deviation* — a squeeze triggers when the 20-day σ tags the lower band (Bollinger 2001, p.194). (3) *TTM Squeeze* (TTM — "Trade The Markets," John Carter's firm — via StockCharts): squeeze "on" when **both** Bollinger bands (20, 2σ) sit *inside* the Keltner channels (20-period, 1.5× ATR — average true range; using Keltner's *original 1960* formula, per StockCharts' note), plus a momentum histogram that supplies the missing directional read. TTM is a vendor overlay — reproducible from the published construction, but a black box if bought as a study.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 30-bar bandwidth series, seed 30 (fixed `numpy.random.default_rng(30)`). Prior-20 bandwidth values (bars 10–29) compress from 0.90% to 1.45% (supplied example conveniences, disclosed); bar 30 is the expansion bar. All numbers hand-verified against the operator-checked worked example; **synthetic — not market data — and no performance is claimed.**
+
+| Bar | Bandwidth | Percentile (trailing 20) | State |
+|-----|-----------|--------------------------|-------|
+| 26 | 1.30% | 100% (rising window) | Expansion underway |
+| 27 | 1.36% | 100% | Expansion underway |
+| 28 | 1.40% | 100% | Expansion underway |
+| 29 | 1.45% | 100% | Expansion underway |
+| 30 | **1.564%** | **100%** | **Expansion bar — NOT a squeeze** |
+
+**Step 1 — bandwidth at bar 30:** from the S029 Bollinger computation, $BW_{30} = 4 \times 0.3923 / 100.29 = 0.01564 = 1.564\%$.
+
+**Step 2 — percentile:** all 20 prior values (0.90%…1.45%) are ≤ 1.564%, so $P_{30} = 100 \times 20/20 = 100\%$.
+
+**Step 3 — squeeze test:** with the example threshold $p = 20\%$, $100\% \not\le 20\%$ → **no squeeze at bar 30**. This is the expansion *after* compression — the spring has already released.
+
+**Step 4 — what a squeeze entry would have looked like:** the compression phase (bars 10–20, bandwidth near its local lows) is where $P_t \le 20\%$ would have armed the signal; the profitable question was never "will volatility expand" (it did — 0.90% → 1.564%) but "in which direction, and after costs." The bar-30 close above the Bollinger upper band (101.0746, from S029) is the directional leg: *squeeze armed it, the band break aimed it.*
+
+**What to notice.** Percentile needs $R$ prior bars — with $R=20$ the first valid reading here is bar 21, so squeeze states are always *late by construction*: the indicator confirms compression after it has persisted. Combined with the bar-$t+1$ fill rule, a squeeze system enters expansions, not compressions — anyone describing it as "buying the quiet" is misreading their own indicator. This toy series has no fees and no direction embedded: it demonstrates the *computation*, and specifically the fact that the computation alone yields no directional call.
+
+### S5. Strategies that use this signal
+
+- **T094 — Squeeze Breakout (Options-Confirmed)** — primary trigger: Bollinger squeeze breakouts confirmed by unusual options activity and vol expansion (S076).
+- **T014 — Bollinger Reversal + Squeeze Exit** — squeeze as timing/exit filter: covers reversal positions into bandwidth-squeeze expansions and vol breakouts.
+- **T061 — Initial-Balance Expansion Trader** — squeeze as confirmation filter: first-hour range breaks confirmed by squeeze state and relative volume.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| OHLC (open/high/low/close) bars | float | 1–15 min or daily | Tier 0/1 | Daily bars suffice for the 6-month-minimum variant |
+| Corporate actions | events | as-occurring | Tier 1 | Splits corrupt σ and hence bandwidth |
+| Session calendar | reference | daily | Tier 0 | Percentile windows must span comparable regimes |
+
+Ingest + feature sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+bars = pl.read_parquet("bars_15m/*.parquet").sort(["symbol", "ts"])
+N, k, R, p = 20, 2.0, 125, 20  # example — not an institutional standard
+feat = bars.with_columns([
+    pl.col("close").rolling_mean(N).over("symbol").alias("sma"),
+    pl.col("close").rolling_std(N, ddof=0).over("symbol").alias("sd"),
+]).with_columns([
+    ((4 * pl.col("sd")) / pl.col("sma")).alias("bw"),  # k=2 -> 4*sd/sma
+]).with_columns([
+    pl.col("bw").rolling_map(lambda s: (s[:-1] <= s[-1]).mean() * 100,
+                             window_size=R + 1).over("symbol").alias("bw_pct"),
+    (pl.col("bw_pct") <= p).alias("squeeze"),
+])
+```
+
+**Storage:** ~0.1 MB per symbol-day for 1-min bars in Parquet (500 symbols ≈ 50 MB/day per `notes/cost-model.md` §4); daily bars are negligible. **Data-quality checklist:** percentile needs $R$ valid prior bars — no squeeze state during warmup; bandwidth is meaningless across corporate actions; compare like-with-like regimes (don't rank today's 5-min bandwidth against last month's daily bandwidth).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** Bandwidth is arithmetic on the S029 features; the rolling percentile is O($R$) per bar naive or O(log $R$) with an order-statistic tree — at $R=125$ and 500 symbols × 390 bars/day, even the naive version is microseconds per bar. Throughput and RAM are the S029 story verbatim: milliseconds per full-universe recompute, ~12 MB for 500 symbols × 60 days of 1-min bars (`notes/cost-model.md` §2/§3). The machine is not the constraint; point-in-time correctness of the bandwidth history is (labeled chatbot lead).
+
+| Stack | When to pick it |
+|---|---|
+| Python + polars | Default: rolling statistics plus percentile in one pipeline |
+| Rust | Unneeded at bar granularity |
+| DuckDB | Research queries over the Parquet archive |
+
+**Engineering band:** Tier L per `notes/cost-model.md` §5 — **4–12 h ≈ $600–1,800** at $150/hr loaded cost. **What breaks first at 500 symbols or full OPRA (Options Price Reporting Authority):** nothing new — the percentile state per symbol is one small ring buffer; full OPRA only matters if you confirm squeezes with options flow (T094), which is a separate Tier-H project.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Buying gains | Buying loses |
+|---|---|---|---|---|
+| Tier 0: Stooq / Alpaca IEX | Daily bars | ~$0 | Enough for the 6-month-minimum squeeze variant | No intraday |
+| Tier 1: Polygon / Alpaca SIP (Securities Information Processor consolidated feed) | Real-time 1–15 min bars | ~$30–200/mo | Clean intraday bandwidth series | Nothing material |
+| Vendor overlay: TTM Squeeze study (charting platforms) | Pre-built squeeze dots + momentum | ~$15–60/mo platform fee | Instant visualization | Opaque parameters; weak audit trail; the momentum histogram's construction is the actual edge, and you can't inspect it |
+| Tier 2: Databento | Normalized bars, imbalance feeds | ~$200/mo + usage | Research-grade history | Overkill for bandwidth math |
+
+All prices *indicative — verify before budgeting*. **Verdict: build.** Bandwidth is one division; the percentile is one rolling rank. Buy the cheapest bar feed that covers your timeframe — and build the indicator yourself, because the squeeze threshold $p$ and window $R$ *are* the strategy, and a vendor will not let you audit theirs.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Bollinger (2001), *Bollinger on Bollinger Bands* — squeeze as lowest-volatility regime; "wait for a squeeze and go with the first breakout" | Practitioner framework, multi-market | Timing rule description; no strategy returns reported | Before-cost (no P&L documented) | The rule is volatility-timing, explicitly not a directional edge |
+| Reuters / LSEG market technicals (2026-09-10) — S&P 500 Bollinger Bandwidth compressed to lowest since June 2021; prior extreme followed by ~4% rally over 16 sessions | US large-cap, Aug–Sep 2026 | Observed volatility compression → subsequent swing; direction explicitly "unclear" beforehand | Observational (no strategy P&L; before-cost) | Single anecdote, not a backtest; illustrates exactly the direction-neutrality point |
+
+**Regimes where it fails:** dead low-liquidity names where bandwidth sits at "squeeze" levels for months with no expansion; news-spike expansions that reverse within the bar (expansion without follow-through); breaks against the higher-timeframe trend; correlated triggers — every squeeze trader arming the same bar.
+
+**Honest bottom line:** as a *volatility-state timer* the squeeze is the most defensible of the three SB5 chapters — volatility clustering is real and compression-then-expansion is its visible signature. As a *directional edge* it is nothing: the squeeze must be paired with a confirmed break (and ideally a directional filter) and evaluated on **risk-adjusted after-cost returns**, not on whether realized volatility subsequently rose. A system that "predicts" the expansion but loses money trading it has measured meteorology, not alpha.
+
+### S10. Failure modes & pitfalls
+
+- **The direction illusion.** Treating the squeeze itself as a buy/sell signal. It is not — compression resolves up or down with roughly the market's base rates. *Mitigation:* the strategy may only enter on the *confirmed band break* (or a separate directional filter); backtest the squeeze leg and the direction leg separately.
+- **Squeeze defined after the move.** Percentile needs $R$ prior bars and the entry needs the break — by the time all conditions are true, part of the expansion is consumed. *Mitigation:* measure entry delay explicitly (bars from percentile trough to fill); size for the *remaining* move, not the full expansion.
+- **Mixed bar-inclusion conventions.** Bandwidth/σ windows that include the forming bar, ranked against percentiles of completed bars, mix information sets at one timestamp — the same live-implementation pitfall as S028/S029. *Mitigation:* one stated convention (completed-bar features through $t-1$, signal on bar $t$, fill at $t+1$) and an explicit fill-timing cost.
+- **Permanent compression in dead names.** Illiquid stocks show "squeeze" bandwidth for months; the spring never releases because there is no spring. *Mitigation:* minimum ADV (average daily volume) and spread screens; require the expansion to actually begin (band break) rather than betting on compression alone.
+- **News-spike fake expansions.** A one-bar volatility spike prints percentile 100% with no follow-through. *Mitigation:* require expansion persistence (e.g. 2–3 bars) or volume/imbalance confirmation before committing.
+- **Threshold mining.** $p \in \{5,10,20\}$, $R \in \{50,\dots,250\}$ — a large grid that will always yield a "best" backtest. *Mitigation:* fix $p, R$ from the trading horizon's logic; validate out-of-sample with purged/embargoed splits (validation splits with near-in-time train/test overlap removed to prevent leakage).
+- **Correlated triggers and crowding.** Squeeze breakouts are visible to every technician watching the same bands. *Mitigation:* expect slippage at the obvious break bar; consider entering on the retest rather than the break. Model the full round-trip stack (spread + fees + slippage/impact) per trade and require the post-break expected move to clear 2–3× that cost before arming.
+
+### S11. Visuals
+
+![S030 worked example — Bollinger bandwidth and its trailing-20 percentile on a synthetic series: bar 30 prints percentile 100%, an expansion after compression, not a squeeze](images/S030_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(e.g. Polygon 1–15 min bars)"] -->|"1–15 min OHLC bars"| ING["Ingest + normalize<br/>(tz, corp actions, warmup)"]
+    ING -->|"1–15 min bars, cleaned"| FEAT["Feature compute<br/>Bollinger bandwidth + percentile"]
+    FEAT -->|"per-bar bandwidth percentile (1–15 min bars)"| SIG["Signal S030<br/>squeeze state (vol timing only)"]
+    SIG -->|"squeeze state per completed 1–15 min bar"| GATE{"Band break +\ncost gate?"}
+    GATE -->|"pass: directional entry intent (1–15 min bars)"| OUT["Downstream consumer<br/>(T094 / T014 / T061)"]
+    GATE -->|"fail: no trade"| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Bollinger, John (2001) — *Bollinger on Bollinger Bands*, McGraw-Hill. The squeeze concept: lowest-volatility regime (simple: 6-month bandwidth minimum; complicated: 20-day σ vs 125-day 1.5-σ bands of σ, p.194) and the "wait for a squeeze and go with the first breakout" rule.
+2. Barchart — "Bollinger BandWidth": formula $((\text{Upper} - \text{Lower}) / \text{Middle}) \times 100$ and the squeeze theory ("periods of low volatility are followed by periods of high volatility… can foreshadow a significant advance or decline" — direction-neutral). https://Www.Barchart.com/education/technical-indicators/bollinger_squeeze (accessed 2026-09-10).
+3. StockCharts ChartSchool — "TTM Squeeze": Carter's construction (Bollinger 20/2 inside Keltner 20/1.5, original 1960 Keltner formula) plus the momentum histogram that supplies the directional read the squeeze itself lacks. https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/ttm-squeeze (accessed 2026-09-10).
+4. Trading Technologies — "Bollinger Bandwidth": formula and configuration reference. https://library.tradingtechnologies.com/trade/chrt-ti-bollinger-bandwidth.html (accessed 2026-09-10).
+5. Reuters (2026-09-10) — "Mapping the Market: S&P 500 may be ready to break out after quiet period": bandwidth compressed to lowest since June 2021; "the question now is which way the market will move." https://www.reuters.com/markets/us/global-markets-technicals-2026-09-10/ (accessed 2026-09-10).
+6. Andersen, T. G., Bollerslev, T., Diebold, F. X. & Labys, P. (2003) — "Modeling and forecasting realized volatility," *Econometrica* 71(2), 579–625. https://www.kellogg.northwestern.edu/academics-research/research/detail/2003/modeling-and-forecasting-realized-volatility/ — Realized-volatility long-memory framework behind the volatility-clustering mechanism the squeeze exploits (compression-then-expansion as the visible signature of clustered volatility).
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- duck.ai answers Q-SB5-1–Q-SB5-3 (GPT-5.6 Luna, 2026-09-10): the 30-bar worked-example numbers (operator hand-checked, no arithmetic errors; bar-30 percentile 100% = expansion after compression, NOT a squeeze); the mandatory framing that the squeeze is volatility-state timing and the testable question is risk-adjusted after-cost returns vs merely predicting realized-vol increase.
+
+---
+## Stage 31/200 — S031: Consecutive-bar streaks (runs)
+
+*Batch SB5 · Signal 31/100 · Provenance [SR] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| Counts consecutive same-sign bar returns; trades continuation at streak ≥ k₁ (*example*) or fades exhaustion at streak ≥ k₂ with range/volume confirmation | Strong intraday trends, news-driven drifts, momentum regimes with persistent order flow | Chop, mean-reverting tapes, low-volume grinds where every "streak" is noise | Build: 20 lines of code on any bar feed; nothing to buy |
+
+Provenance: **[SR]** (standard reconstruction — the streak recursion is textbook; thresholds are implementation examples, not institutional standards). Family B — Intraday Momentum & Breakout.
+
+### S2. How it works — plain human explanation
+
+A *streak* (also called a *run*) is simply a count: how many consecutive bars closed in the same direction? At 10:23, a trader watching XYZ sees the last five 5-minute bars all close higher. That is a streak of 5. The signal asks the oldest question in technical trading — Cowles and Jones (1937) were counting exactly these sequences and reversals on stock prices nearly a century ago: does a rise tend to follow a rise?
+
+Economically, two opposite stories both plausibly generate streaks, and the signal deliberately plays both. The **continuation** story is order-flow persistence: institutional flow arrives in waves (a fund working a large buy order prints a sequence of up bars), and herding plus stop-running extends the move — the micro-mechanism behind intraday time-series momentum. The **exhaustion** story is positioning: after six or seven consecutive up bars the marginal buyer is spent, market makers are long and skewing quotes down, and any pause triggers profit-taking — so extreme streaks *fade*.
+
+The practical art is the split: moderate streaks (3–5 bars, *example*) ride; extreme streaks (6+, *example*) fade, ideally confirmed by a range expansion or a volume climax that says "everyone is already in."
+
+**Mental model:**
+- A streak is a *coarse, robust* momentum proxy: no parameters to overfit beyond two integer thresholds, computable in O(1) per bar.
+- Direction and regime decide the trade: streaks *continue* when flow is institutional and news-backed; they *exhaust* when the move is retail-chased and volume climaxes.
+- The signal's real value is as a *trigger with a built-in flip*: ride the run, then fade it when it gets absurd.
+
+### S3. The math — exact formula
+
+Let $r_t = \ln(C_t / C_{t-1})$ be the bar-$t$ log return on closes $C_t$, and define the sign $s_t = \mathrm{sign}(r_t) \in \{+1, -1\}$ (zero returns, *unchanged* bars, are treated as breaking the streak — a live-implementation choice that must be fixed and documented). The streak counter is the recursion:
+
+$$S_t = \begin{cases} S_{t-1} + 1, & s_t = s_{t-1} \\ 1, & s_t \neq s_{t-1} \end{cases} \qquad S_1 = 1$$
+
+The direction of the streak is $s_t$. The two-sided trading rule (*thresholds are examples — not institutional standards*):
+
+$$\text{Continuation: enter with } s_t \text{ when } S_t \ge k_1 \quad\text{(e.g. } k_1 = 3\text{)}$$
+$$\text{Exhaustion fade: enter against } s_t \text{ when } S_t \ge k_2 \text{ AND range/volume filter passes} \quad\text{(e.g. } k_2 = 6\text{)}$$
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (*example*) |
+|---|---|---|---|---|---|
+| Continuation threshold | $k_1$ | 2–5 bars | Fires on noise; whipsawed by 2-bar wiggles | Never fires; misses the move | 3 |
+| Exhaustion threshold | $k_2$ | 5–9 bars | Fades healthy trends mid-run | Only catches once-a-month extremes | 6 |
+| Bar grid | — | 1–15 min | Microstructure noise dominates | Signal too slow for intraday | 5-min |
+| Zero-return rule | — | break / carry / ignore | (implementation choice — backtest and live must match) | — | break streak |
+
+**Causal timing:** $S_t$ is computed at the close of bar $t$ using only data $\le t$; the earliest tradable fill is the open of bar $t+1$. Entering *inside* bar $t$ on a developing streak is a look-ahead violation (the bar's sign isn't known until it closes).
+
+**Normalization:** streaks are usually raw counts, but a calibrated variant normalizes by the expected streak length under a Bernoulli sign model: under iid signs with up-probability $p$, $P(S \ge k) = p^{k-1}$ for an up-streak — so a 6-bar up-streak with $p = 0.52$ has probability $0.52^5 \approx 3.8\%$, i.e. genuinely unusual. Rank/z normalization across the universe is a cross-sectional variant.
+
+**Named variants:**
+1. **Close-sign streaks** (above) vs **range streaks** (consecutive higher highs / lower lows) — range streaks are stricter and rarer.
+2. **Volume streaks** — consecutive bars with rising volume in the streak direction; used as the exhaustion *confirmation* (a volume climax at $S_t \ge k_2$).
+3. **Above-VWAP streaks** — consecutive bars closing above session VWAP (volume-weighted average price); a trend-quality overlay rather than a pure sign run.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 12-bar 5-minute tape, seed **31**. Prices are hand-designed so the streak pattern is exact; volume jitter comes from `numpy.default_rng(31)`. Zero returns break the streak. This is synthetic data — not market data — and the chart plots exactly these numbers.
+
+| bar | O | H | L | C | vol | sign($r_t$) | $S_t$ | action (*example* thresholds $k_1{=}3$, $k_2{=}6$) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 99.95 | 100.03 | 99.92 | 100.00 | 1129 | +1 | 1 | — |
+| 2 | 100.00 | 100.18 | 99.97 | 100.15 | 1320 | +1 | 2 | — |
+| 3 | 100.15 | 100.35 | 100.12 | 100.32 | 1358 | +1 | 3 | continuation LONG |
+| 4 | 100.32 | 100.47 | 100.29 | 100.44 | 1393 | +1 | 4 | continuation LONG |
+| 5 | 100.44 | 100.64 | 100.41 | 100.61 | 1614 | +1 | 5 | continuation LONG |
+| 6 | 100.61 | 100.82 | 100.58 | 100.79 | 1754 | +1 | 6 | continuation LONG **+ EXHAUSTION fade** |
+| 7 | 100.79 | 100.82 | 100.68 | 100.71 | 1035 | −1 | 1 | — |
+| 8 | 100.71 | 100.74 | 100.57 | 100.60 | 1234 | −1 | 2 | — |
+| 9 | 100.60 | 100.63 | 100.52 | 100.55 | 1330 | −1 | 3 | continuation SHORT |
+| 10 | 100.55 | 100.69 | 100.52 | 100.66 | 1155 | +1 | 1 | — |
+| 11 | 100.66 | 100.83 | 100.63 | 100.80 | 1279 | +1 | 2 | — |
+| 12 | 100.80 | 100.98 | 100.77 | 100.95 | 1267 | +1 | 3 | continuation LONG |
+
+Step-by-step: bar 1's return is measured vs the prior close $C_0 = 99.95$ ($r_1 = \ln(100.00/99.95) > 0$, sign +1, $S_1 = 1$). Each subsequent bar: same sign as the prior bar increments the counter, a flipped sign resets to 1. At bar 3's close $S_3 = 3 \ge k_1$ → continuation long, fillable at bar 4's open (100.32). At bar 6, $S_6 = 6 \ge k_2$ with volume at its tape maximum (1754 shares vs 1129 at bar 1) → the exhaustion flip fires: the strategy would flatten/reverse the long into bar 7's open (100.79). Note the payoff logic: entering at bar 4's open (100.32) and flipping at bar 7's open (100.79) captures +0.47 before costs; entering at bar 3's signal but filling late erodes it — the causal-timing rule is the whole game.
+
+**What to notice:** the volume profile confirms the economics — volume builds through the up-run (institutional participation) and collapses at bar 7. This toy tape has no fees, no spread, and a conveniently clean reversal; in live tapes most $k_2$ hits just consolidate sideways and the fade bleeds on spread. Nothing here is a performance claim.
+
+### S5. Strategies that use this signal
+
+- **T062 — Streak Runner with Exhaustion Flip** — *primary entry trigger (direction)*: rides the $S_t \ge k_1$ continuation leg; *exhaustion filter/flip*: reverses at $S_t \ge k_2$ with range/volume confirmation. This is the signal's home strategy — the chapter's continuation/fade duality maps 1:1 onto T062's two legs.
+- No other strategy in the plan's T001–T100 list consumes S031 directly; the natural secondary consumers are regime-gated momentum books (S031 as a trend-quality filter), which the plan does not define — so this chapter claims exactly one T-consumer and does not invent one.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Open, high, low, close | float | 1–15 min bars | Tier 0–1 | Any OHLCV vendor; consolidated SIP (Securities Information Processor — the consolidated feed) is fine |
+| Volume | int | same bars | Tier 0–1 | Needed for the exhaustion volume filter |
+| Corporate actions / splits | reference | event | Tier 0–1 | Unadjusted splits fabricate sign flips |
+| Halt / session calendar | reference | event | Tier 0–1 | Overnight gaps must not continue the streak |
+
+Ingest loop (Python/polars sketch, ≤20 lines):
+
+```python
+import polars as pl
+bars = pl.read_parquet("bars_1m/*.parquet")          # O,H,L,C,volume,ts,symbol
+bars = (bars.sort(["symbol","ts"])
+            .with_columns(r = pl.col("C").log() - pl.col("C").log().shift(1).over("symbol"))
+            .with_columns(sign = pl.when(pl.col("r")>0).then(1)
+                                    .when(pl.col("r")<0).then(-1).otherwise(0))
+            .with_columns(sign_chg = (pl.col("sign") != pl.col("sign").shift(1).over("symbol")).cast(pl.Int64))
+            .with_columns(run_id = pl.col("sign_chg").cum_sum().over("symbol"))
+            .with_columns(streak = pl.int_range(pl.len()).over("symbol", "run_id") + 1))
+```
+
+Storage: 1-min bars are tiny — per `notes/cost-model.md` §4, 500 symbols ≈ 50 MB/day in Parquet (≈0.1 MB per symbol-day); a 60-day single-symbol research set is a few MB. Archive freely.
+
+Data-quality checklist: timestamp normalization (exchange vs vendor receipt), split/dividend adjustment before sign computation, half-days and DST transitions, halted symbols (freeze the streak, don't carry it across the halt), stale prints on illiquid names.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** A streak counter is O(1) integer state per symbol per bar. Per cost-model §2, even a pure-Python loop handles ~100–500k events/sec and 500 symbols × 1 bar/min is 8.33 bars/sec average — roughly five orders of magnitude below the Python ceiling; polars column ops run at ~10–50M rows/sec, so a full 60-day recompute over 500 symbols (11.7M rows) finishes in about a second. Bottleneck: none on compute; the only real work is the data-quality layer (splits, halts, timestamps).
+
+Stack: **Python+polars** — pick it; nothing here justifies Rust (no L2 (full depth-of-book)/MBO (market-by-order) event rates). DuckDB only if you want SQL access to the bar archive.
+
+RAM: per cost-model §3, 500 symbols × 60 days of 1-min bars ≈ 12 MB — trivial against the 77 GB working budget.
+
+Engineering: **Tier L, 4–12 h** (cost-model §5) → **$600–1,800** at the $150/hr loaded-cost estimate. One line of justification: bar ingestion + streak recursion + two thresholds is an afternoon's work; the remaining hours are the split/halt hygiene and a point-in-time replay check.
+
+What breaks first at 500 symbols or full OPRA (Options Price Reporting Authority): nothing — this signal doesn't touch options or depth; scaling to the full US universe is still a bars problem, trivial.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | What buying gains | What buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq delayed, Alpaca IEX) | Daily/15-min bars | ~$0 — *indicative, verify before budgeting* | $0 data for research | Coarse granularity; no 1-min history depth |
+| Tier-1 retail (Polygon Stocks Advanced, Alpaca SIP) | 1-min + real-time SIP bars, corporate actions | ~$30–200/mo — *indicative, verify before budgeting* | Clean adjusted bars, full history | Nothing material for this signal |
+| Tier-2 professional (Databento) | Normalized OHLCV + venue detail | ~$200/mo + usage — *indicative, verify before budgeting* | Venue-stamped bars if you later care about venue effects | Overkill for close-sign streaks |
+| Academic route (CRSP — Center for Research in Security Prices — / TAQ — Trade and Quote, the consolidated equity tick database — via WRDS (Wharton Research Data Services)) | Publication-grade history | institutional — *indicative, verify before budgeting* | Reproducible research archive | Cost and access friction for zero analytic gain |
+
+**Verdict: build.** The signal is ~20 lines on any bar feed; there is no vendor product that adds value beyond the raw bars. Buy Tier-1 bars only because you need reliable 1-min history anyway — the crossover point is "you need more than delayed daily bars," which any serious intraday book already has.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Cowles & Jones (1937), "Some a posteriori probabilities in stock market action" | US stocks, historical to 1930s | Sequence-to-reversal ratio deviating from the random-walk null | Before-cost (informational — a statistical regularity, not a P&L) | Daily data from the 1930s; documents that sign sequences carry structure, not that a 5-min streak rule earns money |
+| Heston, Korajczyk & Sadka (2010), "Intraday patterns in the cross-section of stock returns", *J. Finance* | US stocks, post-decimalization, half-hour bars | Return continuation at exact multiples of a trading day, persisting ≥40 trading days; timing trades can save ≈ the effective spread | Execution-benefit framing (≈ spread saved); not a standalone after-cost alpha | Cross-sectional portfolio effect, not a per-name streak trigger; the "saving" is a cost reduction, not a return |
+| Haendler, Heston, Korajczyk & Sadka (2025), "The intra-day stock return periodicity puzzle" (out-of-sample follow-up) | US stocks, extended sample | Open/midday periodicity fully explained by institutional trading proxies (VWAP-like, MOC — market-on-close); up to 30% of close periodicity | Before-cost (explanatory, not a trading P&L) | Confirms the institutional-flow mechanism behind intraday continuation — supports the continuation story, not a parameter set |
+
+Regimes where it fails: volatility spikes (streaks form and reverse inside one bar — the counter is always one bar late), low-liquidity names (streaks are just wide spreads bouncing), crowded momentum unwinds (every streak system flips the same way). Documented decay: the raw continuation leg is the classic short-horizon momentum that has been arbitraged down for decades; what survives is the *calibration* (which streaks, which names, which volume profile).
+
+**Honest bottom line:** as a standalone trigger this is a *weak, largely undocumented-after-cost* edge — no public study shows a retail 5-minute streak rule surviving spread and fees. As a *calibrated trigger-plus-flip inside T062*, it is a *reasonable structural component*: the value is in the regime logic around the counter, not the counter itself.
+
+### S10. Failure modes & pitfalls
+
+1. **Look-ahead leakage** — entering on a developing bar before its sign is fixed. *Mitigation:* compute at bar close, trade at next bar's open; enforce in replay with bar-completion flags.
+2. **Stale/latency effects** — on a delayed feed the "streak" you see is one bar behind the market's. *Mitigation:* timestamp everything at bar publication; paper-trade on the same delayed feed you backtest on.
+3. **Crowding / alpha decay** — streak-chasing is the most retail-obvious rule in existence; the continuation leg decays first. *Mitigation:* keep thresholds adaptive (percentile of recent streak distribution, not fixed integers) and gate on volume/flow quality.
+4. **Cost blowup** — a 5-bar streak on a 1-min grid can mean 20+ round trips a day; spread alone eats a 2–3 bps (basis points, 1 bp = 0.01%) edge. *Mitigation:* model half-spread + fees + slippage/impact per trade in the trigger test; require expected move > 3× cost.
+5. **Regime breaks** — streaks continue in trends and mean-revert in ranges; a fixed $k_1/k_2$ can't tell them apart. *Mitigation:* regime-gate with a vol-regime or trend filter (e.g. only ride streaks with the day's VWAP trend).
+6. **Overfitting / parameter mining** — two integer thresholds on one symbol will always "work" in-sample. *Mitigation:* fix $k_1, k_2$ on a calibration universe, validate on untouched symbols and out-of-sample years; prefer the Bernoulli-probability normalization over raw counts.
+7. **Data errors** — unadjusted splits print a −50% "bar" that resets every streak and fabricates signals. *Mitigation:* adjust before sign computation; assert no $|r_t| > 20\%$ without a corporate-action record.
+8. **Microstructure noise vs signal** — on 1-min bars, bid-ask bounce alone manufactures alternating signs that mask real streaks. *Mitigation:* use 5-min+ grids or mid-price bars for illiquid names.
+
+### S11. Visuals
+
+![S031 worked example — synthetic 12-bar 5-min tape with streak runs highlighted, continuation triggers and the exhaustion flip marked](images/S031_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(1-min OHLCV bars)"] -->|"1-min bars"| ING["Ingest + normalize<br/>(exchange ts, splits, halts)"]
+    ING -->|"clean 1-min bars"| FEAT["Feature compute<br/>(bar signs, streak counter)"]
+    FEAT -->|"streak S_t, direction (1-min bars)"| SIG["Signal S031<br/>continuation / exhaustion"]
+    SIG -->|"signal (1-min bars)"| GATE{"Cost / toxicity<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T062 Streak Runner)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Cowles, A. & Jones, H.E. (1937). *Some a posteriori probabilities in stock market action.* Econometrica 5(4). PDF: https://www.ploymarket.com/proxy/https/cowles.yale.edu/sites/default/files/2022-08/cowles-posteriori37.pdf
+- *The Cowles–Jones test with unspecified upward market probability.* Data Science in Finance and Economics, 3(4), 324–336 (2023). PDF: http://aimspress.com/aimspress-data/dsfe/2023/4/PDF/DSFE-03-04-019.pdf
+- Heston, S.L., Korajczyk, R.A. & Sadka, R. (2010). *Intraday patterns in the cross-section of stock returns.* Journal of Finance 65(4), 1369–1407. PDF: https://bauer.uh.edu/departments/finance/documents/Heston-Korajczyk-Sadka-jf-2010-01-07.pdf
+- Haendler, C., Heston, S., Korajczyk, R. & Sadka, R. (2025). *The intra-day stock return periodicity puzzle.* https://www.kellogg.northwestern.edu/academics-research/research/detail/2025/the-intra-day-stock-return-periodicity-puzzle/
+- Lo, A. W. & MacKinlay, A. C. (1988). *Stock market prices do not follow random walks: Evidence from a simple specification test.* Review of Financial Studies 1(1), 41–66. http://web.mit.edu/Alo/www/Papers/lo-mackinlay-88.html — Variance-ratio rejection of the random walk with positive short-horizon serial correlation: the statistical basis for streak continuation at the bar level.
+- Jegadeesh, N. & Titman, S. (1993). *Returns to buying winners and selling losers: Implications for stock market efficiency.* Journal of Finance 48(1), 65–91. https://onlinelibrary.wiley.com/doi/10.1111/j.1540-6261.1993.tb04702.x — Cross-sectional momentum over 3–12-month horizons; the longer-horizon counterpart to the intraday run persistence the streak counter trades.
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10), Q-SB5-2: 1-min bar engine build estimates — prototype 185–385 eng-hours, research-grade 705–1,530 eng-hours (column totals verified; per-row breakdown unverified). Logged in `batches/SB5/duckai-answers.md`; Grok/Cursor answers pending (checked 2026-09-10).
+
+---
+## Stage 33/200 — S033: Open-auction imbalance continuation
+
+*Batch SB5 · Signal 33/100 · Provenance [SR] · Family B — Intraday Momentum & Breakout*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| Reads the opening auction's leftover buy/sell pressure from imbalance messages and rides its sign for the first 5–15 minutes of continuous trading | Large, genuine imbalances on liquid names where the auction couldn't fully clear the pressure | Small imbalances, news-driven opens, or any setup where your fill arrives after the pressure is gone | Buy the normalized imbalance feed; build the replay and the message-sequence logic yourself |
+
+Provenance: **[SR]** (standard reconstruction — practitioner-standard signal; no published canonical parameter set). Family B — Intraday Momentum & Breakout.
+
+### S2. How it works — plain human explanation
+
+Every US equity trading day starts with an *opening auction*: between roughly 9:28 and 9:30, the exchange collects buy and sell orders and computes a single *clearing price* — the price at which the most shares can match — then prints the open. During that window the exchange publishes *imbalance messages*. On Nasdaq this feed is called **NOII** (Net Order Imbalance Indicator): each message states the *indicative clearing price* (where the auction would clear if it ran right now), the *paired shares* (how many shares would actually match at that price), the *imbalance* (the leftover buy or sell shares that can't be matched — the side with more demand), a *reference price* (usually the prior close), the *auction status* (e.g. open, final), the *venue*, and *timestamps* (plus updates and corrections as orders arrive or cancel).
+
+The economic intuition: a large buy imbalance with a rising indicative price means real, unresolved demand. Not all of it gets filled in the auction — especially the portion that arrived as market-on-open (MOO) or limit-on-open (LOO) orders with no price protection beyond the cross. When continuous trading starts at 9:30, that leftover demand keeps lifting offers for the first few minutes. The signal is therefore: **trade with the sign of the opening imbalance for the first 5–15 minutes**.
+
+A concrete vignette: at 9:29:30, NOII for XYZ shows indicative $150.46 (up 44 bps — basis points, 1 bp = 0.01% — vs the $149.80 reference), paired shares 695,872, and a buy imbalance of 181,123 shares — 26% of the paired volume with nowhere to go. The auction prints at $150.55; you buy at the first 1-minute close and the residual demand carries the stock for the next five minutes. That drift is the continuation you're harvesting.
+
+But the honest framing, which this chapter will not soften: the *documented* informational content is real, and the *tradable* edge concentrates brutally with the people who have direct, low-latency venue access and auction order types. A retail setup on an M5 Max reading a normalized vendor feed sits at the bottom of that hierarchy — tier (c) below — and most of what it can see is already in the price by the time it can act.
+
+**Mental model:**
+- The auction is a scheduled, visible supply/demand shock; the imbalance message is the closest thing to seeing the shock before it lands.
+- Continuation exists because auctions ration fills — leftover pressure leaks into the first minutes of the continuous session.
+- Your edge is not the *idea* (everyone knows it) but your *position in the latency and order-type hierarchy* — which, for a retail build, is the worst seat in the house.
+
+### S3. The math — exact formula
+
+From each NOII-style message at time $\tau$ in the pre-open window, extract:
+
+- $P^{ind}_\tau$: indicative clearing price (where the auction would clear now)
+- $Q^{paired}_\tau$: paired shares (matchable volume at $P^{ind}_\tau$)
+- $I_\tau$: signed imbalance in shares ($>0$ = buy imbalance, $<0$ = sell imbalance)
+- $P^{ref}$: reference price (prior close)
+
+Two derived features (all thresholds *examples — not institutional standards*):
+
+$$\text{Imbalance ratio:}\quad \rho_\tau = \frac{|I_\tau|}{Q^{paired}_\tau} \qquad\text{(how much of the cross is one-sided)}$$
+$$\text{Indicative displacement:}\quad d_\tau = \frac{P^{ind}_\tau - P^{ref}}{P^{ref}} \quad\text{(in bps; direction + magnitude)}$$
+
+The continuation rule:
+
+$$\text{At the open print } P^{open}: \text{ if } \rho_{final} \ge \rho_{min} \text{ (e.g. 15\%) AND } |d_{final}| \ge d_{min} \text{ (e.g. 20 bps),}$$
+$$\text{enter with } \mathrm{sign}(I_{final}) \text{ at the first tradable print; exit at } t_{open} + H \text{ (e.g. } H = 10 \text{ min) or on sign flip.}$$
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (*example*) |
+|---|---|---|---|---|---|
+| Min imbalance ratio | $\rho_{min}$ | 10–30% | Fires on balanced crosses; pure noise | Only mega-cap news opens qualify | 15% |
+| Min displacement | $d_{min}$ | 10–50 bps | Trades opens the market already priced | Misses normal institutional pressure | 20 bps |
+| Holding window | $H$ | 5–15 min | Exits before the drift plays out | Holds into the mid-morning reversal | 10 min |
+| Message staleness cap | — | 5–30 s | Acts on cancelled imbalances | Misses the final update | 15 s |
+
+**Causal timing — read this twice:** the signal is a *message sequence*, not a snapshot. At decision time $t$ you may use only messages with exchange timestamps $\le t$. And the cardinal sin: **using the final published imbalance to explain trades placed before it was disseminated is look-ahead bias** — the backtest must replay the exact message tape ("what was known at $t$?"), including cancellations and corrections, not the end-of-window snapshot.
+
+**Named variants:**
+1. **Final-snapshot rule** (above) vs **trajectory rule** — enter only if the imbalance *grew* over the last 60–90 seconds of the window (filters late cancellations).
+2. **Open-print deviation** — no imbalance feed at all: trade the sign of $(P^{open} - P^{ind}_{last})$ or $(P^{open} - P^{ref})$; a cruder proxy for the same pressure.
+3. **Close-auction mirror** — the same machinery applied to the closing auction (MOC — market-on-close — / LOC — limit-on-close — imbalance) for the last-15-minutes drift; different cutoff rules, different participants.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic Nasdaq-style NOII tape for one stock, seed **33**. Reference price $P^{ref} = 149.80$. Small jitter comes from `numpy.default_rng(33)`; the pattern (growing paired shares, persistent buy imbalance, rising indicative) is designed. Synthetic data — not market data — and the chart plots exactly these messages.
+
+| Time (ET) | Status | Indicative $P^{ind}$ | Paired shares | Buy imbalance $I$ | $\rho = |I|/Q^{paired}$ | $d$ vs ref (bps) |
+|---|---|---|---|---|---|---|
+| 09:28:00 | Open | 150.18 | 118,045 | 81,453 | 69.0% | +25.3 |
+| 09:28:20 | Open | 150.26 | 205,233 | 106,903 | 52.1% | +30.8 |
+| 09:28:40 | Open | 150.34 | 342,767 | 142,871 | 41.7% | +36.2 |
+| 09:29:00 | Open | 150.40 | 480,257 | 163,742 | 34.1% | +40.2 |
+| 09:29:15 | Open | 150.38 | 558,647 | 146,967 | 26.3% | +38.9 |
+| 09:29:30 | Open | 150.46 | 695,872 | 181,123 | 26.0% | +43.8 |
+| 09:29:45 | Open | 150.53 | 860,114 | 208,556 | 24.2% | +48.6 |
+| 09:29:55 | Final | 150.55 | 972,793 | 217,180 | 22.3% | +50.2 |
+
+Step-by-step: the final message (09:29:55) satisfies both gates — $\rho = 22.3\% \ge 15\%$ (*example*) and $d = +50.2\text{ bps} \ge 20\text{ bps}$ (*example*), with a buy imbalance ($I > 0$). The trajectory check passes too: paired shares grew monotonically (118k → 973k) and the indicative price rose into the close of the window, so this is not a late-cancellation artifact. The auction prints at $P^{open} = 150.55$. Enter long at the first 1-minute close, 150.62 (09:31 bar — the earliest fill a non-colocated participant can realistically secure). Hold $H = 10$ min; the 09:30–09:35 closes print 150.62, 150.70, 150.66, 150.74, 150.81.
+
+P&L walk (synthetic, before costs): entry 150.62 at the 09:31 close; exit at the last listed close, 150.81 (09:35 — the example tape lists closes only through 09:35, so the walk stops there rather than at the H = 10 min mark): **+0.19 = +12.6 bps**. Now the honest part: a 1-cent spread crossed on entry and exit costs ~1.3 bps round-trip on a $150 stock, plus fees and slippage from filling at 09:31 rather than the 09:30 print. Net of realistic frictions this toy trade keeps maybe +8–10 bps — and that is the *good* case.
+
+**What to notice:** the imbalance *ratio* falls through the window (69% → 22%) even as the *absolute* imbalance grows — late liquidity arrives to meet the pressure, which is why the ratio gate matters more than the share count. Also notice what the example assumes away: routing to the listing venue's open, fills at the close print, and no news at 09:32. None of those are free.
+
+### S5. Strategies that use this signal
+
+- **T065 — Open-Auction Imbalance Continuation** — *primary entry trigger (direction)*: the strategy is this signal with futures-spot confirmation (S059) and block-pressure confirmation (S094) layered on.
+- **T016 — End-of-Day Drift Rider** — *filter/confirmation*: uses the opening-auction imbalance read (with S027 last-hour drift and S013 spread estimates) to confirm the day's directional bias before leaning into the close.
+- **T070 — MOC Auction-Pin Trader** — *primary trigger (closing-auction variant)*: applies the same imbalance machinery to the closing auction (MOC/LOC), trading the imbalance into the close with GEX (gamma exposure) context (S074).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| NOII / imbalance messages (indicative price, paired shares, buy/sell imbalance, auction status) | message stream | per-message (seconds) | Tier 2–3 | Nasdaq NOII via ITCH (Nasdaq's direct-feed order message protocol); NYSE/NYSE Arca equivalents; Databento Imbalance schema |
+| Reference price, venue, auction type (open/close/halt) | message fields | per-message | Tier 2–3 | Must distinguish which auction and which venue — fragmentation matters |
+| Exchange timestamp vs vendor receipt timestamp, correction flags | metadata | per-message | Tier 2–3 | The entire edge is "what was known at $t$" — receipt-time-only feeds leak |
+| 1-min continuous-session bars | float | 1-min | Tier 1 | For the 5–15 min continuation leg |
+| Symbol master / corporate actions | reference | event | Tier 0–1 | Splits near the open corrupt the reference price |
+
+Ingest sketch (≤20 lines) — note the raw-message store, not snapshots:
+
+```python
+import polars as pl
+# store RAW messages, never just the latest snapshot
+msgs = pl.read_parquet("auction_imbalance/date=*/venue=*/**.parquet")
+msgs = msgs.with_columns(
+    rho = pl.col("imbalance_shares").abs() / pl.col("paired_shares"),
+    d_bps = (pl.col("indicative_price") - pl.col("reference_price"))
+            / pl.col("reference_price") * 1e4)
+# point-in-time replay: as-of join messages to decision times on EXCHANGE ts
+decisions = pl.DataFrame({"t": decision_times})
+pit = decisions.join_asof(msgs.sort("exchange_ts"), left_on="t", right_on="exchange_ts")
+```
+
+Storage: imbalance traffic is far lighter than full tick data — hundreds of MB to a few GB for all updates/corrections/venues over a multi-month window (per the batch's chatbot research lead; treat sizing as indicative). Partition Parquet by `date/` and `venue`/symbol-bucket — not by individual symbol (chatbot Q-SB5-2 lead, verified sensible practice).
+
+Data-quality checklist: exchange timestamp vs receipt timestamp (use exchange for sequencing), correction-vs-new message semantics, "was it actually disseminated then" (some messages are revised), venue attribution (Nasdaq vs NYSE vs Arca imbalances differ), auction-type tagging (open vs close vs halt-reopen), reference-price definition per venue.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible** — but the difficulty is *data semantics*, not compute. The batch's chatbot research (Q-SB5-2, labeled lead) puts it bluntly: "the 128GB M5 Max will not be the constraint; data rights, historical revisions, exchange semantics, reproducibility will be." Message rates are trivial (a few per second per symbol in the auction window); per cost-model §2 even a pure-Python loop handles ~100–500k events/sec. The real engineering is the point-in-time replay: raw message storage, correction handling, and the as-of join guaranteeing "what was known at $t$."
+
+Stack: **Python+polars** — pick it; the as-of joins and Parquet partitioning are exactly polars' home turf. Rust only if you're also running a colocated L2 (full depth-of-book) book; you aren't.
+
+RAM: imbalance messages for a 500-symbol universe over 60 days fit in single-digit GB — comfortable inside the 77 GB working budget (cost-model §3). The 1-min continuation bars are ~12 MB (cost-model §3 table) — trivial.
+
+Engineering: **Tier M, ~30–50 h → $4,500–7,500** at the $150/hr loaded-cost estimate (cost-model §5, M band 20–60 h). One line of justification: the signal math is an afternoon; the auction-message normalization, correction semantics, and point-in-time replay harness are the other 25–45 hours — the chatbot's eng-hour table independently flags point-in-time correctness as the biggest hidden item (prototype 20–40 h for replay alone; labeled chatbot lead, cost-model takes precedence).
+
+What breaks first at 500 symbols or full OPRA (Options Price Reporting Authority): multi-venue normalization (each venue's imbalance dialect and cutoff rules) and the replay harness's as-of join performance — not the Mac.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | What buying gains | What buying loses |
+|---|---|---|---|---|
+| Tier-0 free (delayed quotes, SIP (Securities Information Processor — the consolidated feed) snapshots) | No real imbalance feed | ~$0 — *indicative, verify before budgeting* | Nothing | The entire signal — unusable |
+| Tier-1 retail (broker API bars) | Price/volume only; some brokers show indicative auction prices | ~$30–200/mo — *indicative, verify before budgeting* | Cheap continuation-leg bars | No message sequence; cannot replay "what was known at $t$" |
+| Tier-2 professional (Databento Imbalance schema: paired qty, indicative prices, auction status, reference price) | Normalized multi-venue imbalance messages | ~$200/mo + usage; broader history/multi-venue ~$1,000–5,000+/mo — *indicative, verify before budgeting* (vendor bands per cost-model §6; imbalance pricing per chatbot Q-SB5-2 lead) | Research-grade replayable data without exchange agreements | Still normalized — not the raw ITCH wire; some venue nuance lost |
+| Direct exchange (Nasdaq TotalView/NOII, NYSE real-time) | The raw wire, lowest latency | Exchange redistribution fees, small-institutional ~$1,000–10,000+/mo — *indicative, verify before budgeting* (chatbot Q-SB5-2 lead; unverified — confirm with the exchange) | Full fidelity + the latency tier where the edge actually lives | Cost, contracting, and engineering to parse ITCH yourself |
+
+**Verdict: hybrid — buy the normalized feed (Tier 2), build the replay.** The crossover logic: buy raw messages because you cannot reconstruct "what was known at $t$" from snapshots, but build the bar construction, the $\rho/d$ features, and the point-in-time replay yourself — that replay is the strategy's moat and no vendor sells it. Do not use a TradingView-style screener or an opaque vendor pattern API as the research source of record (chatbot Q-SB5-2 lead: weak auction coverage, poor reproducibility).
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Challet & Gourianov (2018), "Dynamical regularities of US equities opening and closing auctions", arXiv:1802.01921 | US equities, opening + closing auctions | Indicative match price is strongly mean-reverting *because the imbalance is*; the final auction price reacts to a single order placement/cancellation in markedly different ways in the opening vs closing auction | Before-cost (informational — market dynamics, not a P&L) | Documents that imbalance information moves prices; does not show a retail-tradable continuation P&L |
+| Morand (Imperial College thesis), "Predicting US stock returns using closing auction imbalance data" | US stocks, closing auction (MOC/LOC cutoff 15:55) | R² ≈ 1% for 2–16 second forward returns from imbalance features; R² negative beyond ~30 s horizon; predictability improves near the 15:55 cutoff | Before-cost (regression R², no spread/impact modeled) | Closing auction, not opening; seconds-scale horizon — far shorter than the 5–15 min continuation rule, and R² ≈ 1% is economically tiny |
+
+Regimes where it fails: news-driven opens (the imbalance is information, not pressure — it doesn't "continue," it *reprices*); thin names where the indicative price is unstable and pre-auction cancellations whip it around; days when you're filled late (the first 60 seconds after the print capture most of the drift — a 2-minute delay can erase it); cross-venue fragmentation (your imbalance read is Nasdaq-only but the pressure clears on Arca).
+
+**Honest bottom line:** as a standalone trigger this is an *informationally documented but barely monetizable* edge for a retail setup — the microstructure literature confirms imbalance information moves prices, and the only quantified forward-return study finds ~1% R² at seconds-scale horizons before costs. As a *directional prior inside T065/T016/T070* — with futures-spot confirmation, spread estimates, and GEX context — it is a *reasonable structural input*. The tradable edge concentrates with (a) direct auction participants, then (b) institutional API users, then (c) retail — and an M5 Max retail build sits squarely in tier (c): delayed/normalized imbalance, MOO/LOO/MOC/LOC via broker, no first-arrival access, no queue priority, no identical timestamps. Size expectations accordingly.
+
+### S10. Failure modes & pitfalls
+
+1. **Look-ahead bias (the cardinal sin)** — backtesting with the *final* imbalance against trades placed *before it was published*. *Mitigation:* replay the literal message sequence with exchange timestamps; assert no feature uses a message with `exchange_ts > decision_t`. Final imbalance predicting earlier trades is the textbook violation — flag any backtest that can't show its as-of join.
+2. **Stale snapshots / cancellations** — pre-auction cancellations can erase an imbalance seconds before the cross; a snapshot feed shows you the ghost. *Mitigation:* use the message stream with correction flags; require the trajectory variant (imbalance stable or growing into the window's end).
+3. **Queue and latency disadvantage** — by the time a retail fill lands (09:31 in the worked example), tier-(a) participants have already traded the pressure. *Mitigation:* measure fill delay explicitly in replay; kill the signal if simulated delay > 60 s destroys the P&L.
+4. **News contamination** — an imbalance caused by an 09:29 headline is repricing, not residual pressure; fading or chasing it blindly is gambling. *Mitigation:* gate on a news filter (halt the signal on halt-reopen auctions and on news-flagged symbols).
+5. **Venue fragmentation** — the imbalance you see is one venue's; the pressure may clear elsewhere. *Mitigation:* venue-tag every message; prefer listing-venue opens; be skeptical of imbalances on non-listing venues.
+6. **Cost blowup** — the continuation is typically 10–20 bps gross; one wide spread at the open plus fees takes a third of it. *Mitigation:* model the *opening* spread (not the midday spread) + fees + slippage/impact explicitly; require expected drift > 3× round-trip cost.
+7. **Indicative-price instability** — Challet & Gourianov document the indicative price whipping as single orders arrive/cancel; a naive "rising indicative" trigger fires on noise. *Mitigation:* smooth over the last 60–90 s of messages; require paired-share growth alongside the price move.
+8. **Auction-rule changes** — cutoff times, order types, and tick rules change (e.g. Nasdaq's 15:55 MOC/LOC cutoff for the close). *Mitigation:* version your auction-rule config per date; re-validate the replay after every exchange notice.
+
+### S11. Visuals
+
+![S033 worked example — synthetic Nasdaq NOII message timeline: indicative clearing price and paired shares converging to the 09:30 open auction, then 1-minute continuation closes](images/S033_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(Nasdaq NOII / NYSE imbalance)"] -->|"auction messages (per-second)"| ING["Ingest + normalize<br/>(exchange ts, venue, corrections)"]
+    ING -->|"clean auction messages (per-second)"| FEAT["Feature compute<br/>(rho, displacement, trajectory)"]
+    FEAT -->|"imbalance features (per-auction)"| SIG["Signal S033<br/>open-auction continuation"]
+    SIG -->|"signal (per-auction)"| GATE{"Cost / latency<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T065 / T016 / T070)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Challet, D. & Gourianov, N. (2018). *Dynamical regularities of US equities opening and closing auctions.* arXiv:1802.01921. https://arxiv.org/abs/1802.01921
+- Nasdaq. *Market Model & Functionality — Nasdaq Derivatives Markets* (§5.2.1.2.5, Net Order Imbalance Indicator: equilibrium price, indicative trade volume, imbalance volume dissemination). https://www.nasdaq.com/docs/2024/11/12/NEQD-Market-Model-3.1.6.pdf
+- Morand, C. *Predicting US stock returns using closing auction imbalance data.* Imperial College London, MSc thesis (Math-Finance). https://www.imperial.ac.uk/media/imperial-college/faculty-of-natural-sciences/department-of-mathematics/math-finance/MORAND_CLEA_01805978.pdf
+- Biais, B., Hillion, P. & Spatt, C. (1995). *An empirical analysis of the limit order book and the order flow in the Paris Bourse.* Journal of Finance 50(5), 1655–1689. https://ideas.repec.Org/a/bla/jfinan/v50y1995i5p1655-89.html — Order flow and book shape predict short-term price shifts: the microstructure basis for reading imbalance messages as directional signal.
+- Biais, B., Hillion, P. & Spatt, C. (1999). *Price discovery and learning during the preopening period in the Paris Bourse.* Journal of Political Economy 107(6), 1218–1248. https://IDEAS.REPEC.ORG/e/pbi43.html — Preopening order flow is informative about the opening price: direct precedent for pre-close imbalance predicting the auction print.
+- Cao, C., Ghysels, E. & Hatheway, F. (2000). *Price discovery without trading: Evidence from the Nasdaq preopening.* Journal of Finance 55(3), 1339–1365. https://ideas.repec.Org/a/bla/jfinan/v55y2000i3p1339-1365.html — Quote and imbalance dynamics during the Nasdaq preopen reveal the clearing price before trading: the mechanism the imbalance tape tracks into the close.
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10), Q-SB5-3: auction-imbalance framing — NOII-equivalent field list (paired shares, buy/sell imbalance, indicative clearing price, reference price, auction status, venue, timestamps, updates/corrections); tradability hierarchy (a) direct auction participants > (b) institutional API users > (c) retail; "test MUST use the message sequence ('what was known at t?') — final imbalance predicting earlier trades = look-ahead bias"; decisive-test verdict (point-in-time replay with realistic fills, spread crossing, market impact, borrow constraints, auction cutoffs, delisted securities — not close-to-close/next-bar backtests on vendor-adjusted data). Full text in `batches/SB5/duckai-answers.md`; Grok/Cursor answers pending (checked 2026-09-10).
+- Duck.ai Q-SB5-2: imbalance feed pricing — API/vendor ~$100–1,000+/mo, small-institutional ~$1,000–10,000+/mo, direct exchange redistribution "much more" (*indicative — verify before budgeting*; unverified chatbot claim); eng-hour table for the session-pattern engine (prototype 185–385 h, research-grade 705–1,530 h; column totals verified).
+
+---
+## Stage 44/200 — S044: Stochastic oscillator & Williams %R
+
+*Batch SB5 · Signal 44/100 · Provenance [D] · Family C — Intraday Mean Reversion & Reversal*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| Two bounded (0–100 / −100–0) oscillators measuring where the close sits inside the recent high–low range; fade overbought/oversold extremes on %K/%D crosses | Clean trading ranges where closes oscillate between well-defined highs and lows | Trends (it pins at extremes and fades the whole move), news jumps, and any tape where the "range" is one expanding bar | Build: textbook formulas on any OHLC feed; nothing to buy |
+
+Provenance: **[D]** (documented — George Lane's stochastic oscillator, 1950s; Larry Williams' %R, 1970s; formulas and 14/80/20 conventions are the published standards). Family C — Intraday Mean Reversion & Reversal.
+
+### S2. How it works — plain human explanation
+
+Both indicators answer one question: *where did we close inside the recent trading range?* The **stochastic oscillator**'s raw value, **%K**, is the close's position as a percentage of the last *n* bars' high–low range: 100 means we closed at the very top of the range, 0 at the very bottom. **%D** is just a 3-bar moving average of %K — a smoothing that turns the twitchy %K into a signal line. **Williams %R** is the same idea on an inverted scale from −100 to 0: −100 means the close was the lowest low of the last *n* bars, 0 means it was the highest high. (In fact, %R is algebraically the mirror of raw %K — more on that in S3.)
+
+The trading logic is pure mean-reversion folklore: in a *trading range* — a market bouncing between support and resistance rather than trending — closes that press against the top of the range tend to rotate back down, and closes crushed against the bottom tend to bounce. So the canonical rules: **short when %K crosses down through %D while above 80** (overbought — the market is trading near the top of its range and losing momentum), **long symmetrically when %K crosses up through %D below 20** (oversold). For Williams %R: fade when %R pushes above −20 (overbought) or below −80 (oversold) and turns.
+
+Why should it work at all? In a range, the range boundaries are where resting liquidity sits — sellers reload at resistance, buyers at support — and where short-horizon mean-reversion flows (market-maker inventory, stat-arb) lean hardest. The oscillator is just a normalized way of saying "we're at the edge of the recent range, where the other side usually shows up."
+
+The honest counterweight, stated up front because this chapter must not oversell oscillator edges after costs: in a *trend*, the range keeps expanding in the trend's direction and these oscillators pin at their extremes for bar after bar, generating a fade signal against every new high. The indicator cannot distinguish "overbought in a range" from "strong in a trend" — that distinction has to come from a regime filter outside the indicator.
+
+**Mental model:**
+- %K/%D and %R are *position-in-range* gauges, not predictors — they tell you where you are, not where you're going.
+- The edge, such as it is, lives entirely in the *range assumption*: right in ranges, systematically wrong in trends.
+- Use them as *exhaustion timing* (when to fade) inside a larger structure, never as a standalone directional system.
+
+### S3. The math — exact formula
+
+Over the last $n$ bars, let $H_n = \max H_i$ and $L_n = \min L_i$ be the highest high and lowest low. With close $C_t$:
+
+$$\%K_t = 100 \cdot \frac{C_t - L_n}{H_n - L_n} \qquad \text{(raw / "fast" \%K)}$$
+
+$$\%D_t = \mathrm{SMA}(\%K_t, 3) \;\; \text{(SMA = simple moving average)} = \frac{\%K_t + \%K_{t-1} + \%K_{t-2}}{3}$$
+
+$$\text{Williams } \%R_t = -100 \cdot \frac{H_n - C_t}{H_n - L_n}$$
+
+Note the identity: $\%R_t = \%K_t - 100$. They are the same measurement on a flipped scale — running both is redundancy, not diversification, unless you use different lookbacks.
+
+Trading rules (*thresholds are examples — not institutional standards*; the 14/80/20/−80/−20 conventions are Lane/Williams' published defaults, which is why this chapter keeps [D]):
+
+$$\text{Short fade: } \%K_{t-1} \ge \%D_{t-1} \text{ and } \%K_t < \%D_t \text{ with } \%K_t > 80$$
+$$\text{Long fade: } \%K_{t-1} \le \%D_{t-1} \text{ and } \%K_t > \%D_t \text{ with } \%K_t < 20$$
+$$\text{\%R fade: short as \%R turns down from above } -20\text{; long as \%R turns up from below } -80$$
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (*example*) |
+|---|---|---|---|---|---|
+| Lookback | $n$ | 9–20 bars | Twitchy; whipsaw crosses on noise | Lags; the range includes ancient history | 14 (Lane/Williams default) |
+| %D smoothing | — | 3–5 bars | Barely smoother than %K | Signal arrives after the turn | 3 |
+| Overbought | — | 70–90 (stoch) / −30–−10 (%R) | Constant false overbought reads | Never fires | 80 / −20 |
+| Oversold | — | 10–30 (stoch) / −90–−70 (%R) | Never fires | Fires mid-plunge repeatedly | 20 / −80 |
+
+**Causal timing:** $\%K_t, \%D_t, \%R_t$ are computed at bar $t$'s close using bars $t-n+1 \ldots t$ only; the crossover is confirmed at the close, so the earliest fill is bar $t+1$'s open. Note %D needs 3 bars of %K and %K needs $n$ bars — the first tradable bar is $t \ge n+2$.
+
+**Named variants:**
+1. **Fast vs slow stochastic** — "fast" uses raw %K with %D as the signal line; "slow" smooths %K first (typically SMA-3) and then smooths again for %D. Slow generates fewer, later signals; a documented study (S9) found fast outperformed slow in most markets tested.
+2. **Stochastic RSI (Relative Strength Index) / %R with different lookbacks** — practitioners often run %R(14) against Stoch(14,3) for confirmation; as shown above they're near-duplicates, so the honest variant is *different* lookbacks, not different names.
+3. **Divergence** — price makes a new high but %K doesn't (bearish divergence); a discretionary overlay, not a rule in this chapter's formula.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 24-bar 5-minute tape, seed **44**: an 18-bar grind up (so %D is well established), then a rollover. %K/%D use $n{=}14$, %D = SMA(%K, 3). Synthetic data — not market data; the chart plots exactly these numbers.
+
+| bar | O | H | L | C | %K(14) | %D | %R(14) | signal |
+|---|---|---|---|---|---|---|---|---|
+| 9 | 101.70 | 102.08 | 101.70 | 101.89 | — | — | — | |
+| 10 | 101.96 | 102.29 | 101.96 | 102.12 | — | — | — | |
+| 11 | 102.21 | 102.54 | 102.21 | 102.37 | — | — | — | |
+| 12 | 102.42 | 102.75 | 102.42 | 102.58 | — | — | — | |
+| 13 | 102.67 | 103.04 | 102.67 | 102.84 | — | — | — | |
+| 14 | 102.89 | 103.26 | 102.89 | 103.08 | 94.7 | — | −5.3 | |
+| 15 | 103.13 | 103.48 | 103.13 | 103.30 | 94.8 | — | −5.2 | |
+| 16 | 103.33 | 103.67 | 103.33 | 103.51 | 95.4 | 95.0 | −4.6 | |
+| 17 | 103.58 | 103.97 | 103.58 | 103.78 | 94.3 | 94.8 | −5.7 | **SHORT cross** |
+| 18 | 103.85 | 104.18 | 103.85 | 104.02 | 95.1 | 94.9 | −4.9 | |
+| 19 | 103.61 | 103.61 | 103.23 | 103.42 | 75.9 | 88.4 | −24.1 | |
+| 20 | 103.22 | 103.22 | 102.85 | 103.02 | 60.7 | 77.2 | −39.3 | |
+| 21 | 102.80 | 102.80 | 102.47 | 102.64 | 43.3 | 60.0 | −56.7 | |
+| 22 | 102.48 | 102.48 | 102.10 | 102.28 | 23.5 | 42.5 | −76.5 | |
+| 23 | 102.06 | 102.06 | 101.71 | 101.87 | 6.3 | 24.4 | −93.7 | |
+| 24 | 101.68 | 101.68 | 101.34 | 101.50 | 5.8 | 11.9 | −94.2 | |
+
+Step-by-step at the trigger bar: at bar 16's close, %K = 95.4 ≥ %D = 95.0 (the 3-bar SMA of the unrounded %K values). At bar 17's close, %K = 94.3 < %D = 94.8 — a cross down, with %K at 94.3 > 80 (*example* overbought line) → **short fade**. Williams %R confirms the overbought read: −5.7, inside the −20 line. Earliest fill: bar 18's open at 103.85. (%R = %K − 100 holds in every row — the check the table invites.)
+
+**The bar-18 adverse move.** The fade does not go straight down. Bar 18 extends *against* the short: it prints H 104.18 (+0.33 above the 103.85 entry) and closes 104.02 — the position is −0.17 underwater at bar 18's close. Only at bar 19 does the rollover begin (O 103.61, C 103.42). Cover example: bar 20's close at 103.02 → gross **+0.83 = +80 bps** (basis points, 1 bp = 0.01%) before costs — the fade survives the adverse excursion and catches the first leg of the rollover. This is why the chapter insists on stops and sizing: a mechanical fade with no adverse-move budget is stopped out exactly at bar 18.
+
+**What to notice:** the cross at bar 17 is *marginal* — %K 94.3 vs %D 94.8, a 0.5-point cross. That's deliberate pedagogy: textbook crosses are often this thin, and a production rule needs a minimum cross magnitude or %R-confirmation to avoid trading dust. Also note %R collapses to −94.2 by bar 24 — deep "oversold" — while price is still falling: the classic pinned-at-the-extreme behavior that punishes mechanical fading without a regime check. This toy tape has no spread, no fees, and a conveniently clean rollover; nothing here is a performance claim.
+
+### S5. Strategies that use this signal
+
+- **T013 — RSI-2 / IBS Extreme Fade** — *primary oscillator-fade consumer (genuine fit)*: Connors-style oversold/overbought fading combining RSI-2 and IBS (internal bar strength); the %K/%D crossover and %R extremes are the natural timing overlay for its fade entries.
+- **T062 — Streak Runner with Exhaustion Flip** — *conceptual-fit reference (not a plan-defined consumer — labeled as conceptual)*: a %K-cross-down-above-80 or %R-above-−20 rollover is exactly the kind of exhaustion signature T062's flip leg needs to time its reversal; the fit is conceptual, not specified in the plan.
+- Related signals (same family): **S042** (RSI-2) and **S043** (IBS) are the sibling extreme-fade oscillators; **S045** (stretched-move z-score) is the vol-normalized cousin of the same "too far, too fast" idea.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Open, high, low, close | float | 5–15 min bars (intraday) | Tier 0–1 | Any OHLCV vendor; SIP (Securities Information Processor — the consolidated feed) is fine |
+| Session calendar / halts | reference | event | Tier 0–1 | Don't span the lookback across halts or overnight gaps |
+| Corporate actions | reference | event | Tier 0–1 | Unadjusted splits corrupt $H_n/L_n$ for $n$ bars |
+
+Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+N = 14
+df = (pl.read_parquet("bars_5m/*.parquet").sort(["symbol","ts"])
+        .with_columns(Hn = pl.col("H").rolling_max(N).over("symbol"),
+                      Ln = pl.col("L").rolling_min(N).over("symbol")))
+df = df.with_columns(pctK = 100*(pl.col("C")-pl.col("Ln"))/(pl.col("Hn")-pl.col("Ln")),
+                     pctR = -100*(pl.col("Hn")-pl.col("C"))/(pl.col("Hn")-pl.col("Ln")))
+df = df.with_columns(pctD = pl.col("pctK").rolling_mean(3).over("symbol"))
+```
+
+Storage: 5-min bars are ~78 bars/day/symbol — per cost-model §4, 500 symbols of 1-min bars is ~50 MB/day; 5-min is ~5× smaller. Trivial; archive freely.
+
+Data-quality checklist: split-adjustment before computing $H_n/L_n$ (one unadjusted split poisons the range for the full lookback), halt handling (freeze, don't bridge), DST/half-day session boundaries, illiquid names where $H_n = L_n$ prints (division by zero — guard it).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** Rolling max/min/mean over 14 bars is O(1)-amortized per bar with deques, or a single polars pass at ~10–50M rows/sec (cost-model §2) — a 60-day, 500-symbol 5-min recompute is milliseconds. The Mac will be idle.
+
+Stack: **Python+polars** — pick it; this is a column-ops problem and nothing here needs Rust or a GPU.
+
+RAM: per cost-model §3, 500 symbols × 60 days of 1-min bars ≈ 12 MB; 5-min bars ≈ 2–3 MB — roughly four orders of magnitude inside the 77 GB working budget.
+
+Engineering: **Tier L, 4–12 h → $600–1,800** at the $150/hr loaded-cost estimate (cost-model §5). One line of justification: the formulas are textbook and the ingest is a rolling-window one-liner; the hours go to split/halt hygiene and deciding the zero-range guard.
+
+What breaks first at 500 symbols or full OPRA (Options Price Reporting Authority): nothing — this signal never touches options or depth; the full US universe on 5-min bars remains a trivially small frame.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | What buying gains | What buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq, Alpaca IEX delayed) | Daily/15-min OHLC | ~$0 — *indicative, verify before budgeting* | $0 research data | Coarse for intraday crossover timing |
+| Tier-1 retail (Polygon Stocks Advanced, Alpaca SIP) | 1-min + real-time SIP bars | ~$30–200/mo — *indicative, verify before budgeting* | Clean 5-min bars with corporate actions | Nothing material |
+| Tier-2 professional (Databento) | Normalized OHLCV, venue detail | ~$200/mo + usage — *indicative, verify before budgeting* | Venue-stamped bars if you ever care | Overkill for range oscillators |
+| Charting platform (TradingView-style) | Built-in Stochastic / %R studies | ~$15–60/mo — *indicative, verify before budgeting* | Zero-code visualization | Not a research source of record: opaque revisions, no replay, no audit |
+
+**Verdict: build.** Two textbook formulas on bars you already buy for every other signal. The crossover point is simply "you have 5-min bars," which is every tier at or above free. Never pay for the indicator itself — and never use a screener's precomputed oscillator values as research inputs (you can't audit their lookback or bar-revision handling).
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Chong et al., "Performance of Stochastic Oscillators" (MPRA 80559) | Multiple markets (paper's universe) | Fast stochastic outperformed slow stochastic in most markets studied | As reported in the paper — cost treatment not verified from available materials; treat as before-cost unless the paper states otherwise | Compares indicator *variants*, not oscillator-vs-cash; says nothing about net profitability |
+| Paik et al. (2024), "Algorithm-Based Low-Frequency Trading Using a Stochastic Oscillator and William%R", *JRFM* | SPY + MSCI Korea ETF, 2010–2022 | 8 trades in 12 years, 87.5% hit ratio, max gain +28.7%, max drawdown −0.1% | Before-cost as reported — the paper does not model transaction costs (and a reviewer noted the parameter choices lack theoretical basis) | Weekly/low-frequency system (~1.5 trades/year), not intraday; 8 trades is far too few for statistical confidence; index-level, not single-name |
+
+Regimes where it fails: trends (the documented killer — %K pins above 80 through entire legs up, %R pins near 0); news jumps (the range explodes and the oscillator reads "overbought" into a repricing); low-volatility grinds (the range is tiny, so %K whipsaws 0–100 on penny moves); crowded retail symbols where every fade is faded by someone faster.
+
+**Honest bottom line — and this chapter will not oversell it:** there is *no documented after-cost intraday edge* for stochastic/%R fades as a standalone trigger in the sources found. What is documented: the formulas are standard, variant comparisons exist, and one low-frequency paper reports attractive before-cost numbers on 8 trades. As a standalone trigger this is a *weak, unproven-after-cost* edge; as an *exhaustion-timing overlay* inside T013-style fades or T062-style flips — telling you *when* within an already-justified fade — it is a *reasonable, cheap component*.
+
+### S10. Failure modes & pitfalls
+
+1. **Trend-pinning** — the #1 killer: fading every new high in a trend. *Mitigation:* regime-gate — only take fades when a trend filter (e.g. ADX — average directional index, a 0–100 trend-strength gauge — or price within a defined range for N bars) says "range."
+2. **Look-ahead on the cross** — acting on a developing bar's %K before the close fixes $H_n/L_n$. *Mitigation:* confirm crosses at bar close; trade next bar's open.
+3. **Zero-range division** — $H_n = L_n$ on dead names → division by zero. *Mitigation:* guard: if range is zero, hold the prior value and skip signals.
+4. **Parameter mining** — 14/80/20 "works" because everyone uses it; optimizing to 11/73/27 on one symbol is overfitting. *Mitigation:* keep the published defaults or calibrate on a broad universe with out-of-sample validation.
+5. **Cost blowup** — oscillators on 1-min bars can fire several times a day; each fade pays the full spread at the worst moment (you're providing liquidity to momentum). *Mitigation:* model full spread-crossing cost + fees + slippage/impact; require expected rotation > 3× cost; prefer 5–15 min grids.
+6. **Redundant confirmation** — %R ≈ %K − 100, so "both agree" is one signal counted twice. *Mitigation:* if you want confirmation, use an *independent* input (volume, or S045's vol-normalized z) — not the same range repackaged.
+7. **News-jump misreads** — a gap reprices the range; the oscillator screams overbought into a new equilibrium. *Mitigation:* suppress signals for N bars after jumps (S064-style jump filter) or on news-flagged symbols.
+8. **Thin-cross trading** — the worked example's 0.5-point cross is typical; trading dust crosses churns. *Mitigation:* require a minimum cross magnitude (e.g. 2 points, *example*) or %R beyond its line as confirmation.
+
+### S11. Visuals
+
+![S044 worked example — synthetic 24-bar 5-min tape with %K/%D and Williams %R panels; the SHORT cross at bar 17 marked](images/S044_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(5-min OHLCV bars)"] -->|"5-min bars"| ING["Ingest + normalize<br/>(splits, halts, sessions)"]
+    ING -->|"clean 5-min bars"| FEAT["Feature compute<br/>(Hn, Ln, %K, %D, %R)"]
+    FEAT -->|"oscillator values (5-min bars)"| SIG["Signal S044<br/>stochastic / %R fade"]
+    SIG -->|"signal (5-min bars)"| GATE{"Cost / regime<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T013 extreme fade)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Chong, T.T.L. et al. *Performance of Stochastic Oscillators.* MPRA Paper 80559. https://mpra.ub.uni-muenchen.de/80559/1/MPRA_paper_80559.pdf
+- Paik, J. et al. (2024). *Algorithm-Based Low-Frequency Trading Using a Stochastic Oscillator and William%R: A Case Study on the U.S. and Korean Indices.* J. Risk Financial Manag. 17(3), 92. https://www.mdpi.com/1911-8074/17/3/92/
+- Barchart. *Williams Percent Range — education/technical indicators* (formula, −80/−20 conventions, n=14 default). https://Www.barchart.com/education/technical-indicators/percent_r
+- Barchart. *Stochastic Slow — trader help/studies* (raw %K, %K/%D smoothing conventions; "%R is the inverse of fast stochastics"). https://www.barchart.com/trader/help/studies/stoch_s.php
+- Jegadeesh, N. (1990). *Evidence of predictable behavior of security returns.* Journal of Finance 45(3), 881–898. http://ideas.repec.org/a/bla/jfinan/v45y1990i3p881-98.html — Significant negative first-order serial correlation in monthly returns: short-term reversal predictability that oscillator overbought/oversold rules attempt to time.
+- Lehmann, B. N. (1990). *Fads, martingales, and market efficiency.* Quarterly Journal of Economics 105(1), 1–28. https://econpapers.repec.org/RePEc:oup:qjecon:v:105:y:1990:i:1:p:1-28. — Weekly winners/losers reverse the next week, net of spreads and costs: attributed to inefficiency in the market for liquidity around large price moves, the mechanism behind oscillator fade setups.
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10), Q-SB5-1: Keltner/Bollinger formulas and the 30-bar worked tape whose verified z-score material (z=+4.36, σ=0.3923) is reused in S045 — arithmetic verified by the operator, not independently re-derived here. Full text in `batches/SB5/duckai-answers.md`; Grok/Cursor answers pending (checked 2026-09-10).
+
+---
+## Stage 45/200 — S045: Stretched-move z-score & market-internals extremes
+
+*Batch SB5 · Signal 45/100 · Provenance [SR] · Family C — Intraday Mean Reversion & Reversal*
+
+### S1. One-line verdict
+
+| What it is | When it works | When it dies | Build-or-buy in one line |
+|---|---|---|---|
+| Measures how many realized-vol units price has stretched from its session anchor (VWAP — volume-weighted average price — or rolling mean); fades multi-sigma moves lacking volume/news, confirmed by market-wide TICK/TRIN extremes | Liquidity-driven excursions in liquid names — fast spike, no news, volume not confirming | News-driven repricings, trending opens, and illiquid names where "3 sigma" is just the spread | Build the z-score on bars you own; buy the internals feed (TICK/TRIN) if you want the market-wide leg |
+
+Provenance: **[SR]** (standard reconstruction — the z-score mean-reversion template is textbook; the VWAP-session anchoring, the 2–3σ thresholds, and all internals levels are desk-specific examples, not institutional standards). Family C — Intraday Mean Reversion & Reversal.
+
+### S2. How it works — plain human explanation
+
+A **z-score** is a distance measured in units of typical wiggle: "price is 3 standard deviations above its anchor" means the move is 3× bigger than the recent norm. The anchor here is usually the session **VWAP** — the volume-weighted average price, i.e. the average price paid by everyone who traded today, weighted by size — or a rolling mean. The ruler is **realized volatility** — volatility measured from actual recent price changes, not implied from options.
+
+The economic story: most violent intraday spikes are *liquidity excursions*, not information. A large seller dumps into thin midday liquidity, price lurches 3 sigma in ten minutes, but nothing fundamental changed — no news, no expanding volume, no market-wide participation. Liquidity providers step back, the order book refills, and price drifts back toward where the day's volume actually traded (VWAP). Fading the stretch — selling the spike, buying the plunge — harvests that snap-back. The confirmation that it's *liquidity* rather than *news* is what keeps you alive: volume should be flat or falling into the extreme, and there should be no headline.
+
+The second leg is **market internals** — market-wide, not single-name, extremes. **TICK** is the number of NYSE stocks ticking up minus the number ticking down, right now: a real-time breadth pulse. Readings beyond ±800 to ±1,000 (*desk-specific example*) mark intraday capitulation. **TRIN** (the Arms index, short for TRading INdex) is (advancing stocks ÷ declining stocks) ÷ (advancing volume ÷ declining volume): above 1.0 means declining volume dominates — bearish; spikes mark panic. When your single-name z-score screams *and* TICK prints −1,000, you're fading a market-wide flush — the highest-probability version of this trade.
+
+A vignette: at 13:42 XYZ spikes from 100.20 to 102.00 in one 5-minute bar on 900 shares — roughly in line with its recent prints. No headline. The 20-bar z-score prints +4.36 while NYSE TICK tags −950. You short the spike: a liquidity air-pocket, with the single-name ruler and the market-wide pulse agreeing it's exhaustion, not repricing.
+
+**Mental model:**
+- The z-score separates *big moves* (common) from *statistically unusual moves* (rare) — you only fade the unusual ones.
+- "Unusual" is necessary but not sufficient: the *cause* filter (no news, no volume expansion) is what keeps you from fading a genuine repricing.
+- Internals turn a single-name guess into a market-structure read: capitulation is a crowd phenomenon, and TICK/TRIN measure the crowd.
+
+### S3. The math — exact formula
+
+**Session-anchored z (source reconstruction):**
+
+$$z_t = \frac{P_t - \mathrm{VWAP}_{session,t}}{\sigma_{realized} \cdot \sqrt{t}}$$
+
+where $P_t$ is the current price (mid or last), $\mathrm{VWAP}_{session,t} = \sum_{i \le t} P_i V_i / \sum_{i \le t} V_i$ is the session volume-weighted average price, $\sigma_{realized}$ is per-bar realized volatility (e.g. the standard deviation of recent 1-min returns, annualized or per-bar consistently), and $t$ is elapsed session time in bars — the $\sqrt{t}$ term scales the ruler for how far price can normally wander by time $t$ under a random walk.
+
+**Rolling z (the worked example's variant):**
+
+$$z_t = \frac{C_t - \mu_t(N)}{\sigma_t(N)}, \qquad \mu_t(N) = \frac{1}{N}\sum_{i=t-N+1}^{t} C_i, \;\; \sigma_t(N) = \sqrt{\frac{1}{N}\sum_{i=t-N+1}^{t}(C_i - \mu_t)^2}$$
+
+(population standard deviation; the window *includes* bar $t$ — the completed-bar convention, with the caveat dissected in S10).
+
+**Trade rule** (*thresholds are examples — not institutional standards*):
+
+$$\text{Fade when } |z_t| > z_{entry} \text{ (e.g. 2.0–3.0) AND volume is NOT expanding AND no news flag;}$$
+$$\text{cover when } z_t \to 0 \text{ or at a time stop (e.g. 30–60 min).}$$
+
+**Market internals:**
+
+$$\mathrm{TICK}_t = \#\{\text{NYSE stocks on an uptick}\} - \#\{\text{NYSE stocks on a downtick}\}$$
+$$\mathrm{TRIN}_t = \frac{\text{Advances}_t / \text{Declines}_t}{\text{AdvancingVolume}_t / \text{DecliningVolume}_t}$$
+
+Fade triggers (*desk-specific examples*): $|\mathrm{TICK}| > 800$–$1{,}000$; TRIN spiking well above 1.0 (panic selling) or collapsing below ~0.7 into a buying climax.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (*example*) |
+|---|---|---|---|---|---|
+| Entry z | $z_{entry}$ | 1.5–3.0 | Fades normal noise; churns on spread | Waits for once-a-week events | 2.0 |
+| Lookback | $N$ | 15–60 bars | Ruler too twitchy; z whipsaws | Ruler stale; misses regime shifts | 20 |
+| Anchor | — | session VWAP / rolling mean | — | — | rolling mean (worked ex.) |
+| Time stop | — | 15–90 min | Exits before snap-back | Holds a repricing all afternoon | 45 min |
+| TICK extreme | — | 500–1,500 | Constant false capitulations | Never fires | ±800 |
+
+**Causal timing:** $z_t$ uses bars $\le t$ only (the VWAP variant needs the session's volume tape to date — no future bars); the fade is entered at bar $t+1$'s open at the earliest. TICK/TRIN are real-time but vendor-delayed — know your feed's latency (often 1–15 minutes on retail feeds, which can make the "confirmation" arrive after the turn).
+
+**Named variants:**
+1. **VWAP-session z** (source formula) vs **rolling z** (worked example) — VWAP anchors to the day's actual traded value; rolling mean adapts faster but has no economic anchor.
+2. **Return-based z** — $r_t(M) = \ln(C_t/C_{t-M})$, z-scored over its own history; measures *velocity* rather than *displacement*.
+3. **Internals composite** — z-score AND (TICK extreme OR TRIN spike); the capitulation filter that upgrades a single-name fade to a market-structure fade.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+This worked example reuses the operator-verified 30-bar synthetic tape (seed **45**; every number below was hand-checked — $\mu_{20} = 100.29$, $\sigma_{20} = 0.3923$, $z_{30} = +4.36$). Construction: bars 1–10 closes ramp 100.00 → 100.50 (step 0.50/9); bars 11–29 close at 100.20 on declining volume; bar 30 prints O 100.20, H 102.50, L 100.00, C 102.00 on 900 shares (in line with the 670–850 recent prints — no volume expansion). Rolling 20-bar z, population std, window *including* the current bar. Synthetic data — not market data; the chart plots exactly this series.
+
+| bar | C | $\mu_{20}$ | $\sigma_{20}$ | z | read |
+|---|---|---|---|---|---|
+| 20 | 100.20 | 100.2250 | 0.1156 | −0.22 | quiet |
+| 21 | 100.20 | 100.2350 | 0.1037 | −0.34 | quiet |
+| 22 | 100.20 | 100.2422 | 0.0957 | −0.44 | quiet |
+| 23 | 100.20 | 100.2467 | 0.0915 | −0.51 | quiet |
+| 24 | 100.20 | 100.2483 | 0.0903 | −0.54 | quiet |
+| 25 | 100.20 | 100.2472 | 0.0907 | −0.52 | quiet |
+| 26 | 100.20 | 100.2433 | 0.0910 | −0.48 | quiet |
+| 27 | 100.20 | 100.2367 | 0.0890 | −0.41 | quiet |
+| 28 | 100.20 | 100.2272 | 0.0821 | −0.33 | quiet |
+| 29 | 100.20 | 100.2150 | 0.0654 | −0.23 | quiet |
+| 30 | 102.00 | 100.2900 | 0.3923 | **+4.36** | **FADE (short)** |
+
+Step-by-step at bar 30: $\mu = (19 \times 100.20 + 102.00)/20 = 100.29$; deviations $-0.09$ (×19, sq 0.0081 each = 0.1539) and $+1.71$ (sq 2.9241); sum 3.0780; population variance $3.0780/20 = 0.1539$; $\sigma = 0.3923$; $z = 1.71/0.3923 = +4.36 > 2.0$ (*example* threshold) → short fade at bar 31's open (102.00). Volume check: 900 shares sits within the tape's 670–850 recent prints — no material volume expansion confirming new information; the fade's no-expansion gate passes; stipulate no news flag. Hypothetical exit (labeled as such — the tape ends at bar 30): cover half at $z \to +1.0$ (~100.68) and the rest on the 45-minute time stop; a full snap-back to 100.68 would be +1.32 ≈ +129 bps (basis points, 1 bp = 0.01%) before costs. The honest version: you'd more likely cover into a partial retrace for +30–60 bps, and sometimes the "excursion" keeps going.
+
+**What to notice:** bars 20–29 show the ruler *shrinking* ($\sigma$ 0.1156 → 0.0654) as the tape goes dead — low-volatility compression is what makes bar 30 read +4.36 rather than +1.5. That's the mechanism *and* the trap: a compressed ruler makes everything look extreme. This toy tape has no fees, no spread, and no bar 31 — the exit is illustrative, not a backtest. Nothing here is a performance claim.
+
+**Methodology caveat (mandatory):** this example computes the window *including* bar 30. Recomputed on a strictly *prior-only* window (bars 10–29): $\mu = 100.2150$, $\sigma = 0.06538$, $z = +27.30$ — a wildly different number from the same bar. Mixing inclusion/exclusion conventions across indicators at the same bar is a live-implementation pitfall: pick one convention (completed-bar including current, or strictly prior), document it, and make the backtest and the live engine match exactly. See S10.
+
+### S5. Strategies that use this signal
+
+- **T063 — Stretched-Move Z-Score Fade** — *primary entry trigger (direction)*: the strategy is this signal — fades multi-sigma intraday moves with resiliency-timed exits (S048) and spread-decomposition cost gating (S014).
+- **T013 — RSI-2 / IBS Extreme Fade** — *co-trigger (genuine fit)*: the plan lists S045 among T013's signals — the z-score provides the vol-normalized "how stretched" read alongside RSI-2 (Relative Strength Index)/IBS (internal bar strength) extremes.
+- **T048 — Put/Call Ratio Contrarian** — *context input (genuine fit)*: the plan lists S045 as stretched-move/sentiment context for fading extreme put/call readings.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Mid/last price, volume | float/int | 1–5 min bars | Tier 0–1 | Any intraday feed; SIP (Securities Information Processor — the consolidated feed) consolidated fine |
+| Session VWAP | derived | per-bar cumulative | Tier 0–1 | Needs the full session volume tape to date |
+| Realized vol (per-bar σ) | derived | rolling | Tier 0–1 | From the same bars — no extra feed |
+| NYSE TICK | int | real-time tick | Tier 1–2 | dxFeed, Databento, broker feeds; know the delay |
+| TRIN / advance-decline + adv/dec volume | float | real-time | Tier 1–2 | Same vendors; definitions vary slightly — pin yours |
+| News flag | boolean | event | Tier 2 | Benzinga-class headline feed to enforce the no-news filter |
+
+Ingest sketch (≤20 lines):
+
+```python
+import polars as pl
+N = 20
+b = (pl.read_parquet("bars_1m/*.parquet").sort(["symbol","ts"])
+       .with_columns(mu = pl.col("C").rolling_mean(N).over("symbol"),
+                     sd = pl.col("C").rolling_std(N, ddof=0).over("symbol")))
+b = b.with_columns(z = (pl.col("C") - pl.col("mu")) / pl.col("sd"))
+# internals: as-of join the slower TICK feed onto bar times
+tick = pl.read_parquet("internals_tick/*.parquet").sort("ts")
+b = b.join_asof(tick, on="ts", strategy="backward")  # TICK known at bar close only
+```
+
+Storage: 1-min bars per cost-model §4 — 500 symbols ≈ 50 MB/day Parquet, 60 days ≈ 3 GB; internals are a single market-wide series — negligible. Archive freely.
+
+Data-quality checklist: bar timestamp vs internals timestamp alignment (the as-of join is the whole game), vendor TICK delay disclosure, VWAP session-boundary definition (regular session only), corporate actions before z computation, half-day sessions (the $\sqrt{t}$ scaling needs the right $t$).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial** for the bar-based z-score; **feasible** with the internals leg. Rolling mean/std over 20 bars is O(1)-amortized per bar; per cost-model §2, polars does ~10–50M rows/sec on simple column ops — the entire 500-symbol 60-day 1-min universe (11.7M rows) z-scores in about a second. The internals join is one as-of per bar. Bottleneck: none on compute — it's feed latency on TICK/TRIN that matters, not FLOPS.
+
+Stack: **Python+polars** — pick it. Rust only if you're already running an event-driven book; nothing in this signal needs it.
+
+RAM: per cost-model §3, 500 symbols × 60 days of 1-min bars ≈ 12 MB — four orders of magnitude inside the 77 GB working budget. Even 5 years of 1-min bars for calibrating the $z_{entry}$ threshold fits comfortably.
+
+Engineering: **Tier L, 4–12 h → $600–1,800** at the $150/hr loaded-cost estimate (cost-model §5). One line of justification: the z-score is a rolling-window one-liner; the hours go to the no-news filter wiring, the internals as-of join, and pinning the bar-inclusion convention (S10) identically in research and live.
+
+What breaks first at 500 symbols or full OPRA (Options Price Reporting Authority): the internals leg doesn't scale per-symbol (it's one market-wide series — fine); what breaks is *expectation* — 500 independent z-fades without portfolio-level heat control become one large correlated bet on calm markets.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | What buying gains | What buying loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq, Alpaca IEX delayed) | Daily/15-min bars | ~$0 — *indicative, verify before budgeting* | $0 data | Too coarse for a 20-bar intraday z |
+| Tier-1 retail (Polygon, Alpaca SIP) | 1-min + real-time SIP bars | ~$30–200/mo — *indicative, verify before budgeting* | Clean bars for the z computation | Usually no TICK/TRIN feed |
+| Tier-2 (Databento / dxFeed / broker) | Bars + market-internals (TICK, TRIN, adv/dec) | ~$200/mo + usage — *indicative, verify before budgeting* | The internals leg with timestamps you can audit | Still check the vendor's TICK delay |
+| Academic/institutional (TAQ — Trade and Quote, the consolidated equity tick database — + NYSE internals history) | Publication-grade replay | institutional $$$$ — *indicative, verify before budgeting* | Point-in-time internals research | Vast overkill for a Tier-L signal |
+
+**Verdict: hybrid — build the z-score, buy the internals feed.** The crossover: the z-score itself is 5 lines on bars you already own (never pay for it); the TICK/TRIN series you cannot reconstruct from SIP bars, so buy it from a Tier-1/2 vendor once you trade the internals-confirmed variant. Start with the single-name z (Tier-0/1 data, $0–200/mo) and only add the internals subscription when the confirm-filter proves its worth in replay.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| "Trends and Reversion in Financial Markets on Time Scales from Minutes to Decades" (arXiv:2501.16772, 2025) | Minute-bar data, multiple markets | Intraday mean reversion statistically strong — regression linear coefficient negative with t ≈ −13.6 at short horizons, after discounting tick-size effects | Before-cost (informational regression — not a trading P&L) | Documents the *statistical* phenomenon, not a monetizable rule; says nothing about spread, impact, or timing |
+| Wood, Roberts & Zohren (2021), "Slow Momentum with Fast Reversion" (arXiv:2105.13727) | 50 liquid futures, 1995–2020 | Adding a fast mean-reversion module to a time-series-momentum strategy improved Sharpe by ~one-third (≈ two-thirds in 2015–2020) | As reported by the authors — verify the paper's cost treatment before treating as after-cost | Futures portfolio, daily-ish horizon, ML pipeline — supportive of the *idea* that fast reversion adds value, not of any specific z-threshold |
+
+Regimes where it fails: news-driven repricings (the #1 killer — the z-score can't tell a liquidity air-pocket from an earnings surprise; that's what the no-news filter is for); trending opens where "stretched" keeps stretching all day; volatility-regime shifts where the backward-looking $\sigma$ understates the new normal and every z is overstated; illiquid names where 3 sigma is one wide spread.
+
+**Honest bottom line:** the *statistical* fact of intraday mean reversion is well documented — as a standalone trigger this is a *moderate, real-but-thin* edge whose monetization lives or dies on two things the formula doesn't contain: the cause filter (news/volume) and the exit timing (resiliency). Before costs the phenomenon is real; after spread-crossing on entry *and* exit plus the occasional news-driven blowup, the public evidence supports "structural component of T063," not "standalone money machine."
+
+### S10. Failure modes & pitfalls
+
+1. **Bar-inclusion convention mismatch (mandatory caveat)** — the worked example shows it: including-bar-30 gives $z = +4.36$; prior-only gives $z = +27.30$. A backtest on one convention and a live engine on the other is a different strategy. *Mitigation:* pick one convention, document it, assert it in both code paths with a unit test.
+2. **Fading news** — the z-score's blindness to *why* is its deepest flaw. *Mitigation:* hard no-news filter (halt-reopen and headline-flagged symbols excluded); require volume *not* expanding.
+3. **Compressed-ruler false extremes** — dead tapes shrink $\sigma$ until everything reads extreme. *Mitigation:* floor $\sigma$ at a multiple of the spread or a longer-horizon vol estimate; don't trade z on dormant names.
+4. **Stale/vol-of-vol underestimation** — after a regime shift the backward $\sigma$ is too small and z overstates. *Mitigation:* use a vol estimator with faster adaptation (or a vol-regime gate) around events.
+5. **Internals latency** — retail TICK feeds can lag 1–15 minutes; the "confirmation" arrives after the turn. *Mitigation:* measure your feed's delay in replay; if the lag kills the P&L, drop the internals leg rather than trading stale confirmation.
+6. **Cost blowup (double spread-cross)** — you cross the spread entering *against* momentum and again covering — often 2× the cost of a momentum trade for a smaller expected move. *Mitigation:* model full round-trip spread + fees + impact; require expected snap-back > 4× cost; prefer limit orders on the exit.
+7. **Correlated-book risk** — 500 z-fades are one bet on "today is calm"; on a crash day they all trigger together. *Mitigation:* portfolio heat limits and a market-wide kill switch (e.g. halt new fades when |TICK| is extreme *against* your book).
+8. **Overfitting $z_{entry}$** — 2.0 vs 2.5 will always "optimize" in-sample. *Mitigation:* calibrate the threshold on a broad universe and out-of-sample years; prefer the economically anchored VWAP variant over the most-tunable rolling one.
+
+### S11. Visuals
+
+![S045 worked example — synthetic 30-bar tape: price with the bar-30 spike and the 20-bar rolling z-score reaching +4.36 at the extreme bar](images/S045_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(1-min bars + TICK/TRIN)"] -->|"1-min bars; internals ticks"| ING["Ingest + normalize<br/>(sessions, splits, as-of join)"]
+    ING -->|"aligned 1-min bars + internals"| FEAT["Feature compute<br/>(VWAP/rolling z, TICK/TRIN)"]
+    FEAT -->|"z_t, internals (1-min bars)"| SIG["Signal S045<br/>stretched-move fade"]
+    SIG -->|"signal (1-min bars)"| GATE{"Cost / news<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T063 / T013 / T048)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- *Trends and Reversion in Financial Markets on Time Scales from Minutes to Decades.* arXiv:2501.16772 (2025). https://arxiv.org/pdf/2501.16772.pdf
+- Wood, K., Roberts, S. & Zohren, S. (2021). *Slow Momentum with Fast Reversion: A Trading Strategy Using Deep Learning and Changepoint Detection.* arXiv:2105.13727. https://arxiv.org/abs/2105.13727v2
+- TRIN (Arms index) — definition and formula: (advances/declines) ÷ (advancing volume/declining volume); <1.0 bullish, >1.0 bearish. https://en.wikipedia.org/wiki/TRIN_(finance)
+- Nagel, S. (2012). *Evaporating liquidity.* Review of Financial Studies 25(7), 2005–2039. https://ideas.repec.Org/a/oup/rfinst/v25y2012i7p2005-2039.html — Short-term reversal returns proxy liquidity provision; expected reversal profits covary with VIX: explains why the z-score fade is regime-dependent and pays best when liquidity demand spikes.
+- Gatev, E., Goetzmann, W. N. & Rouwenhorst, K. G. (2006). *Pairs trading: Performance of a relative-value arbitrage rule.* Review of Financial Studies 19(3), 797–827. https://www.econbiz.de/Record/pairs-trading-performance-of-a-relative-value-arbitrage-rule-gatev-evan/10005564224 — A simple 2σ-deviation convergence rule on close substitutes earns ~11% annualized: the academic benchmark for z-score-style mean reversion.
+- Avramov, D., Chordia, T. & Goyal, A. (2006). *Liquidity and autocorrelations in individual stock returns.* Journal of Finance 61(5), 2365–2394. https://www.jstor.org/stable/3699323 — Short-horizon return autocorrelation is concentrated in illiquid, high-turnover stocks: bounds where the intraday z-score fade works and where it is just spread.
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence):
+- Duck.ai (GPT-5.6 Luna, anonymous, 2026-09-10), Q-SB5-1: the 30-bar worked tape reused in S4 — arithmetic operator-verified (z=+4.36, σ=0.3923, IBH/IBL=101.20/99.80), with the methodology caveat (mixed bar-inclusion conventions) flagged in S10. Q-SB5-3: "fade works best when the move lacks volume/news confirmation" framing. Full text in `batches/SB5/duckai-answers.md`; Grok/Cursor answers pending (checked 2026-09-10).
 
 ---
 <!-- SIGNAL CHAPTERS APPEND BELOW -->
