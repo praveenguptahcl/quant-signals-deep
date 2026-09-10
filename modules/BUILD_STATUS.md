@@ -13,3 +13,5 @@ Spec: MODULE_FORMAT_PROPOSAL.md v1.0.0 · template: notes/module-template.md v1.
 | T051–T075 (strategies) | writer bba5f5c7 | 25 | DONE 2026-09-10 · 25 md + 50 csv + 25 test · 150/150 tests pass · THIN: T058 (fixture shows entry only, no exit; rules documented) |
 
 | (partial, in b7b326a) T050 + T076–T079 fixtures/tests | — | 5 | landed via glob sweep; module .md files pending from their writers |
+
+| R001–R025 (regimes) | writer 8b811b51 | 25 | DONE 2026-09-10 · 25 md + 50 csv + 25 test · 225/225 tests pass · no THIN · 6 prose↔fixture mismatches fixed in audit |
