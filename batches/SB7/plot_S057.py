@@ -1,4 +1,12 @@
-"""S057 plot: cash-and-carry basis decomposition waterfall (4.0% gross -> 0.1% net)."""
+"""S057 plot: cash-and-carry basis decomposition waterfall.
+
+CORRECTED 2026-09-10: the previous version double-counted carry (it took the
+OVER-FAIR excess 4.00% as gross, then subtracted financing 3.20% a second time,
+printing a 0.10% net). This version starts from the RAW (F-S) basis and charges
+financing and dividends exactly once, per the rebuilt S4 waterfall. Every number
+is computed from the synthetic inputs below; the friction rows are stated
+`example` assumptions, labeled as such.
+"""
 import matplotlib
 matplotlib.use("Agg")  # headless render on the Mac/VM
 import matplotlib.pyplot as plt
@@ -33,15 +41,36 @@ PALETTE = {
     "zero":    "#2c3e50",  # baseline
 }
 
-# Verified arithmetic (duck.ai Q-SB7-3, hand-checked): gross 4.0% annualized basis,
-# less financing 3.2%, basket+execution 0.4%, ops/dividend leakage 0.3% => net 0.1%.
+# ---- SYNTHETIC INPUTS (identical to the chapter's S4) ----
+S = 5000.0            # index spot
+T_days = 90
+r = 0.05              # financing rate
+q = 0.018             # dividend yield
+F_star = S * np.exp((r - q) * T_days / 365.0)   # fair value -> 5039.61
+F = 5088.92           # synthetic observed future
+ANN = 365.0 / T_days  # annualization factor = 4.0556
+
+# ---- COMPUTED WATERFALL (annualized %) ----
+raw_basis = (F - S) / S * ANN            # 7.21%
+financing = -r * 100.0                   # -5.00% (charged once)
+dividends = +q * 100.0                   # +1.80% (collected once)
+exec_costs = -0.40                       # spreads + commissions/fees (example)
+impact = -0.30                           # market impact / slippage (example)
+leakage = -0.30                          # ops / dividend-forecast leakage (example)
+
 steps = [
-    ("Gross annualized\nbasis (over fair)", +4.0, True),
-    ("Financing the\nbasket (r = 5.0%)", -3.2, False),
-    ("Basket + execution\n(spreads, commissions)", -0.4, False),
-    ("Ops / dividend\nleakage", -0.3, False),
-    ("Net carry\n(annualized)", 0.0, True),  # total bar
+    ("Raw gross basis\n(F - S), annualized", raw_basis, True),
+    ("Financing the basket\n(r = 5.0%)", financing, False),
+    ("Dividend income\ncollected (q = 1.8%)", dividends, False),
+    ("Spreads + commissions\n/fees (example)", exec_costs, False),
+    ("Market impact /\nslippage (example)", impact, False),
+    ("Ops / dividend\nleakage (example)", leakage, False),
+    ("Net\n(annualized)", 0.0, True),  # total bar
 ]
+net = raw_basis + financing + dividends + exec_costs + impact + leakage
+print(f"F* = {F_star:.2f}; raw basis = {raw_basis:.2f}%; "
+      f"net = {net:.2f}% (check: 7.21-5.00+1.80-0.40-0.30-0.30 = 3.01)")
+
 values = np.array([s[1] for s in steps])
 labels = [s[0] for s in steps]
 is_total = np.array([s[2] for s in steps])
@@ -58,18 +87,17 @@ for i, (lab, val, total) in enumerate(steps):
     elif total:
         bottom, height, color = 0, cum, PALETTE["profit"] if cum >= 0 else PALETTE["loss"]
     else:
-        bottom, height, color = (cum + val, -val) if val < 0 else (cum, val), val, PALETTE["loss"]
         if val < 0:
-            bottom, height = cum + val, -val
+            bottom, height, color = cum + val, -val, PALETTE["loss"]
         else:
-            bottom, height = cum, val
+            bottom, height, color = cum, val, PALETTE["profit"]
         cum += val
     ax.bar(pos[i], height, bottom=bottom, width=0.62, color=color, edgecolor="white")
     if not total:
         ax.text(pos[i], bottom + height / 2, f"{val:+.1f}%", ha="center", va="center",
                 fontsize=10, color="white", weight="bold")
     else:
-        ax.text(pos[i], height + (0.12 if height >= 0 else -0.12), f"{cum:.1f}%",
+        ax.text(pos[i], height + (0.15 if height >= 0 else -0.15), f"{cum:+.2f}%",
                 ha="center", va="bottom" if height >= 0 else "top",
                 fontsize=11, weight="bold", color=PALETTE["zero"])
     # connector
@@ -80,13 +108,13 @@ for i, (lab, val, total) in enumerate(steps):
 
 ax.axhline(0, color=PALETTE["zero"], linewidth=1)
 ax.set_xticks(pos)
-ax.set_xticklabels(labels, fontsize=9)
+ax.set_xticklabels(labels, fontsize=8)
 ax.set_xlim(-0.7, len(steps) - 0.3)
 ax.set_ylabel("annualized return (%)")
 ax.text(0.98, 0.96,
-        "S = 5000, T = 90d, F* = 5039.61, F observed = 5088.92\n"
-        "gross basis = (F - F*)/S x 365/90 = 4.00%\n"
-        "4.00 - 3.20 - 0.40 - 0.30 = 0.10% net",
+        f"S = 5000, T = 90d, F* = {F_star:.2f}, F observed = {F:.2f}\n"
+        f"raw basis = (F - S)/S x 365/90 = {raw_basis:.2f}%\n"
+        f"{raw_basis:.2f} - 5.00 + 1.80 - 0.40 - 0.30 - 0.30 = {net:+.2f}% net",
         transform=ax.transAxes, fontsize=8, va="top", ha="right",
         bbox=dict(boxstyle="round", facecolor="white", alpha=0.9))
 
