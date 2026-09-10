@@ -84,7 +84,7 @@ for t, (side, ann) in traded.items():
 print(f"\nTOTAL gross {gross:.2f} | costs {cost:.2f} | net {gross-cost:.2f} "
       f"(cost drag = {100*cost/gross:.1f}% of gross)")
 print(f"PEAD leg (H+A mean AR) - (G+I mean AR) = "
-      f"{100*((AR[7]+AR[0])/2 - (AR[6]+AR[3])/2):.2f}%")
+      f"{100*((AR[7]+AR[0])/2 - (AR[6]+AR[8])/2):.2f}%")
 
 # ---- Chart: quintile drift bars + event timeline ----
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.2), sharex=False)
@@ -106,7 +106,7 @@ ax1.annotate("monotonic drift across SUE quintiles",
 events = [("A (long, 07:30 pre-open)", 0, PALETTE["profit"]),
           ("H (long, 16:45 post-close)", 7, PALETTE["profit"]),
           ("G (short, 10:15 intraday)", 6, PALETTE["loss"]),
-          ("I (short, 07:15 pre-open)", 3, PALETTE["loss"])]
+          ("I (short, 07:15 pre-open)", 8, PALETTE["loss"])]
 for k, (label, i, c) in enumerate(events):
     steps = 24
     noise = rng.normal(0, 1, steps).cumsum()
