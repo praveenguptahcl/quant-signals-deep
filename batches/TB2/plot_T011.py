@@ -49,9 +49,10 @@ trades = [
 rows = []
 for label, entry, exitp, side, shares, comm, why in trades:
     gross = (exitp - entry) * shares
-    net = gross - comm
+    slip = 0.005 * shares if side == "bid" else 0.0   # 0.5-tick aggressive-exit slippage
+    net = gross - comm - slip
     rows.append(dict(label=label, entry=entry, exit=exitp, side=side,
-                     shares=shares, comm=comm, gross=gross, net=net, why=why))
+                     shares=shares, comm=comm, slip=slip, gross=gross, net=net, why=why))
 nets = np.array([r["net"] for r in rows])
 cum = np.cumsum(nets)
 
@@ -122,7 +123,7 @@ ax2.set_title("Per-trade net P&L and cumulative P&L", fontsize=11)
 print("T011 trade check (seed 111):")
 for r in rows:
     print(f'  {r["label"]}: entry {r["entry"]:.2f} exit {r["exit"]:.2f} x{r["shares"]} '
-          f'gross {r["gross"]:+.2f} comm {r["comm"]:.2f} net {r["net"]:+.2f} ({r["why"]})')
+          f'gross {r["gross"]:+.2f} comm {r["comm"]:.2f} slip {r["slip"]:.2f} net {r["net"]:+.2f} ({r["why"]})')
 print(f'  TOTAL net: {cum[-1]:+.2f}')
 
 # ---- SYNTHETIC WATERMARK (mandatory) ----
