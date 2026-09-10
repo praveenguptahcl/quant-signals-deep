@@ -51,7 +51,7 @@ F = 5088.92           # synthetic observed future
 ANN = 365.0 / T_days  # annualization factor = 4.0556
 
 # ---- COMPUTED WATERFALL (annualized %) ----
-raw_basis = (F - S) / S * ANN            # 7.21%
+raw_basis = (F - S) / S * ANN * 100.0     # 7.21% (percent units)
 financing = -r * 100.0                   # -5.00% (charged once)
 dividends = +q * 100.0                   # +1.80% (collected once)
 exec_costs = -0.40                       # spreads + commissions/fees (example)

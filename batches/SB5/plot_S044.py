@@ -45,6 +45,9 @@ C0 = 99.95
 O = np.empty(N_BARS); O[0] = C0; O[1:] = C[:-1]
 H = C + 0.15 + rng.uniform(0.0, 0.05, size=N_BARS)
 L = C - 0.15 - rng.uniform(0.0, 0.05, size=N_BARS)
+# valid OHLC: the open (prior close) can fall outside the bar's H/L on gap moves;
+# clip it inside so every printed bar satisfies L <= O <= H and L <= C <= H
+O = np.clip(O, L, H)
 
 pctK = np.full(N_BARS, np.nan)
 pctR = np.full(N_BARS, np.nan)
