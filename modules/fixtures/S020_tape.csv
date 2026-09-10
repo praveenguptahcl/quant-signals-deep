@@ -1,0 +1,7 @@
+# TYPE: validation-run
+print,signed_vol
+1,80
+2,120
+3,-50
+4,90
+5,-30

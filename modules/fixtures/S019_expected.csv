@@ -1,0 +1,6 @@
+# TYPE: validation-run
+trade,signed_vol,cum_sum
+1,300,300
+2,-100,200
+3,500,700
+4,200,900

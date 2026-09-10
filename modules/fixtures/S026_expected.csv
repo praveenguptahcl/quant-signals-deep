@@ -1,0 +1,3 @@
+# TYPE: validation-run
+session,fh_ret_bps,trig
+s1,30.0,1

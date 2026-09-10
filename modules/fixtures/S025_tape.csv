@@ -1,0 +1,6 @@
+# TYPE: validation-run
+bar,close
+1,100.0
+2,100.15
+3,100.1
+4,99.95

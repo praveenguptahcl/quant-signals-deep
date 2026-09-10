@@ -1,0 +1,3 @@
+# TYPE: validation-run
+name,order_proc,inventory,adv_sel
+ex1,0.008,0.005,0.007

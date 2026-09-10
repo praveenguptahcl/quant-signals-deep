@@ -1,0 +1,5 @@
+# TYPE: validation-run
+event,t
+e1,0.0
+e2,1.0
+e3,2.0

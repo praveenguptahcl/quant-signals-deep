@@ -1,0 +1,4 @@
+# TYPE: validation-run
+venue,IS
+A,0.7
+B,0.3

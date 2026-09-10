@@ -1,0 +1,8 @@
+# TYPE: validation-run
+bucket,buy_vol,sell_vol
+1,600,400
+2,900,100
+3,300,700
+4,550,450
+5,1000,0
+6,200,800
