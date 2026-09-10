@@ -34,7 +34,7 @@ PALETTE = {
 
 # ---- SYNTHETIC WORKED EXAMPLE (deterministic schedule) ----
 # 60 synthetic labeled events, one per day, 5-day label horizons.
-# Chatbot worked example (Q-SB3-1, arithmetic VERIFIED): test fold = E41-E60;
+# Worked example (this chapter's explicitly chosen convention; arithmetic VERIFIED): test fold = E41-E60;
 # purge E36-E40 (intervals overlap the test fold); embargo removes the first 3
 # TEST events E41-E43  ->  35 train / 17 test / 8 removed = 60.
 # CONVENTION FLAG: de Prado's standard embargo removes the last TRAIN
@@ -48,7 +48,7 @@ ends = starts + H
 test_lo, test_hi = 41, 60
 
 purged = (starts <= test_hi) & (ends >= test_lo) & (starts <= 40)   # E36-E40
-embargoed = (starts >= test_lo) & (starts < test_lo + 3)            # E41-E43 (bot convention)
+embargoed = (starts >= test_lo) & (starts < test_lo + 3)            # E41-E43 (this chapter's explicitly chosen convention)
 is_test = (starts >= test_lo + 3) & (starts <= test_hi)             # E44-E60
 is_train = (starts <= 40) & ~purged                                 # E1-E35
 
@@ -57,7 +57,7 @@ for i in range(29, 48):  # print E30-E48
     if purged[i]:
         st = "PURGED"
     elif embargoed[i]:
-        st = "EMBARGOED (bot convention: first 3 test events)"
+        st = "EMBARGOED (this chapter's explicitly chosen convention: first 3 test events)"
     elif is_test[i]:
         st = "TEST"
     elif is_train[i]:
@@ -90,7 +90,7 @@ ax.axvspan(test_lo, test_lo + 3, color=PALETTE["signal2"], alpha=0.12)
 
 draw(y_train, PALETTE["price"], label="train E1-E35 (kept)")
 draw(y_purge, PALETTE["signal"], hatch="///", label="purged E36-E40 (label overlaps test)")
-draw(y_emb, PALETTE["signal2"], hatch="\\\\", label="embargoed E41-E43 (bot convention)")
+draw(y_emb, PALETTE["signal2"], hatch="\\\\", label="embargoed E41-E43 (this chapter's explicitly chosen convention)")
 draw(y_test, PALETTE["profit"], label="test E44-E60")
 
 ax.set_xlim(28, 66)
@@ -101,7 +101,7 @@ ax.set_title("S088 — Purged + embargoed CV: 60-event synthetic schedule")
 ax.legend(loc="upper left", fontsize=8)
 ax.text(0.99, 0.02,
         "35 train / 17 test / 8 removed = 60 (arithmetic verified)\n"
-        "bot convention: embargo drops first 3 TEST events;\n"
+        "this chapter's explicitly chosen convention: embargo drops first 3 TEST events;\n"
         "de Prado standard drops last 3 TRAIN events instead",
         transform=ax.transAxes, ha="right", va="bottom", fontsize=8,
         bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=PALETTE["zero"], alpha=0.92))
@@ -112,6 +112,8 @@ fig.text(0.5, 0.5, "SYNTHETIC EXAMPLE", fontsize=42, color="red", alpha=0.14,
          ha="center", va="center", rotation=28, weight="bold", zorder=10)
 fig.text(0.99, 0.01, "synthetic data — not market data", fontsize=8, color="#7f8c8d",
          ha="right", va="bottom")
+fig.text(0.01, 0.01, "seed 88088", fontsize=8, color="#7f8c8d",
+         ha="left", va="bottom")
 plt.tight_layout()
 plt.savefig("images/S088_example.png", bbox_inches="tight")  # <-- use the chapter's ID
 plt.close()
