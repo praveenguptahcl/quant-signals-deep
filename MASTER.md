@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 80/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 90/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -89,6 +89,16 @@
 - Stage 72/200 — S072 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 72)
 - Stage 73/200 — S073 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 73)
 - Stage 74/200 — S074 merged 2026-09-10 · reviewer: rereviewer-sb8+orchestrator · plot verified (seed 74)
+- Stage 16/200 — S016 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 84)
+- Stage 75/200 — S075 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 75)
+- Stage 76/200 — S076 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 76)
+- Stage 77/200 — S077 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 77)
+- Stage 78/200 — S078 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 78)
+- Stage 80/200 — S080 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 80)
+- Stage 82/200 — S082 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 82)
+- Stage 84/200 — S084 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 42)
+- Stage 87/200 — S087 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 2)
+- Stage 89/200 — S089 merged 2026-09-10 · reviewer: 6d129d69+orchestrator · plot verified (seed 21)
 
 
 ## Table of contents
@@ -198,6 +208,19 @@
 - [x] Stage 72/200 — [S072 — Put/call ratio](#stage-72200--s072-putcall-ratio)
 - [x] Stage 73/200 — [S073 — Unusual options activity](#stage-73200--s073-unusual-options-activity)
 - [x] Stage 74/200 — [S074 — Gamma exposure (GEX) & dealer positioning](#stage-74200--s074-gamma-exposure-gex--dealer-positioning)
+
+**Batch SB9** — Stat/ML infrastructure + market-making skew.
+
+- [x] Stage 16/200 — [S016 — Hasbrouck (1995) information share — venue price discovery](#stage-16200--s016-hasbrouck-1995-information-share--venue-price-discovery)
+- [x] Stage 75/200 — [S075 — Dispersion trading](#stage-75200--s075-dispersion-trading)
+- [x] Stage 76/200 — [S076 — Volatility breakout / squeeze positioning](#stage-76200--s076-volatility-breakout--squeeze-positioning)
+- [x] Stage 77/200 — [S077 — Kalman-filtered fair value (local-level trend)](#stage-77200--s077-kalman-filtered-fair-value-local-level-trend)
+- [x] Stage 78/200 — [S078 — AR(1)/ARMA short-horizon return forecast & innovation](#stage-78200--s078-ar1arma-short-horizon-return-forecast--innovation)
+- [x] Stage 80/200 — [S080 — PCA / statistical-factor residual reversal (incl. eigenportfolios)](#stage-80200--s080-pca--statistical-factor-residual-reversal-incl-eigenportfolios)
+- [x] Stage 82/200 — [S082 — Deep learning on the LOB (DeepLOB + classical ML features)](#stage-82200--s082-deep-learning-on-the-lob-deeplob--classical-ml-features)
+- [x] Stage 84/200 — [S084 — Hasbrouck (1991) trade–quote VAR](#stage-84200--s084-hasbrouck-1991-tradequote-var)
+- [x] Stage 87/200 — [S087 — Fractional differentiation (memory-retaining stationarization)](#stage-87200--s087-fractional-differentiation-memory-retaining-stationarization)
+- [x] Stage 89/200 — [S089 — Avellaneda–Stoikov inventory-skew market making](#stage-89200--s089-avellanedastoikov-inventory-skew-market-making)
 
 ### Strategy chapters
 
@@ -16430,6 +16453,1822 @@ flowchart LR
 3. SqueezeMetrics (2016, rev. 2017). "GEX — Gamma Exposure" methodology guide (practitioner construction; aggregate GEX, DDOI dealer-direction model). https://squeezemetrics.com/monitor/static/guide.pdf
 
 **Unverified leads** (chatbot-provided, not independently checkable — do not treat as evidence): GEX engine build hours (prototype 50–120 h, production 180–450 h); chain-normalization hours (60–150 / 200–500 h); OI-based GEX data ($500–20,000+/mo) and historical GEX ($2,000–25,000+/mo) pricing bands; the "cents or small fraction of a percent" effect-size framing (kept as a qualitative caution, not a measured statistic).
+
+---
+## Stage 16/200 — S016: Hasbrouck (1995) information share — venue price discovery
+
+*Batch SB9 · Signal 16/100 · Provenance [D] · Family A — Microstructure & Order Flow*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | For one security trading on several venues, the **information share (IS)** decomposes the innovation in the common *efficient price* across venues — it measures *where price discovery happens*, not what the price does next. |
+| **When it works** | Fragmented markets (US equities, cross-listed stocks, FX): attributing price discovery across venues, routing market-data spend, and building cross-venue lead–lag features. |
+| **When it dies** | As a directional trading signal — high IS is descriptive, not predictive; and when innovation correlation is high, Cholesky-ordering bounds swallow any point estimate. |
+| **Build-or-buy in one line** | Build the VECM-to-IS pipeline (a day's work); buy synchronized multi-venue mids (TAQ/Databento) — garbage synchronization in, garbage attribution out. |
+
+Provenance **[D]** (Hasbrouck 1995, *Journal of Finance*); never upgraded. The central honesty rule of this chapter: **report bounds, not one number** — the Cholesky ordering sensitivity below is the rule, not an artifact.
+
+### S2. How it works — plain human explanation
+
+**Price discovery** is the incorporation of new information into a security's price. The **efficient price** is the unobservable "true" value common to all venues — each venue's quote is the efficient price plus venue-specific noise. **Cointegration** keeps the venue prices from drifting apart (one long-run anchor), but *which* venue moves first when news arrives is an empirical question.
+
+**Information share** answers it: fit a **VECM** (vector error-correction model — a VAR for cointegrated prices that includes each venue's pull back toward the common anchor), convert it to its moving-average form, and read off the **long-run impact vector** $\psi$ — how much a shock to each venue's price permanently moves the common efficient price. Combine with the **innovation covariance** $\Omega$ (how the venues' unexpected moves co-vary) via a **Cholesky decomposition** $\Omega = FF'$ (a way of attributing correlated shocks to venues one at a time, in a chosen order), and venue $j$'s share is $IS_j = ([\psi F]_j)^2 / (\psi\Omega\psi^\top)$: the proportion of the efficient price's permanent innovation attributable to venue $j$.
+
+Picture three venues quoting the same stock. Venue A's mid ticks up 2¢, B and C follow 300 ms later. The VECM sees A's innovation *leading* the common move and credits A with most of the permanent innovation — A is where price discovery happened. But IS does *not* say the price goes up next (the innovation already happened), it doesn't say A's lead survives your latency and fees, and it doesn't distinguish "A had the informed traders" from "A reacts fastest to public news" or "B and C copy A." A high IS can mean faster public-info reaction, more informed flow, better liquidity, lower latency — or mechanical following. **The information-share statistic alone is descriptive, not predictive.**
+
+- **Mental model 1:** Five thermometers in one room; IS tells you which thermometer's reading the room's "true temperature" follows — not what the temperature will be tomorrow.
+- **Mental model 2:** The Cholesky ordering is a seating chart for correlated shocks: whoever sits first gets credit for the shared movement. Change the seating, change the credit — hence bounds, not point estimates.
+- **Mental model 3:** This is a *routing and monitoring* tool that becomes a trading input only inside a conditional lead–lag model tested out-of-sample (T082, T089).
+
+### S3. The math — exact formula
+
+Let $p_t = (p_{1,t}, \dots, p_{n,t})^\top$ be the log mid-prices on $n$ venues (dollars in logs), cointegrated with known cointegrating vectors $\beta$ (e.g. pairwise spreads $p_1 - p_j$). The VECM:
+
+$$\Delta p_t = c + \alpha\, \beta' p_{t-1} + \sum_{i=1}^{k-1} \Gamma_i\, \Delta p_{t-i} + \varepsilon_t, \qquad \Omega = \mathrm{Cov}(\varepsilon_t).$$
+
+The moving-average form gives the common **long-run impact row vector** $\psi$ ($1 \times n$) — how much a shock to each venue's price permanently moves the efficient price. With the Cholesky factor $F$ ($\Omega = FF'$, lower triangular, for a given venue ordering), the **information share** of venue $j$ is:
+
+$$IS_j = \frac{([\psi F]_j)^2}{\psi\,\Omega\,\psi^\top}, \qquad \sum_j IS_j = 1.$$
+
+Because $F$ depends on the ordering, compute $IS_j$ for **all $n!$ orderings** and report $[\min, \max]$ bounds per venue. Complement: the **Gonzalo–Granger component share** (permanent–transitory decomposition weight) — a second attribution that agrees with IS when VECM residuals are uncorrelated and diverges otherwise.
+
+| Parameter | Symbol | Typical range | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Venues | $n$ | 2–5 | Too many: $n!$ orderings explode; too few: misses the fragmenting venue | 3 *— example, not an institutional standard* |
+| Sampling | $\Delta t$ | ≤1 s bars (example) | Too fine: asynchrony distorts $\Omega$; too coarse: the lead is arbitraged | 1-s synchronized mids *— example* |
+| Estimation window | $T$ | minutes–days | Too short: $\psi$, $\Omega$ noisy; too long: structural breaks | 1 session *— example* |
+| VECM lags | $k$ | 1–5 | Too few: residual autocorrelation biases $\Omega$; too many: overfit | 2 *— example* |
+
+**Normalization:** log mid-prices, synchronized to a common clock (venue timestamps, millisecond-aligned). **Causal timing:** IS is estimated on a *history* window and used as a slow-moving venue attribute — not a per-bar trigger; any lead–lag trade built on it executes no earlier than $t+1$. **Variants:** (1) *trade-vs-quote decomposition* (Pascual et al. 2006); (2) *Hasbrouck lower/upper bounds* (min/max over orderings — the mandated default); (3) *time-varying IS* on rolling windows.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+All numbers below are **synthetic** (seed **84**); the chart plots exactly these numbers. DGP: a common efficient price (random walk, $\sigma = \$0.01$) plus venue transitory noise with different persistence — Venue A fast/tight ($\rho = 0.10$, leads), Venue B medium ($\rho = 0.50$), Venue C slow/noisy ($\rho = 0.90$, lags); 5,000 one-second bars; VECM with known $\beta$ (pairwise spreads) and 1 lag of $\Delta p$.
+
+**Step 1 — estimate.** The VECM yields $\psi = [0.2963,\ 0.2768,\ 0.2825]$ (nearly equal — the common efficient price loads on all venues) and $\Omega = [[0.000613,\ 0.000172,\ 0.000121],[0.000172,\ 0.000524,\ 0.000101],[0.000121,\ 0.000101,\ 0.000499]]$ (strong off-diagonals — the venues share the shock contemporaneously), with $\psi\Omega\psi^\top = 0.00019818$.
+
+**Step 2 — one ordering.** For ordering (A, B, C), the Cholesky factor is $F = [[0.024763,\ 0,\ 0],[0.006953,\ 0.021815,\ 0],[0.004889,\ 0.003083,\ 0.021571]]$. Then $[\psi F]_A = 0.0106431$, and $IS_A = 0.0106431^2 / 0.00019818 = 0.5716 \approx \mathbf{0.572}$; likewise $IS_B = 0.241$, $IS_C = 0.187$.
+
+**Step 3 — all six orderings: the bounds.** 
+
+| Ordering | A | B | C |
+|---|---|---|---|
+| (A,B,C) | 0.572 | 0.241 | 0.187 |
+| (A,C,B) | 0.572 | 0.180 | 0.248 |
+| (B,A,C) | 0.326 | 0.486 | 0.187 |
+| (B,C,A) | 0.240 | 0.486 | 0.274 |
+| (C,A,B) | 0.395 | 0.180 | 0.424 |
+| (C,B,A) | 0.240 | 0.336 | 0.424 |
+
+**Venue bounds (the honest answer): A: 0.240–0.572 (avg 0.391); B: 0.180–0.486 (avg 0.318); C: 0.187–0.424 (avg 0.291).** The chart shows these as bars with whiskers.
+
+**What to notice:** A was *designed* as the leader and averages highest — yet its bounds (24–57%) overlap B's and C's completely. A point estimate like "A = 39%" is spurious precision; the bounds are the result. **Limits:** synthetic; real venues have halts and tick-size differences, and this example has no latency.
+
+### S5. Strategies that use this signal
+
+- **T082 — Information-Share Venue Router** — primary trigger: routes orders to the price-discovering venue and avoids toxic venues — IS bounds are the routing table.
+- **T089 — Quote-Matcher (SIP-vs-Direct)** — attribution input: micro-arbitrage on venue/SIP quote differences; IS identifies which venue's quotes lead so the matcher knows which side is stale.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Venue mid-prices (all $n$ venues) | numeric | ≤1-s, synchronized | Tier 2–3 | TAQ multi-exchange quotes or Databento multi-venue; venue (not SIP) timestamps |
+| Venue trade prints (optional) | event | tick | Tier 2–3 | For the trade-vs-quote IS decomposition |
+| Corporate actions / halts | reference | daily | Tier 0–1 | A halted venue drops out of the panel — handle explicitly |
+| FX rates (cross-listed only) | numeric | matched frequency | Tier 1 | Convert to common currency before the VECM |
+
+Ingest sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+frames = []
+for venue in ["A", "B", "C"]:
+    q = pl.read_parquet(f"quotes_{venue}.parquet")
+    q = q.with_columns(mid=(pl.col("bid")+pl.col("ask"))/2,
+                       ts=(pl.col("venue_ts").dt.round("1s")))
+    frames.append(q.group_by("ts").agg(pl.col("mid").last().alias(venue)))
+panel = frames[0]
+for f in frames[1:]:
+    panel = panel.join(f, on="ts", how="inner")   # common clock
+panel = panel.with_columns(pl.all().exclude("ts").log().name.suffix("_log"))
+```
+
+Storage (per `notes/cost-model.md` §4): IS needs *tick* quotes per venue — L1 quotes+trades ≈ 2–8 GB/symbol-day parquet per venue feed; keep per-symbol-per-venue daily files and estimate on 1-s bars. Data-quality checklist: venue (never SIP) timestamps, millisecond alignment; locked/crossed quotes filtered; halts remove the venue for that interval; DST/half-days; tick-size differences across venues.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible** (Tier M — the VECM is small; the pain is synchronization). Per `notes/cost-model.md` §2, polars asof/rolling joins run ~1–10M rows/sec — synchronizing three venue quote streams to 1-s bars for a Dow-30-style panel is seconds; the VECM is OLS plus a $3 \times 3$ eigendecomposition per window — milliseconds in numpy. RAM: a 1-s bar panel for 30 symbols × 3 venues × 1 session is megabytes (§3); raw tick panels stay in per-symbol daily files. Engineering (per §5): Tier M, **20–60 h** ≈ **$3,000–9,000** at $150/hr loaded-cost estimate (multi-venue sync, VECM, Cholesky-bounds machinery, rolling leadership monitor). What breaks first at 500 symbols or full OPRA: the synchronization join across venues (Rust or pre-aggregated 1-s bars), and the $n!$ ordering combinatorics — cap $n$ or sample orderings.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars/numpy | Default: sync, VECM, IS bounds, leadership monitoring |
+| Rust | Only for tick-level multi-venue sync at full universe scale |
+| DuckDB | Ad-hoc IS studies over archived multi-venue panels |
+
+### S8. Buy vs build
+
+Vendor price bands per `notes/cost-model.md` §6.
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0/1 (SIP consolidated) | One NBBO tape | ~$0–200/mo *indicative — verify before budgeting* | Cheap | No per-venue attribution possible — IS needs venue-identified quotes |
+| Tier-2 (Databento multi-venue) | Per-venue L1 with venue timestamps | ~$200/mo + usage *indicative — verify before budgeting* | Honest synchronization for IS | Usage meter on full universes |
+| Tier-3 (TAQ via WRDS) | Full multi-exchange history | institutional/academic *indicative — verify before budgeting* | Gold-standard replay | Licensing friction |
+| Build the estimator | VECM → $\psi$, $\Omega$ → IS bounds | eng time only | Your own orderings, windows, decompositions | — |
+
+**Verdict: build the pipeline, buy venue-identified data.** The econometrics is a day's work and must be yours; SIP data cannot answer "which venue" by construction. Crossover: for a *single* venue's lead–lag vs the SIP, Tier-1 plus a lead–lag regression (S059/S060) is cheaper than multi-venue IS.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Hasbrouck (1995), *J. Finance* | 30 Dow stocks | Median **92.7%** information share for the NYSE | Before-cost (descriptive) | 1995 fragmentation; specialist era — magnitudes not portable |
+| Su & Chong (2007), *Pacific-Basin Finance J.* | Chinese NYSE/SEHK cross-listings | SEHK **89.4%** IS (81.6% Gonzalo–Granger PT) vs NYSE | Before-cost (descriptive) | Cross-listed, overlapping-hours subsample |
+| Pascual, Pascual-Fuster & Climent (2006), *J. Financial Markets* | Spanish cross-listed stocks, 2-hr overlap | NYSE contribution decomposed into trade-related vs trade-unrelated informative shocks | Before-cost (descriptive) | Working-paper version; overlap-window only |
+
+Regimes where it fails: leadership changes (the "dominant" venue of 1995 is not the dominant venue of 2026); high correlation regimes where bounds go uninformative; sampling asynchrony manufacturing spurious leads; news regimes where all venues react to the same public signal. **Honest bottom line:** as a standalone directional signal this has no documented edge — the evidence base is *attribution*, and every number above is before-cost and descriptive. As a venue-routing input (T082) and quote-staleness detector (T089), it earns its keep: knowing *where* discovery happens tells you which feed to buy, which quotes to trust, and which venue's moves deserve a response.
+
+### S10. Failure modes & pitfalls
+
+1. **Cholesky-ordering shopping** (reporting the ordering most favorable to your venue) → mitigate: always report min/max bounds over all $n!$ orderings.
+2. **Sampling asynchrony** (stale prints look like a "lag") → mitigate: venue timestamps, common-clock bars, drop bars where any venue is stale.
+3. **Cointegration failure** (halts, tick-size regimes, FX moves break the anchor) → mitigate: test cointegration per window; suspend attribution when it fails.
+4. **Structural breaks in leadership** → mitigate: rolling windows; change-point monitoring on the bounds.
+5. **Endogeneity** (all venues react to the same news) → mitigate: news-time controls; don't trade the lead without a conditional model tested out-of-sample.
+6. **Latency erasing the lead** (measured lead 300 ms; your round trip 800 ms) → mitigate: compare the lead horizon against measured latency + fees before any trading claim.
+7. **Over-interpreting a high IS** → mitigate: remember the four readings of high IS — the statistic doesn't choose among them.
+
+### S11. Visuals
+
+![S016 worked example — venue information shares with Cholesky-ordering bounds (whiskers = min/max over all 6 orderings); seed 84, synthetic 1-s cointegrated bars](images/S016_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(TAQ multi-exchange / Databento)"] -- "per-venue tick quotes<br/>(venue timestamps)" --> ING["Ingest + normalize<br/>(common clock, halts)"]
+    ING -- "synchronized 1-s<br/>log-mid panel" --> FEAT["Feature compute<br/>(VECM → ψ, Ω)"]
+    FEAT -- "IS bounds per venue<br/>(per estimation window)" --> SIG["Signal S016<br/>information shares"]
+    SIG -- "venue ranking + bounds<br/>(per window)" --> GATE{"Lead > latency<br/>+ cost gate?"}
+    GATE -- "pass (per window)" --> OUT["Downstream consumer<br/>(T082 router / T089 matcher)"]
+    GATE -- "fail" --> DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Hasbrouck, Joel (1995). "One Security, Many Markets: Determining the Contributions to Price Discovery." *Journal of Finance* 50(4): 1175–1199. http://ideas.repec.org/a/bla/jfinan/v50y1995i4p1175-99.html
+2. Su, Qian & Chong, Terence Tai-Leung (2007). "Determining the contributions to price discovery for Chinese cross-listed stocks." *Pacific-Basin Finance Journal* 15(2): 140–153. https://www.sciencedirect.com/science/article/abs/pii/S0927538X06000643
+3. Pascual, Roberto, Pascual-Fuster, Bartolomé & Climent, Francisco (2006). "Cross-listing, price discovery and the informativeness of the trading process." *Journal of Financial Markets* 9: 144–161. (Stable URL not captured this batch.)
+4. Gonzalo, Jesús & Granger, Clive W. J. (1995). "Estimation of common long-memory components in cointegrated systems." *Journal of Business & Economic Statistics* 13: 27–35. (Component-share complement.)
+5. Federal Reserve Bank of New York. Staff Report on FX market price discovery and the shifting locus of trading (working-paper PDF captured in this batch's research notes). https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr624.pdf
+
+**Unverified leads** (batch-research claims without an independently checkable source this batch):
+- Duck.ai Q-SB9-3 information-share summary (verified formula): $IS_j = ([\psi F]_j)^2/(\psi\Omega\psi^\top)$; "descriptive, not predictive"; the six limitations (Cholesky ordering, cointegration assumption, sampling sensitivity, structural breaks, endogeneity, latency).
+- NY Fed FX price-discovery staff study findings as summarized by the bot — working-paper PDF captured above; treat the summary as a lead.
+- Source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
+
+---
+## Stage 75/200 — S075: Dispersion trading
+
+*Batch SB9 · Signal 75/100 · Provenance [D] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Harvests the gap between index option-implied correlation and realized constituent correlation (long constituent vol, short index vol, or reverse). |
+| **When it works** | Calm-to-moderate regimes where implied correlation mean-reverts and realized correlations stay dispersed. |
+| **When it dies** | Correlation spikes (2008-style): correlations → 1, index IV explodes, constituent hedges go illiquid. |
+| **Build-or-buy in one line** | Build the analytics yourself, but you must *buy* the options data — there is no free full-chain OPRA feed. |
+
+Provenance **[D]** · Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+**Dispersion** is the tendency of index volatility and the volatilities of the index's constituents to disagree. A **variance swap** is a contract paying the difference between realized variance over its life and a fixed strike variance — its fair strike is roughly the market's expectation of future variance. **Implied volatility (IV)** is the volatility number that makes an option's market price equal its model price. **Implied correlation** is the single correlation number that makes the index's implied variance consistent with the constituents' implied variances.
+
+Picture a calm Tuesday: the S&P 500's 1-month implied volatility sits at 24% while the average single-stock IV is 35%. The index options imply a correlation of only 0.39 — but realized correlation has been running 0.30. The classic dispersion trade *sells* index volatility (short index straddles or variance swaps — a **straddle** is a call plus a put at the same strike, a pure volatility position) and *buys* constituent volatility (long single-stock straddles), **delta-hedging** both legs (neutralizing directional exposure by trading the underlying against the option position). If realized correlation comes in below the implied correlation you sold, the index leg decays faster than the constituent legs, and the spread earns money.
+
+Why should the edge exist? Two competing stories. (1) **Correlation-risk compensation**: the premium is payment for bearing correlation risk — correlations spike exactly when you are short index vol, so the premium is earned risk compensation. (2) **Market inefficiency**: structural supply/demand (institutional put buying vs. dealer/hedge-fund single-stock option selling) misprices the index-vs-constituent volatility surface. Deng (2008) tests these against each other using the late-1999/2000 institutional changes in the US options market as a natural experiment, and finds the profitability *changed* when market structure changed — supporting inefficiency over a stable risk premium (label: research lead — see S9/S12).
+
+- **Mental model 1:** You are an insurance company selling correlation insurance — small steady premiums, occasional catastrophic claims.
+- **Mental model 2:** Index puts are structurally overbought; single-stock options are structurally oversold. Dispersion arbitrages the spread between those two clienteles.
+- **Mental model 3:** Net delta near zero understates risk: your true exposure is to correlation and to index vega (sensitivity to IV changes), not direction.
+
+The honest core, straight from the literature: the premium "is compensation for correlation + liquidity risk." The 2008-style break — correlations → 1, index puts extremely expensive, constituent hedges illiquid — is precisely the wrong environment for a small account: margin expands, spreads widen, forced hedging at worst prices.
+
+### S3. The math — exact formula
+
+Index variance decomposes into constituent variances plus pairwise correlation terms:
+
+$$\sigma_I^2 = \sum_{i=1}^{n} w_i^2 \sigma_i^2 + 2\sum_{i<j} w_i w_j \rho_{ij}\, \sigma_i \sigma_j$$
+
+where $\sigma_I$ = index implied volatility, $\sigma_i$ = constituent $i$ implied volatility, $w_i$ = index weight of constituent $i$ (weights sum to 1), and $\rho_{ij}$ = implied pairwise correlation.
+
+Solving for one common pairwise correlation gives the **implied correlation**:
+
+$$\rho_{\text{impl}} = \frac{\sigma_I^2 - \sum_i w_i^2 \sigma_i^2}{\sum_{i \ne j} w_i w_j\, \sigma_i \sigma_j}$$
+
+and the signal is its spread vs. realized correlation:
+
+$$\text{signal}_t = \rho_{\text{impl},t} - \rho_{\text{real},t}(W)$$
+
+with $\rho_{\text{real},t}(W)$ the average pairwise realized constituent correlation over window $W$. Classic direction: **long constituent variance / short index variance** when $\text{signal}_t > +\kappa$ (*example* $\kappa \approx 0.10$–$0.15$ — *not an institutional standard*); reverse or stand down when the spread is negative or realized correlation is spiking. Computed at day $t$'s close on data $\le t$; tradable no earlier than $t+1$.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Entry spread threshold | $\kappa$ | 0.05–0.20 | Overtrading, costs dominate | Never trades | 0.10 |
+| Realized-corr window | $W$ | 20–60 trading days | Noisy $\rho_{\text{real}}$ | Stale, misses regime shifts | 30 days |
+| Constituent count | $n$ | 30–100 | Idiosyncratic noise | Hedging cost explosion | 50 |
+| Option tenor | $T$ | 1–3 months | Gamma/transaction churn | Vega-dominant, slow | 1 month |
+| Delta-hedge frequency | — | daily–intraday | Gamma bleed | Trading costs | daily |
+
+*All defaults are examples — not institutional standards.*
+
+**Normalization:** work in correlation *spread* units (dimensionless), or z-score the spread against its own 1-year history. **Variants:** straddle-based (listed options) vs. variance-swap-based (OTC, cleaner math); equally-weighted vs. index-weighted legs; vega-neutral vs. gamma-weighted sizing. The Cboe Implied Correlation Index (tickers KCJ/ICJ) disseminates the market price of expected 1-year SPX constituent correlation — a ready-made dispersion-regime gauge.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+All numbers below are **synthetic** — a hand-built 10-day illustration, not market data and not a backtest. Random seed **75** (`np.random.default_rng(75)`; only the filler bars use it). Equal weights, three stocks A/B/C with IVs 33/35/37.
+
+Day 1 check: $\sigma_I^2 = 27^2 = 729$; $\sum w^2\sigma_i^2 = (33^2+35^2+37^2)/9 = 409.22$; $\sum_{i\ne j} w_iw_j\sigma_i\sigma_j = 2(33{\cdot}35+33{\cdot}37+35{\cdot}37)/9 = 815.78$; so $\rho_{\text{impl}} = (729-409.22)/815.78 = \mathbf{0.3920}$.
+
+Daily P&L uses two illustrative scalings, both stated as examples: **$1,000 per correlation point** on the $\rho_{\text{impl}} - \rho_{\text{real}}$ spread, and **−$1,000 per vol point** of index-IV increase on the short index leg (vega bleed).
+
+| Day | Index IV | $\rho_{\text{impl}}$ | $\rho_{\text{real}}$ | Spread P&L ($) | Index vega P&L ($) | Daily total ($) | Cumulative ($) |
+|---|---|---|---|---|---|---|---|
+| 1 | 27.0 | 0.3920 | 0.30 | +92.0 | 0 | +92.0 | +92.0 |
+| 2 | 27.0 | 0.3920 | 0.28 | +112.0 | 0 | +112.0 | +204.0 |
+| 3 | 27.0 | 0.3920 | 0.32 | +72.0 | 0 | +72.0 | +276.0 |
+| 4 | 27.0 | 0.3920 | 0.29 | +102.0 | 0 | +102.0 | +378.0 |
+| 5 | 27.0 | 0.3920 | 0.31 | +82.0 | 0 | +82.0 | +460.0 |
+| 6 | 27.0 | 0.3920 | 0.30 | +92.0 | 0 | +92.0 | +551.9 |
+| 7 | 30.0 | 0.6016 | 0.55 | +51.6 | −3,000 | −2,948.4 | −2,396.4 |
+| 8 | 33.0 | 0.8333 | 0.75 | +83.3 | −3,000 | −2,916.7 | −5,313.2 |
+| 9 | 38.0 | 0.8536 | 0.92 | −66.4 | −5,000 | −5,066.4 | −10,379.5 |
+| 10 | 40.0 | 1.0000 | 0.97 | +30.0 | −2,000 | −1,970.0 | −12,349.5 |
+
+**What to notice:** days 1–6 earn a slow, steady +$552 while realized correlation sits below implied — the insurance-premium phase. On day 7 stress arrives: implied correlation rises (the market *sees* the correlation risk coming), but the damage comes from the index-IV repricing on the short leg, not the correlation spread itself. By day 10 implied correlation hits 1.0000 and six days of gains are buried under −$12,350. Limits of this toy: fixed scalings, no option bid–ask, no delta-hedging cost, no margin calls, 3 names. It illustrates the payoff shape, not profitability.
+
+### S5. Strategies that use this signal
+
+- **T058 — Dispersion Trader** — primary trigger: long single-stock realized vol vs. short index vol, VRP-aware (uses S075, S063, S069). This signal *is* the strategy's entry logic.
+- **T095 — Dispersion + GEX Regime Switch** — runs dispersion only when the dealer-gamma regime is supportive (uses S075, S074, S068). S075 supplies the correlation-spread trigger; S074 (GEX) acts as the regime gate/veto — dispersion is stood down when dealer positioning makes correlation spikes likely.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Index option chain (IV by strike/tenor) | float (IV, OI, volume) | daily EOD snapshots (intraday for hedging) | Tier 2 | OPRA; SPX/OEX or ETF (SPY) chains |
+| Constituent option chains | float | daily EOD snapshots | Tier 2 | 30–100 underlyings; OI filter for liquidity |
+| Index weights | float | daily | Tier 0/1 | Index factsheet or vendor |
+| Dividends / borrow rates | float | daily | Tier 1/2 | For variance-swap fair value; hard-to-borrow names distort |
+| Underlying prices (hedging) | float | 1-min bars | Tier 1 | For daily delta hedging |
+
+Collection (Databento OPRA example, ≤20-line sketch):
+
+```python
+import databento as db
+client = db.Historical("YOUR_KEY")          # key via approved credential flow
+job = client.timeseries.get_range(
+    dataset="OPRA.PILLAR",                  # OPRA full chain
+    symbols=["SPX.OPT", "AAPL.OPT"],        # index + constituents
+    schema="definition",                    # chain definitions
+    start="2026-08-01", end="2026-09-10")
+store = job.to_parquet("opra_chains.parquet")
+# downstream: fit IV surface per underlying -> compute rho_impl daily
+```
+
+Storage per cost-model §4: OPRA full-chain snapshots ≈ **1–3 GB/day (SPX-like)** — selective underlyings only; 60 days of the 50-name chain ≈ 60–180 GB on disk.
+
+**Data-quality checklist:** chain timestamps in exchange time; corporate actions adjusted before IV fitting; halts → drop the underlying that day; OI/volume liquidity filter on single-name tenors; borrow-rate spikes flagged; DST/half-day calendars.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible for research, heavy for production** (Tier H per cost-model §5: 60–200 h ≈ **$9,000–$30,000** loaded-cost estimate at $150/hr — full-chain OPRA analytics, surface fitting, and multi-leg hedging sit in the H tier).
+
+- **Throughput** (cost-model §2): IV-surface fitting is numpy-vectorized (~50–200M elements/sec); a 50-name daily chain refit takes seconds. Intraday delta hedging on 1-min bars for 50 names = 19,500 bars/day — trivial for polars (~10–50M rows/sec). Bottleneck is **data I/O and licensing**, not arithmetic.
+- **RAM** (cost-model §3): one SPX-like chain snapshot ≈ 100–300 MB; 8 snapshots/day ≈ 1–2.5 GB/day live — fits inside the 77 GB working budget if you keep fitted surfaces, not raw ticks. 60 days of fitted surfaces ≈ tens of GB — fits with care.
+- **Stack:** Python + polars + numpy for research; DuckDB for the chain archive. Rust only for intraday chain streaming.
+- **What breaks first at 500 symbols:** the OPRA feed itself — full-chain real-time for 500 underlyings is institutional $$$$ data and TB-scale storage (cost-model §4 warns: do not archive naively). Breakage order: data bill → disk → your ability to delta-hedge, long before the M5 Max's CPU.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 free route | Stooq daily bars, Cboe delayed quotes page | ~$0 | Regime gauges (KCJ/ICJ levels), weights | No chains, no history, no backtest |
+| Tier-1 retail (Cboe delayed options data) | Coarse Greeks, straddle moves | ~$0–50/mo | Cheap signal prototyping | Too coarse for real implied-corr math |
+| Tier-2 professional (Databento OPRA) | Full chain snapshots, research-grade | ~$200/mo + usage | Honest IV surfaces, real backtests | Usage meter runs on full-universe pulls |
+| Academic/institutional (OptionMetrics IvyDB) | Publication-quality options history | ~$thousands/yr academic; institutional $$$$ | Clean adjusted history | Price; redistribution limits |
+
+*All prices indicative — verify before budgeting.*
+
+**Verdict: build if** you need custom correlation estimators, your own hedging rules, or microstructure honesty around which tenors are actually tradeable. **Buy if** you need full OPRA chain history or borrow/term-structure panels — building those means re-licensing anyway. **Crossover:** buy Databento OPRA for the raw chains (~$200/mo + usage, indicative), build the implied-correlation engine yourself.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Deng (2008), "Volatility Dispersion Trading", SSRN | US index + single-stock options; natural experiment of late-1999/2000 institutional changes | Dispersion profitability *changed* after structural options-market changes → supports inefficiency over stable risk premium | Before-cost (cost detail not in available abstract) | Research lead: abstract-level; full text paywalled |
+| Ferrari, Poy, Abate (2019), S&P 100 options backtest | S&P 100 options | Risk-adjusted return beat buy-and-hold; low market correlation | Before-cost (costs not detailed in available summary) | Research lead: timing + Bollinger overlay; model-dependent |
+| Variance-swap dispersion study (MPRA 22318) | EuroStoxx 50, Jan 2005–Dec 2006 | Systematic short index variance / long constituents: positive mean 3-month returns | Explicitly **before-cost** (zero transaction costs assumed) | Author notes the market got more efficient and later profits were lower than historically |
+| Quantpedia literature summary (unverified lead) | 1996–2007 backtest summary | "15.39% return" cited | Before/after-cost unknown | **Historical, model-dependent, NOT expected return** — quarantined as a research lead |
+
+Regimes where it fails: correlation spikes (2008-style: correlations → 1, index puts extremely expensive, constituent hedges illiquid, dealers and funds hedging simultaneously) and volatility-of-volatility explosions. Documented decay: Deng measures a sharp decrease in performance since 2000; the MPRA study notes declining profits as the market got more efficient.
+
+**Honest bottom line:** as a standalone trigger this is a *structural but capacity-constrained* edge — the index-vs-single-name vol/correlation premium is real in the historical record, but it is compensation for correlation and liquidity risk that realizes violently. As a regime-gated harvester (cf. T095) it is more defensible. For a ≤$1M paper operation the capital intensity (index leg + dozens of constituent option legs + daily delta hedging + short-option margin + stress collateral) makes it one of the hardest signals in this document to run small.
+
+### S10. Failure modes & pitfalls
+
+1. **Correlation-spike break (and hidden vega)** — correlations → 1, short index leg detonates; near-zero net delta hides the real exposure. *Mitigation:* hard cap on index vega; stand down when KCJ/ICJ or realized correlation spikes (T095's GEX gate); risk-report on $\partial\sigma_I^2/\partial\rho_{ij} = 2w_iw_j\sigma_i\sigma_j$, not delta.
+2. **Liquidity illusion in constituent hedges** — single-name options go one-sided in stress. *Mitigation:* OI/volume liquidity filters; fewer, more-liquid names.
+3. **Margin expansion** — short-option margin and stress collateral spike exactly when P&L is worst. *Mitigation:* pre-fund stress collateral; size to stressed margin, not current.
+4. **Discrete-rebalance error** — variance-swap math assumes continuous hedging; daily hedging leaks P&L. *Mitigation:* model discrete hedging explicitly; widen the required edge by the slippage estimate.
+5. **Dividend/borrow distortion** — special dividends and hard-to-borrow names corrupt IV. *Mitigation:* borrow-rate feed; exclude or haircut affected names.
+6. **Surface model risk** — implied correlation depends on your IV interpolation. *Mitigation:* compute with two surface methods; trade only when they agree.
+7. **Crowding** — every vol desk runs dispersion; unwinds correlate. *Mitigation:* monitor dealer positioning (S074); reduce into crowded regimes.
+
+### S11. Visuals
+
+![S075 worked example — synthetic 10-day dispersion trade with correlation spike](images/S075_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(OPRA chains + index weights)"] -->|"daily options chains"| ING["Ingest + normalize<br/>(exchange ts, corp actions, halts)"]
+    ING -->|"clean daily chains"| FEAT["Feature compute<br/>(IV surfaces, rho_impl, rho_real)"]
+    FEAT -->|"daily correlation series"| SIG["Signal S075<br/>implied - realized corr spread"]
+    SIG -->|"daily signal"| GATE{"Cost / margin<br/>gate?"}
+    GATE -->|"pass"| OUT["Downstream consumer<br/>(T058 / T095 sizing)"]
+    GATE -->|"fail"| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Bakshi, G. & Kapadia, N. (2003). "Delta-Hedged Gains and the Negative Market Volatility Risk Premium." *Journal of Derivatives*, Fall 2003. http://people.umass.edu/nkapadia/docs/Bakshi_Kapadia_JoD_Fall_2003.pdf — negative market volatility risk premium: index options priced above subsequently realized volatility; foundational for the index-leg richness dispersion harvests.
+2. Deng, Q. (2008). "Volatility Dispersion Trading." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1156620 — profitability changed after the late-1999/2000 structural options-market changes, supporting the inefficiency hypothesis over a stable risk premium.
+3. Ferrari, P., Poy, G. & Abate, G. (2019). "Dispersion trading: an empirical analysis on the S&P 100 options." *Investment Management and Financial Innovations*, 16(1), 178–188. http://dx.doi.org/10.21511/imfi.16(1).2019.14 — S&P 100 backtest; risk-adjusted return beat buy-and-hold with low market correlation.
+4. "Dispersion Trading Based on the Explanatory Power of S&P 500 Stock Returns." *Mathematics* (MDPI), 2020. https://www.mdpi.com/2227-7390/8/9/1627 — net buying pressure on index options vs. net selling pressure on single-stock options creates the IV mispricing.
+5. Dispersion P&L decomposition (variance-swap gamma P&L = correlation exposure + vega/volga/vanna terms). http://arxiv.org/pdf/1004.0125v1 — formalizes the split into a correlation-spread term and a volatility term.
+
+**Unverified leads** (chatbot-provided or second-hand; not confirmed facts — verify before use):
+- Quantpedia literature summary citing a "15.39% return 1996–2007 backtest" for dispersion — historical, model-dependent summary; NOT an expected return.
+- Driessen, Maenhout & Vilkov (2009): large negative *index* variance risk premium with no evidence of a negative premium on *individual* variance risk — cited as summarized in an NYU Stern survey document (https://www.stern.nyu.edu/sites/default/files/assets/documents/con_040081.pdf); full text not independently opened.
+
+---
+
+---
+## Stage 76/200 — S076: Volatility breakout / squeeze positioning
+
+*Batch SB9 · Signal 76/100 · Provenance [D/SR] · Family E — Volatility & Options-Informed*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Positions for volatility expansion: enters when a bar's range explodes past its recent average, or when Bollinger bandwidth has squeezed to a historic low. |
+| **When it works** | Genuine regime shifts — scheduled events, breakouts with follow-through — where realized volatility actually expands after the signal. |
+| **When it dies** | Choppy, mean-reverting regimes: the breakout reverses, the time stop exits at a loss, and costs compound. |
+| **Build-or-buy in one line** | Build — it is a few dozen lines on 1-min bars; nothing worth buying. |
+
+Provenance **[D/SR]** · Family E — Volatility & Options-Informed.
+
+### S2. How it works — plain human explanation
+
+A **range-expansion** bar is a bar whose high–low range is a large multiple of its recent average — the market suddenly moving much more than it has been. A **Bollinger bandwidth squeeze** is the opposite setup: **Bollinger Bands** (a moving average plus/minus two standard deviations) pinch to their narrowest width in months, meaning volatility has compressed to an extreme. **Realized volatility** is volatility that actually happened (measured from price changes); the premise of the squeeze is volatility clustering — quiet periods are followed by loud ones, a fact documented since Engle (1982).
+
+Picture 9:47 AM: a stock has chopped between $100.20 and $100.28 for two hours, bandwidth at its 5th percentile of the last six months. Then a headline hits; the next 1-minute bar prints $100.05–$100.59 — a range 7× its 10-bar average — and closes above the upper band. The signal says: volatility regime has changed; position for expansion in the bar's direction with a **time stop** (exit after a fixed number of bars, because the edge, if any, is short-lived).
+
+Why should it work? Two mechanisms. First, genuine information arrival: scheduled events and real breakouts produce persistent directional range expansion. Second, positioning cascades: a volatility breakout forces hedgers and stop-losses to trade, extending the move. But the honest framing, confirmed by large-scale testing: the squeeze tells you *that* a move is coming, not *which way*. Volatility clustering predicts the magnitude of future movement, not its direction. A **false breakout** (or **whipsaw**) — the bar breaks out, you enter, price reverses — is the modal outcome in range-bound regimes, and each one costs spread plus fees plus the time stop's giveback.
+
+- **Mental model 1:** The squeeze is a coiled spring detector — it measures compression, not aim.
+- **Mental model 2:** Range expansion is a regime-change alarm — it fires on real news and on noise alike; the time stop is what keeps the noise affordable.
+- **Mental model 3:** You are buying realized volatility after it starts expanding — you will always be late; the question is whether the move has a second leg.
+
+### S3. The math — exact formula
+
+**Range expansion.** Let $R_t = H_t - L_t$ be bar $t$'s range and $\bar{R}_{t-1}^{(N)} = \frac{1}{N}\sum_{i=1}^{N} R_{t-i}$ its trailing mean. Signal when:
+
+$$\frac{R_t}{\bar{R}_{t-1}^{(N)}} > k \quad \text{(enter in the direction of bar } t\text{'s close vs. open)}$$
+
+with $k \approx 1.5$–$2.0$ (*example — not an institutional standard*; the worked example uses $k = 1.75$).
+
+**Bollinger bandwidth squeeze.** With $N$-bar moving average $\text{MA}_t^{(N)}$ and standard deviation $\sigma_t^{(N)}$:
+
+$$\text{BW}_t = \frac{(\text{MA}_t^{(N)} + 2\sigma_t^{(N)}) - (\text{MA}_t^{(N)} - 2\sigma_t^{(N)})}{\text{MA}_t^{(N)}} = \frac{4\sigma_t^{(N)}}{\text{MA}_t^{(N)}}$$
+
+Squeeze when $\text{BW}_t$ is at or below the $p$-th percentile of its trailing $M$-bar history (*example:* $p = 10$, $M \approx 126$ trading days ≈ 6 months — the practitioner standard; Bollinger's own definition is the lowest bandwidth in the past 125 periods). The combined signal: **squeeze armed** (bandwidth percentile ≤ $p$) **and then** an expansion bar or a close outside the bands → enter in the breakout direction; exit on a time stop of $H$ bars (*example:* 3–6 bars).
+
+Causal timing: computed at bar $t$'s close using only data $\le t$; tradable no earlier than bar $t+1$'s open.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Expansion multiple | $k$ | 1.5–2.5 | Noise triggers, overtrading | Misses real expansions | 1.75 |
+| Range lookback | $N$ | 10–20 bars | Jumpy reference | Slow to adapt | 10 |
+| Band lookback | $N$ (bands) | 10–20 bars | Twitchy bands | Squeeze never registers intraday | 10 |
+| Squeeze percentile | $p$ | 5–15% | Almost never armed | Not a real squeeze | 10% |
+| Squeeze history | $M$ | 60–180 days | Percentile meaningless | Ancient regimes pollute | 126 days |
+| Time stop | $H$ | 3–10 bars | Chops winners early | Gives back the move | 6 bars |
+
+*All defaults are examples — not institutional standards.*
+
+**Normalization:** bandwidth percentile is already normalized; the range ratio is self-normalizing. **Variants:** expansion-only (no squeeze arming — more trades, lower quality); squeeze + close-outside-band (Bollinger's original); Crabel-style opening-range expansion; close-position filter (close in top/bottom quartile of the expansion bar).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Synthetic** 60-bar 1-minute series, random seed **76** (`np.random.default_rng(76)`; only filler bars 51–59 use randomness — all signal bars are fixed). 10-bar, 2σ bands (*example* parameter); bandwidth percentile over a trailing 20-bar window (*illustrative short window — practitioner standard is 6 months*); range ratio vs. 10-bar average range with $k = 1.75$.
+
+**Tape A — squeeze → true breakout (bars 27–32):**
+
+| Bar | O | H | L | C | Range | 10-bar avg range | Ratio | BW pct | Upper | Lower |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 27 | 100.24 | 100.26 | 100.21 | 100.23 | 0.05 | 0.086 | 0.62 | 5.3% | 100.25 | 100.16 |
+| 28 | 100.24 | 100.27 | 100.21 | 100.24 | 0.05 | 0.081 | 0.67 | 5.0% | 100.25 | 100.17 |
+| 29 | 100.24 | 100.27 | 100.21 | 100.24 | 0.05 | 0.077 | 0.70 | 5.0% | 100.25 | 100.18 |
+| 30 | 100.26 | 100.74 | 100.20 | 100.67 | 0.54 | 0.073 | **7.37** | 100% | 100.55 | 99.99 |
+| 31 | 100.70 | 100.91 | 100.57 | 100.77 | 0.34 | 0.118 | 2.88 | 100% | 100.74 | 99.91 |
+| 32 | 100.77 | 101.01 | 100.65 | 100.86 | 0.35 | 0.143 | 2.46 | 100% | 100.92 | 99.86 |
+
+Bar 29: squeeze armed (BW at 5th percentile). Bar 30: range 7.37× average, close 100.67 > upper band 100.55 → expansion signal. Entry bar 31 open 100.70; 6-bar time stop → exit bar 36 close 101.21. Gross +$0.510/share; costs (half-spread $0.01 + fee $0.003 per side, an *example* schedule) = $0.026/share → **net +$0.484/share (+$242 on 500 shares)**.
+
+**Tape B — expansion false breakout (bars 44–49):**
+
+| Bar | O | H | L | C | Range | 10-bar avg range | Ratio | BW pct | Upper | Lower |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 44 | 100.81 | 100.86 | 100.76 | 100.80 | 0.09 | 0.192 | 0.50 | 50% | 101.22 | 100.65 |
+| 45 | 100.80 | 100.85 | 100.75 | 100.79 | 0.09 | 0.169 | 0.56 | 35% | 101.16 | 100.64 |
+| 46 | 100.81 | 101.46 | 101.00 | 101.32 | 0.46 | 0.148 | **3.12** | 55% | 101.24 | 100.59 |
+| 47 | 101.35 | 101.48 | 101.11 | 101.22 | 0.37 | 0.164 | 2.25 | 60% | 101.31 | 100.56 |
+| 48 | 101.22 | 101.37 | 100.96 | 101.08 | 0.41 | 0.174 | 2.33 | 60% | 101.33 | 100.56 |
+| 49 | 101.08 | 101.21 | 100.87 | 100.97 | 0.33 | 0.200 | 1.68 | 55% | 101.34 | 100.57 |
+
+Bar 46: range 3.12× average and close 101.32 > upper band 101.24 — but note the *weaker* setup: no squeeze arming (BW percentile 35–55%, not ≤10%) and the band break is only $0.08 vs. $0.12 on the true breakout. Entry bar 47 open 101.35; price reverses; 3-bar time stop → exit bar 49 close 100.97. Gross −$0.380/share → **net −$0.406/share (−$203 on 500 shares)**.
+
+**What to notice:** the two trades net +$39 combined — the winner barely covers the loser plus costs. That *is* the lesson: expansion signals are roughly coin-flips on direction; profitability comes entirely from (a) requiring squeeze arming, (b) sizing the time stop to the regime, and (c) costs staying small relative to the average expansion move. This toy has no partial fills, no slippage beyond the spread, and hand-picked bars — it demonstrates mechanics, not profitability.
+
+### S5. Strategies that use this signal
+
+- **T042 — Jump-Robust Vol Spike Trader** — primary trigger: trades bipower-variation / Lee–Mykland jump-filtered vol spikes (uses S064, S065, S076). S076 supplies the raw expansion trigger; S064/S065 veto the jumps that are microstructure noise rather than regime change.
+- **T014 — Bollinger Reversal + Squeeze Exit** — exit/cover leg: fades band tags but *covers into bandwidth-squeeze expansions and vol breakouts* (uses S041, S030, S076). S076 acts as the adverse-regime veto — when expansion fires, the reversal book stands down.
+- **T041 — HAR Vol-Timing Overlay** — regime input: scales all intraday positions by HAR realized-vol forecasts (uses S066, S067, S076). S076 flags expansion regimes where the overlay cuts size.
+- **T050 — GEX Pin / Dealer-Positioning Fade** — context leg (uses S074, S070, S076): S076's expansion signal tells the pin-fade when the pinning regime has broken.
+- **T019 — Donchian/Keltner Breakout + Vol Sizing** — sizing leg (uses S028, S029, S076): S076 gates position size by volatility-breakout regime.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| OHLCV bars | float/int | 1–5 min bars | Tier 1 | Any OHLCV vendor; RTH session filter |
+| Corporate actions | adjustment factors | daily | Tier 1 | Splits/dividends before band computation |
+
+Collection (Polygon example, ≤20-line sketch):
+
+```python
+import requests, polars as pl
+resp = requests.get(                                   # key via approved credential flow
+  "https://api.polygon.io/v2/aggs/ticker/SPY/range/1/minute/2026-09-09/2026-09-10",
+  params={"apiKey": "YOUR_KEY", "limit": 50000}).json()
+bars = pl.DataFrame(resp["results"]).with_columns(
+  pl.from_epoch("t", "ms").dt.convert_time_zone("America/New_York").alias("ts"))
+# downstream: rolling(10) mean/std -> bands; rolling range ratio; bandwidth percentile
+```
+
+Storage per cost-model §4: 1-min bars for 500 symbols ≈ **50 MB/day** total; 60 days ≈ 3 GB — archive freely.
+
+**Data-quality checklist:** timestamps in exchange time (DST/half-days); corporate actions adjusted; halts → exclude bars; zero-range RTH bars flagged; late prints not used for signal bars.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial** (per cost-model §5 this is Tier L: 4–12 h ≈ **$600–$1,800** loaded-cost estimate at $150/hr — justified: 1-min bar signals with rolling statistics are the textbook Tier-L workload).
+
+- **Throughput** (cost-model §2): 500 symbols × 390 bars = **195,000 bars/day**; polars rolling aggregations run at ~10–50M rows/sec — the full universe recomputes in milliseconds. A Python event loop at ~100–500k events/sec is also ample. Bottleneck: none locally; data-vendor rate limits, if anything.
+- **RAM** (cost-model §3): 1-min OHLCV for 500 symbols × 60 days ≈ **12 MB** — four orders of magnitude inside the 77 GB working budget.
+- **Stack:** Python + polars (pick this; nothing else needed). Rust/DuckDB only if this becomes one feature among thousands in a shared engine.
+- **What breaks first at 500 symbols:** nothing about compute — the failure mode is *signal* quality: 500-symbol expansion screens generate correlated false breakouts on macro headlines, so the breakage is portfolio heat, not hardware.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq, Alpaca IEX) | Daily/15-min bars | ~$0 | Free prototyping | Too coarse for true 1-min squeeze timing |
+| Tier-1 retail (Polygon Stocks Advanced, Alpaca SIP) | 1-min/real-time SIP bars | ~$30–200/mo | Everything this signal needs | SIP-vs-direct latency nuance (irrelevant at this horizon) |
+| Tier-2 professional (Databento) | L1/L2 + bars, clean symbology | ~$200/mo + usage | Corporate-action-clean history | Overkill for this signal alone |
+| Academic route | LOBSTER academic samples | ~hundreds/yr academic | Microstructure truth | Unnecessary — bars suffice |
+
+*All prices indicative — verify before budgeting.*
+
+**Verdict: build, always.** The entire signal is two rolling computations; the only real decision is the data tier. **Buy** Tier-1 1-min bars (~$30–200/mo, indicative) the moment you trade more than a toy universe; **build** the estimator regardless — you cannot buy your own thresholds, and the squeeze percentile window is the whole edge.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Fang, Jacobsen & Qin (2014), "Popularity versus Profitability: Evidence from Bollinger Bands" (summarized by CXO Advisory) | 14 international stock indexes, 1885–2014 | Basic Bollinger volatility-breakout avg daily gross buy–sell spread: **0.45% pre-1983 → 0.00% post-2001**; squeeze refinement = band width at 6-month minimum + close outside band | **Before-cost** (gross spread) | Decay coincides with rising media coverage — popularity extinguished the edge |
+| EdgeTools, "Buy the Panic" — ~20M Bollinger backtests | CME_MINI:ES1! futures | Squeeze breakout longs −0.10pp edge, shorts +0.15pp — economically negligible, statistically zero after Bonferroni correction; squeeze predicts future *volatility*, not *direction* | Before-cost (cost treatment undisclosed — treat as research lead) | Practitioner study, not peer-reviewed; confirms the "magnitude not direction" framing |
+
+Regimes where it fails: low-volatility chop (false breakouts dominate); macro-headline whipsaws (expansion fires on noise); crowded retail hours where everyone trades the same band break. Documented decay: the Fang et al. result is the key fact — the naive breakout edge decayed to zero as the indicator became popular.
+
+**Honest bottom line:** as a standalone directional trigger this is a *weak-to-zero* edge in modern data — the documented record shows decay to nothing and large-scale tests find no directional edge. As a *volatility-regime detector* (squeeze = expansion is coming) and as a *veto/exit* (T014, T041) it is genuinely useful: it tells you when your other edges are about to be stressed. Trade it for the regime information, not the direction.
+
+### S10. Failure modes & pitfalls
+
+1. **False breakouts in chop** — the modal outcome in range-bound regimes. *Mitigation:* require squeeze arming (BW percentile ≤ 10%) before taking expansion entries.
+2. **Direction coin-flip** — clustering predicts magnitude, not direction. *Mitigation:* pair with a directional filter (trend, order flow); never size as if direction were signaled.
+3. **Realized vol doesn't follow** — band break without follow-through; the move dies in 2 bars. *Mitigation:* short time stops (3–6 bars); exit on range contraction.
+4. **Cost blowup** — frequent small losses each pay spread + fees; turnover kills the book. *Mitigation:* require expected move > 3× round-trip cost, modeled explicitly.
+5. **Lookahead in the percentile** — computing the "6-month low" with data past the signal bar. *Mitigation:* strictly trailing window; point-in-time bandwidth history.
+6. **Parameter mining** — $k$, $N$, $p$, $H$ are many degrees of freedom on 1-min data. *Mitigation:* fix parameters from the literature first (1.75 / 10 / 10% / 6); sensitivity-check, don't optimize.
+7. **Overnight/event gaps** — bars spanning announcements print artificial expansion. *Mitigation:* session filters; treat scheduled-event windows as a separate regime (S034).
+8. **Correlated signals** — macro headlines fire expansion on all 500 names at once. *Mitigation:* portfolio-level heat cap; de-duplicate by residualizing market beta.
+
+### S11. Visuals
+
+![S076 worked example — synthetic 60-bar squeeze to true breakout and later false breakout](images/S076_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(e.g. Polygon 1-min bars)"] -->|"1-min OHLCV bars"| ING["Ingest + normalize<br/>(exchange ts, DST, halts)"]
+    ING -->|"clean 1-min bars"| FEAT["Feature compute<br/>(bandwidth, range ratios)"]
+    FEAT -->|"1-min feature series"| SIG["Signal S076<br/>squeeze + expansion"]
+    SIG -->|"bar-close signal"| GATE{"Cost / regime<br/>gate?"}
+    GATE -->|"pass"| OUT["Downstream consumer<br/>(T042 entry / T014 exit)"]
+    GATE -->|"fail"| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Fang, J., Jacobsen, B. & Qin, Y. (2014). "Popularity versus Profitability: Evidence from Bollinger Bands." https://www.cxoadvisory.com/big-ideas/when-bollinger-bands-snapped/ (CXO Advisory summary) — 14 international indexes, 1885–2014: basic Bollinger breakout gross edge decayed 0.45%/day pre-1983 → 0.00% post-2001; defines the squeeze refinement as band width at a six-month minimum plus a close outside the band.
+2. EdgeTools. "Buy the Panic: What 20 Million Bollinger Tests Found for CME_MINI:ES1!" https://www.tradingview.com/chart/ES1!/FwfqO55g-Buy-the-Panic-What-20-Million-Bollinger-Tests-Found/ — ~20M backtests: squeeze-breakout directional edge ≈ 0 (−0.10pp long / +0.15pp short, insignificant after Bonferroni); squeeze forecasts future volatility, not direction.
+3. Bollinger Band squeeze definition (lowest bandwidth in the past 125 periods; squeeze = volatility compression precedes expansion). https://www.tradingview.com/scripts/bollingerbands/page-4/?script_type=indicators&sort=recent — documents the indicator's squeeze/bulge semantics and the 125-period convention.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- TheStreet (2015) practitioner note on squeeze + failed-breakout confirmation — https://www.thestreet.com/investing/stocks/this-technical-tool-can-tell-you-when-a-stock-will-break-out-13283064 — anecdotal, single-stock examples.
+
+---
+
+---
+## Stage 77/200 — S077: Kalman-filtered fair value (local-level trend)
+
+*Batch SB9 · Signal 77/100 · Provenance [D] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | Splits each observed price into a latent "efficient" (fair-value) price plus microstructure noise, using the Kalman filter; trades the gap or the fair-value trend. |
+| **When it works** | When microstructure noise is large relative to true price movement (illiquid names, wide spreads) and the Q/R calibration is honest. |
+| **When it dies** | When Q/R is miscalibrated — too smooth and you lag every turn; too fast and you just chase noise — or when the "trend" was noise all along. |
+| **Build-or-buy in one line** | Build — the filter is ~20 lines; the calibration (Q, R) is the entire product and cannot be bought. |
+
+Provenance **[D]** · Family F — Statistical/ML Infrastructure.
+
+### S2. How it works — plain human explanation
+
+A **Kalman filter** is a recursive estimator for a hidden quantity observed through noise. A **state-space model** writes the world as two equations: how the hidden state evolves (the *state* equation) and how observations relate to it (the *observation* equation). The **local-level model** is the simplest useful state space: the hidden fair value follows a random walk, and each observed price equals the fair value plus noise.
+
+Picture 9:47:03: AAPL's mid-price flickers 231.40 → 231.41 → 231.39 → 231.42 within two seconds. Is the "true" price moving, or is this just **microstructure noise** — bid–ask bounce and quote flicker around a stable efficient price? The Kalman filter answers with a weighted average: each new observation moves the fair-value estimate by the **Kalman gain** $K_t$ times the surprise. The gain comes from the ratio of **process noise** $Q$ (how much the true price moves per step) to **observation noise** $R$ (how noisy each print is). Large $Q/R$ → trust the tape, react fast. Small $Q/R$ → trust the model, smooth heavily. The filter also outputs $P_{t|t}$, the variance of its own estimate — a built-in confidence meter no moving average gives you.
+
+This differs from **S052** (define-on-first-use distinction): S052 uses the Kalman filter to estimate a time-varying *hedge ratio* $\beta_t$ between *two* cointegrated prices (a pairs-trading parameter). S077 uses it to estimate the latent *efficient price of a single price* — fair value vs. hedge ratio. Same machinery, different estimand.
+
+Economically: at short horizons, much price variance is transient (bounce, flicker) rather than information. Filtering it out gives a cleaner trend with less lag than any moving average of comparable smoothness — and the filter's confidence output lets you size positions by how much you actually know.
+
+- **Mental model 1:** A thermostat for price — the filter separates the room's true temperature (fair value) from the thermometer's jitter (noise).
+- **Mental model 2:** $Q/R$ is the only real parameter — everything else is bookkeeping. It sets where you live on the smooth↔fast frontier.
+- **Mental model 3:** The residual $e_t = y_t - \hat{x}_{t|t}$ is the trade: fade it (mean reversion to fair value) or ride $\Delta\hat{x}$ (fair-value momentum) — but never both at once without a regime rule.
+
+### S3. The math — exact formula
+
+Local-level state space (log-prices $y_t$, latent fair value $x_t$):
+
+$$x_t = x_{t-1} + \eta_t, \quad \eta_t \sim \mathcal{N}(0, Q) \qquad \text{(state)}$$
+$$y_t = x_t + \varepsilon_t, \quad \varepsilon_t \sim \mathcal{N}(0, R) \qquad \text{(observation)}$$
+
+**Predict:** $\hat{x}_{t|t-1} = \hat{x}_{t-1|t-1}$, $\quad P_{t|t-1} = P_{t-1|t-1} + Q$
+
+**Update:** $K_t = \dfrac{P_{t|t-1}}{P_{t|t-1} + R}, \quad \hat{x}_{t|t} = \hat{x}_{t|t-1} + K_t\,(y_t - \hat{x}_{t|t-1}), \quad P_{t|t} = (1 - K_t)\,P_{t|t-1}$
+
+**Signals:** residual (fade) $e_t = y_t - \hat{x}_{t|t}$; or fair-value momentum on $\Delta\hat{x}_{t|t} = \hat{x}_{t|t} - \hat{x}_{t-1|t-1}$; or the one-step-ahead surprise $s_t = y_t - \hat{x}_{t|t-1}$. The scale-free tuning knob is $\lambda = Q/R$.
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default (example) |
+|---|---|---|---|---|---|
+| Process-noise variance | $Q$ | $10^{-6}$–$10^{-2}$ (price²) | Filter never moves; lags turns | Chases every tick; no smoothing | 0.04 |
+| Observation-noise variance | $R$ | $10^{-5}$–$10^{-1}$ (price²) | Overfits bounce | Ignores real moves | 0.16 |
+| Smooth↔fast ratio | $Q/R$ | $10^{-4}$–$1$ | Glacial | Noise-chasing | 0.25 |
+| Initial variance | $P_0$ | $R$, $10R$, or $100R$ (diffuse) | Overconfident start | Slow burn-in | $R$ |
+
+*All defaults are examples — not institutional standards.*
+
+**Calibration (the actual work):** $R$ from bid–ask bounce / quote-revision variance at the shortest horizon; $Q$ from low-frequency price-change variance *minus* the noise component; or joint maximum-likelihood/EM on a training window. **Normalization:** z-score the residual by $\sqrt{P_{t|t} + R}$ for a scale-free fade signal. Causal timing: the update at $t$ uses only data $\le t$; tradable no earlier than $t+1$.
+
+**Variants:** local *linear* trend (adds a slope state — faster but twitchier); pairs form: $y_t = \beta_t x_t + \mu_t + \varepsilon_t$ with $\theta_t = [\beta_t, \mu_t]^\top$ random-walking — the S052 bridge, signal on the z-scored spread $s_t = y_t - \hat{\beta}_t x_t - \hat{\mu}_t$; **innovation**-gated entries (trade only when $|e_t|$ exceeds a multiple of its predicted std).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Operator-verified** recursion (duck.ai answers, hand-checked 2026-09-10 — 4th-decimal rounding noise only, no material errors). Synthetic 10-observation series; $Q = 0.04$, $R = 0.16$, $\hat{x}_{0|0} = 100.00$, $P_{0|0} = 0.16$. Seed **77** recorded for the plot script (`np.random.default_rng(77)`); the series itself is fixed, not random.
+
+Update 1 ($y_1 = 100.40$): $P_{1|0} = 0.16 + 0.04 = 0.20$; $K_1 = 0.20/(0.20+0.16) = 0.5556$; surprise $\nu_1 = 0.40$; $\hat{x}_{1|1} = 100.00 + 0.5556 \times 0.40 = \mathbf{100.2222}$; $P_{1|1} = (1-0.5556)\times0.20 = \mathbf{0.0889}$.
+
+Update 2 ($y_2 = 99.80$): $P_{2|1} = 0.1289$; $K_2 = 0.4462$; $\nu_2 = -0.4222$; $\hat{x}_{2|2} = \mathbf{100.0338}$; $P_{2|2} = \mathbf{0.0714}$.
+
+Update 3 ($y_3 = 100.20$): $P_{3|2} = 0.1114$; $K_3 = 0.4104$; $\nu_3 = 0.1662$; $\hat{x}_{3|3} = \mathbf{100.1020}$; $P_{3|3} = \mathbf{0.0657}$; $e_3 = 100.20 - 100.1020 = \mathbf{0.0980}$.
+
+Full table (matches `images/S077_example.png` exactly):
+
+| $t$ | $y_t$ | $\hat{x}_{t\|t-1}$ | $P_{t\|t-1}$ | $K_t$ | $\hat{x}_{t\|t}$ | $P_{t\|t}$ | $e_t = y_t - \hat{x}_{t\|t}$ |
+|---|---|---|---|---|---|---|---|
+| 1 | 100.40 | 100.0000 | 0.2000 | 0.5556 | 100.2222 | 0.0889 | +0.1778 |
+| 2 | 99.80 | 100.2222 | 0.1289 | 0.4462 | 100.0338 | 0.0714 | −0.2338 |
+| 3 | 100.20 | 100.0338 | 0.1114 | 0.4104 | 100.1020 | 0.0657 | +0.0980 |
+| 4 | 100.60 | 100.1020 | 0.1057 | 0.3977 | 100.3001 | 0.0636 | +0.2999 |
+| 5 | 100.30 | 100.3001 | 0.1036 | 0.3931 | 100.3001 | 0.0629 | −0.0001 |
+| 6 | 100.90 | 100.3001 | 0.1029 | 0.3914 | 100.5349 | 0.0626 | +0.3651 |
+| 7 | 101.10 | 100.5349 | 0.1026 | 0.3908 | 100.7557 | 0.0625 | +0.3443 |
+| 8 | 100.80 | 100.7557 | 0.1025 | 0.3905 | 100.7730 | 0.0625 | +0.0270 |
+| 9 | 101.20 | 100.7730 | 0.1025 | 0.3904 | 100.9397 | 0.0625 | +0.2603 |
+
+**What to notice:** the gain $K_t$ decays 0.5556 → 0.3904 and $P_{t|t}$ converges toward its steady state (~0.0625) — the filter "learns" how much to trust the tape within a handful of observations. The residual $e_t$ is the tradeable object: a fade rule would sell $t=6$'s +0.3651 print; a fair-value-momentum rule would buy the rising $\hat{x}_{t|t}$ path. Note $t=5$: the filter barely moves ($\hat{x}$ unchanged to 4 decimals) because the observation confirmed the prediction — exactly the behavior a moving average cannot replicate. Limits: Gaussianity assumed, $Q/R$ fixed by fiat here, and 10 points prove nothing about profitability.
+
+### S5. Strategies that use this signal
+
+- **T051 — Kalman Fair-Value Trend** — primary trigger: local-level trend following with dynamic confidence from the Kalman filter (uses S077, S078, S079). S077 *is* the entry logic — position direction from $\Delta\hat{x}_{t|t}$, sized by $1/\sqrt{P_{t|t}}$.
+- **T096 — Kalman + HMM Adaptive Trend** — regime-gated variant (uses S077, S079, S078): fair-value trend entries from S077, gated by the HMM regime state (S079) — trend-following only when the hidden state says "trending" — with AR-innovation timing (S078).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trade/quote prices | float | tick or 1-min bars | Tier 1 | Any intraday feed; mid-prices preferred over last prints |
+| Bid–ask spread | float | 1-min | Tier 1 | For $R$ calibration from bounce |
+| Pair leg prices (pairs form) | float | 1-min bar closes | Tier 1 | Two cointegrated names |
+
+Collection (1-min bars → filter loop, ≤20-line sketch):
+
+```python
+import polars as pl, numpy as np
+bars = pl.read_parquet("bars_1min.parquet").sort("ts")   # Tier-1 vendor, key via approved flow
+y = bars["mid"].to_numpy(); Q, R = 0.04, 0.16            # example calibration
+x, P = y[0], R
+xs, Ps = [], []
+for yt in y:                                             # causal: uses only data <= t
+    Pp = P + Q; K = Pp/(Pp+R)
+    x = x + K*(yt-x); P = (1-K)*Pp
+    xs.append(x); Ps.append(P)
+bars = bars.with_columns(pl.Series("fair", xs), pl.Series("conf", Ps))
+```
+
+Storage per cost-model §4: 1-min bars for 500 symbols ≈ **50 MB/day** total; 500 × 390 = **195,000 bars/day**; 60 days ≈ 3 GB — archive freely. Panel RAM for a 500 × 252 estimation window: 500×252×8 ≈ **0.96 MiB**; the 500×500 covariance ≈ **1.91 MiB** (both operator-verified byte arithmetic).
+
+**Data-quality checklist:** use mid-prices (last prints inject bounce into $y_t$); timestamp normalization; corporate actions adjusted; halts excluded; calibration window separated from the trading window (no lookahead in $Q/R$).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial-to-feasible** (per cost-model §5 this is Tier M: 20–60 h ≈ **$3,000–$9,000** loaded-cost estimate at $150/hr — justified: the filter loop is simple, but honest $Q/R$ calibration with walk-forward validation is the real work).
+
+- **Throughput** (cost-model §2): 500 scalar Kalman updates run in <10 ms compiled; a 500-symbol 1-min batch update is ~1–20 ms vectorized. Polars/numpy handle the universe in real time with enormous headroom. Bottleneck: none — calibration design, not compute.
+- **RAM** (cost-model §3): the filter state is two floats per symbol; even a 500 × 252 estimation panel is ~1 MiB. Fits trivially inside the 77 GB working budget.
+- **Stack:** Python + numpy/polars (pick this). Rust only if the filter sits inside a tick-level execution loop.
+- **What breaks first at 500 symbols:** calibration discipline — estimating honest per-symbol $Q/R$ on 500 names without overfitting needs purged walk-forward (S088) machinery, not more hardware.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq daily) | Daily bars | ~$0 | Free local-level on daily data | Useless for intraday fair value |
+| Tier-1 retail (Polygon/Alpaca SIP) | 1-min/real-time bars | ~$30–200/mo | Everything the filter needs | — |
+| Tier-2 professional (Databento) | L1 quotes, imbalance feeds | ~$200/mo + usage | True quote-mid inputs, better $R$ calibration | Overkill for the basic filter |
+| Academic route | Textbooks (Harvey), LOBSTER samples | ~$0–hundreds/yr | Canonical state-space theory | No production feed |
+
+*All prices indicative — verify before budgeting.*
+
+**Verdict: build, immediately.** The filter is twenty lines; no vendor sells your $Q/R$. **Buy** Tier-1 1-min bars (~$30–200/mo, indicative) and spend the budget on calibration rigor — walk-forward $Q/R$ selection with purged validation — instead of fancier data.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Benhamou (2016), "Trend Without Hiccups — A Kalman Filter Approach", SSRN | S&P 500 mini-future | 4 KF models: models 1–2 ≈ $20k net/1yr; model 4 (short/long-term split + extremum term) ≈ **$40k net/1yr**, max drawdown −$7.3k → −$2.6k | Reported "net", cost detail unavailable — **research lead** | Parameters "obtained by general optimization… best possible choice" = in-sample optimization; overfit risk explicitly flagged by the paper itself |
+| Bel Hadj Ayed et al. (2015), "Forecasting trends with asset prices", arXiv:1504.03934 | Latent trend as unobservable OU process | Closed-form likelihood + online estimation; quantifies damage from **bad calibration** of a misspecified Kalman filter | N/A — methodology, not a P&L backtest | Confirms the chapter's core warning: calibration is the product |
+| Bruder, Dao, Richard & Roncalli (2011), "Trend Filtering Methods for Momentum Strategies", SSRN | Multi-asset momentum | Trend-filtering (incl. Kalman-type) methods improve momentum strategy construction | Before/after-cost detail unverified — **research lead** | Cited via reference list; full text not independently opened |
+
+Regimes where it fails: high-noise chop where $Q/R$ is set too fast (filter chases bounce and whipsaws); regime shifts where the calibrated $Q/R$ no longer describes the market (volatility regime change → recalibrate); jump-driven moves the Gaussian local-level model cannot represent (pair with S064 jump filters). Documented decay: none specific to the filter — but the Benhamou caveat generalizes: any edge found by optimizing filter parameters in-sample should be assumed overstated until walk-forwarded.
+
+**Honest bottom line:** as a standalone trigger this is a *calibration-dependent smoothing edge* — the filter demonstrably beats moving averages on lag *given correct parameters*, and its confidence output ($P_{t|t}$) is genuinely useful for sizing. As infrastructure (fair-value input to T051/T096, or the pairs-form spread in S052-style books) it is more defensible than as a lone signal. For a ≤$1M paper operation it is one of the cheapest signals in this document to run honestly.
+
+### S10. Failure modes & pitfalls
+
+1. **Q/R miscalibration** — the single dominant failure; too smooth lags turns, too fast chases noise. *Mitigation:* calibrate $R$ from bounce, $Q$ from low-frequency variance minus noise; walk-forward the ratio.
+2. **In-sample parameter optimism** — optimizing $Q/R$ on the test period (the Benhamou caveat). *Mitigation:* purged/embargoed walk-forward (S088); never select $Q/R$ on the evaluation window.
+3. **Gaussianity violation** — jumps break the linear-Gaussian assumptions. *Mitigation:* jump-robust pre-filtering (S064); robustified update or regime switch.
+4. **Microstructure regime change** — spread/tick-size changes alter $R$ silently. *Mitigation:* re-estimate $R$ on rolling windows; monitor the innovation variance.
+5. **Stale-quote inputs** — filtering last prints instead of mids injects bounce into the state. *Mitigation:* mid-price or microprice inputs only.
+6. **Overfitting via variants** — local-level vs. local-linear-trend vs. pairs form = model mining. *Mitigation:* pick the variant *a priori* from the horizon; report all tried.
+7. **Latency illusion** — "zero lag" claims assume the print is tradeable; SIP latency still applies. *Mitigation:* label backtests on SIP data as `simulated only — requires MBO/ITCH` for any latency-sensitive claim.
+8. **Confidence misread** — $P_{t|t}$ measures *estimation* uncertainty, not *prediction* uncertainty; price can leave the ±2σ band freely. *Mitigation:* size on $P_{t|t}$, stop-loss on realized P&L.
+
+### S11. Visuals
+
+![S077 worked example — verified Kalman local-level fair value path and residuals on 10 observations](images/S077_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(e.g. Polygon 1-min bars)"] -->|"1-min bars / tick prices"| ING["Ingest + normalize<br/>(mids, exchange ts, halts)"]
+    ING -->|"clean 1-min price series"| FEAT["Feature compute<br/>(Kalman predict/update)"]
+    FEAT -->|"1-min fair-value + confidence series"| SIG["Signal S077<br/>residual / fair-value trend"]
+    SIG -->|"bar-close signal"| GATE{"Cost / confidence<br/>gate?"}
+    GATE -->|"pass"| OUT["Downstream consumer<br/>(T051 / T096)"]
+    GATE -->|"fail"| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Benhamou, E. (2016). "Trend Without Hiccups — A Kalman Filter Approach." SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2747102 — 4 KF models on the S&P 500 mini-future; the combined smoothing+extremum model roughly doubles reported net profit vs. basic models while cutting max drawdown; parameters optimized in-sample (overfit caveat).
+2. Bel Hadj Ayed, A. et al. (2015). "Forecasting trends with asset prices." arXiv:1504.03934. https://arxiv.org/abs/1504.03934v1 — latent trend as unobservable Ornstein–Uhlenbeck process; closed-form likelihood and the cost of bad calibration in a misspecified filter.
+3. Bruder, B., Dao, T.-L., Richard, J.-C. & Roncalli, T. (2011). "Trend Filtering Methods for Momentum Strategies." SSRN. http://papers.ssrn.com/sol3/papers.cfm?abstract_id=2289097 — trend-filtering methods (including Kalman-type filters) applied to momentum strategy construction.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- Kalman, R.E. (1960) original filter paper and Harvey, A.C. (1989) *Forecasting, Structural Time Series Models and the Kalman Filter* — canonical references per the signal report; specific editions/URLs not verified in this pass.
+- HF stat-arb reference arXiv 2210.15448 cited in the signal report — not independently opened.
+
+---
+
+---
+## Stage 78/200 — S078: AR(1)/ARMA short-horizon return forecast & innovation
+
+*Batch SB9 · Signal 78/100 · Provenance [D/SR] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | AR(1)/ARMA forecast of 1–5 min mid-price returns; trades the forecast direction or the standardized forecast error (**innovation**). |
+| **When it works** | When short-horizon return autocorrelation is stable and larger than the round-trip cost: calm, liquid, trend-persistent minutes. |
+| **When it dies** | When the per-bar edge is below spread+fees; when the fitted φ flips sign in regime breaks; when you run it on trade prices without removing the bid–ask bounce. |
+| **Build-or-buy in one line** | Build: the model is a dozen lines of OLS (ordinary least squares); buy only the 1-min bar feed. |
+
+Provenance: the AR/ARMA forecasting machinery is **[D]** (documented: Box–Jenkins; Tsay); the **innovation-trading rule** (long z < −2, short z > +2, exit at 0) is **[SR]** — a research framing, not a documented paper rule.
+
+### S2. How it works — plain human explanation
+
+It is 9:47:03 and AAPL's mid-price is 231.405. The last three 1-minute returns were +1.8, +0.9, −0.4 basis points. An **AR(1)** model — **autoregressive** of order 1: today's value is a linear function of last bar's value plus noise — fitted over the last hour says: r_t ≈ 0.28·r_{t−1} + noise. The one-step forecast is 0.28 × (−0.4) = −0.11 bp against a ~2.5 bp round-trip cost — twenty times smaller. The signal does nothing, and that restraint is the whole point.
+
+The economic story: at 1–5 minute horizons, mid-price returns carry small but measurable autocorrelation. Part of it is mechanical (the bid–ask bounce induces *negative* serial covariance in trade prices — Roll 1984), part of it is structural (large orders are split into autocorrelated sequences of child orders; market-maker inventory cycles push and pull the mid back). An AR(1) or ARMA(p,q) (**autoregressive moving-average**: AR terms on past returns plus **MA** terms on past forecast errors) separates the *predictable* component from the *surprise*. Two ways to trade it:
+
+1. **Forecast trading**: take the sign of the forecast, but only when |forecast| clears the cost threshold.
+2. **Innovation trading** ([SR] framing): standardize the forecast error — the **innovation**, the part of the return the model did *not* predict — as z_t = ε̂_t/σ̂_ε, and bet that huge unexplained shocks partially reverse (long z < −2, short z > +2, exit at 0).
+
+Why should any of this exist economically? Order flow is not white noise: split orders arrive in autocorrelated sequences (Bouchaud et al. 2004 document long-range correlated market orders), so signed flow — and hence the mid — drifts persistently over a few minutes, while market-maker inventory cycles pull the mid back after one-sided flow. The AR coefficient φ is the net of these two forces. The edge is tiny precisely because both forces are well known — which is why honest cost gating kills most candidate trades.
+
+**Mental model:**
+- Short-horizon returns = a small predictable part + a dominant surprise; the model exists to isolate the surprise.
+- You are not predicting the market; you are measuring whether the market's own short memory is currently stronger than your cost to trade it.
+- The trade gate (|forecast| > cost) fires rarely by design; a frequently-firing AR(1) signal at 1-minute is almost certainly a cost model bug or look-ahead.
+
+### S3. The math — exact formula
+
+**AR(1) (documented [D]):**
+
+r_t = c + φ·r_{t−1} + ε_t,   ε_t white noise, E[ε_t] = 0, Var(ε_t) = σ²_ε
+
+**ARMA(p,q) (documented [D]):**
+
+r_t = c + Σᵢ₌₁ᵖ φᵢ·r_{t−i} + Σⱼ₌₁ᵍ θⱼ·ε_{t−j} + ε_t
+
+One-step forecast (causal: computed at event/bar *t* using only data ≤ *t*; tradable no earlier than *t+1*):
+
+f̂_t = c + Σᵢ φᵢ·r_{t−i}
+
+**Innovation** and its standardization:
+
+ε̂_t = r_t − f̂_t   (the surprise),   z_t = ε̂_t / σ̂_ε
+
+**Forecast-direction rule [D form]**: direction = sign(f̂_t) **only if** |f̂_t| > c_thr, where c_thr is the example round-trip cost threshold.
+
+**Innovation rule [SR — research framing, not a paper rule]**: long when z_t < −2, short when z_t > +2, exit when z_t crosses 0. Parameters re-estimated on rolling windows; model order chosen by AIC/BIC (**Akaike/Bayesian information criteria**: penalized fit measures that trade off likelihood against number of parameters).
+
+**Bid–ask bounce (Roll 1984) — why trade prices need cleaning:** under a constant spread s, trade prices follow Δp_t = m_t + (s/2)(q_t − q_{t−1}) with q_t ∈ {+1,−1} the trade sign, so Cov(Δp_t, Δp_{t−1}) = −s²/4. The AR(1) coefficient on *trade* prices is mechanically negative; running the signal on trade prices without de-bouncing confuses the bounce with predictability. Use mid-prices (or quote midpoints).
+
+**Parameter table** (every default marked `example — not an institutional standard`):
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default example |
+|---|---|---|---|---|---|
+| AR order | p | 1–3 | underfits persistent flow | fits noise; unstable | p = 1 |
+| MA order | q | 0–2 | misses bounce/MA structure | over-parameterized | q = 0 |
+| Estimation window | W | 30–240 bars | noisy φ̂, whipsaws | stale through regime breaks | W = 60 1-min bars |
+| Cost threshold | c_thr | 1–5 bp | trades below cost | never fires | c_thr = 2.5 bp |
+| Innovation z-entry | z_entry | 1.5–3 | constant trading, cost bleed | never trades | ±2 [SR] |
+| AIC/BIC selection | — | p,q ∈ {0..3} | picks noise | picks inertia | re-check weekly [example] |
+
+**Normalization**: fit on mid-price *returns* (or spreads), never raw prices (non-stationary — φ̂ drifts to 1); z-score the innovation (z_t) for cross-name comparability; causal timing "computed at bar *t* using only data ≤ *t*; tradable no earlier than *t+1*". **Variants**: (a) AR(1) on mid returns (directional); (b) ARMA(1,1) on trade prices with the MA term absorbing the bounce; (c) innovation trading ([SR]) vs forecast trading; (d) calendar-time 1-min bars vs event-time bars.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+Synthetic 12-bar tape, 1-min mid returns in **basis points**, generated with **seed 78** (`rng = np.random.default_rng(78)`). Model: r_t = 0.28·r_{t−1} + ε_t, ε ~ N(0, 4.5 bp). The coefficient φ̂ = 0.28 is *assumed already estimated* on a prior 60-bar window — this example does not pretend to fit it from 12 bars. Forecast f_t = 0.28·r_{t−1}; innovation ε̂_t = r_t − f_t; gate |f_t| > 2.5 bp (example threshold).
+
+| t | r_t (bp) | f_t (bp) | innovation ε̂_t (bp) | \|f_t\| > 2.5? | Action |
+|---|---|---|---|---|---|
+| 0 | −3.04 | — | −3.04 | no data | NONE |
+| 1 | +0.93 | −0.85 | +1.78 | no | NONE |
+| 2 | −1.46 | +0.26 | −1.72 | no | NONE |
+| 3 | −5.33 | −0.41 | −4.92 | no | NONE |
+| 4 | +1.70 | −1.49 | +3.19 | no | NONE |
+| 5 | −1.07 | +0.48 | −1.55 | no | NONE |
+| 6 | −0.09 | −0.30 | +0.21 | no | NONE |
+| 7 | +3.23 | −0.03 | +3.25 | no | NONE |
+| 8 | +12.29 | +0.90 | +11.39 | no | NONE |
+| 9 | +1.28 | +3.44 | −2.16 | **yes** | **BUY** (forecast +3.44 bp > 2.5) |
+| 10 | +2.74 | +0.36 | +2.38 | no | NONE |
+| 11 | +4.77 | +0.77 | +4.00 | no | NONE |
+
+Hand-check of bar 9: f_9 = 0.28 × 12.29 = +3.44 bp ✓; |3.44| > 2.5 → BUY, tradable at bar 10's open. Bar 8's +12.29 bp realized return produced a +11.39 bp innovation — the surprise was nine times the forecast, and the model *did not trade it*: the forecast rule only fires at bar 9. (The matching chart — forecast vs realized with the cost gate — appears in §S11.)
+
+**What to notice:** the gate fired once in 12 bars. That is the honest signature of this signal: with φ = 0.28 and 4.5 bp noise, the typical forecast is ~1 bp, well inside a 2.5 bp cost band. This toy tape has no fees, no latency, no partial fills, and a *known* φ — a real deployment estimates φ with error, which shrinks the edge further. Do not read this as a backtest.
+
+### S5. Strategies that use this signal
+
+- **T052 — AR/ARMA Innovation Trader**: *primary trigger* — trades forecast innovations (surprises) per the [SR] z-rule, validated by the trade–quote VAR (vector autoregression; S084).
+- **T040 — PCA Eigenportfolio Residual Reversal**: uses S078 for *timing* — AR-innovation timing of residual-reversal entries (signal T040 composes S080, S039, S078).
+- **T051 — Kalman Fair-Value Trend**: uses S078 as a *timing/refinement input* alongside the Kalman fair-value deviation (S077).
+- **T096 — Kalman + HMM Adaptive Trend**: uses S078 for AR-innovation-timed entries inside the HMM regime book.
+- **T057 — Fractional-Differentiation Memory Trader**: uses S078 to time entries on fractionally-differenced series.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Mid price / quote midpoint | float | 1-min bars (or 5-min) | Tier 1–2 | Prefer NBBO (national best bid and offer) midpoint over trade price (de-bounced) |
+| Bid–ask spread series | float (bp) | 1-min bars | Tier 1–2 | For the cost gate c_thr; intraday, not static |
+| Corporate actions / splits | events | daily | Tier 0–1 | Adjust returns; splits break AR continuity |
+| Halt / auction flags | bool | 1-min bars | Tier 1–2 | Exclude halt bars from estimation window |
+
+Collection: Polygon Stocks Advanced (`/v2/aggs/ticker/{t}/range/1/minute/...`) or Databento MBP-1 (`dbn` schema, `midpoint` from best bid/ask), ≤20-line sketch:
+
+```python
+import polars as pl, numpy as np
+bars = pl.read_parquet("aapl_1min.parquet").sort("ts")          # mid, spread_bps
+r = (bars["mid"] / bars["mid"].shift(1) - 1) * 1e4              # bp returns
+W, phi = 60, None
+for t in range(W, len(r)):                                     # rolling refit (example cadence)
+    y, x = r[t-W:t].to_numpy()[1:], r[t-W:t].to_numpy()[:-1]
+    phi = float(np.polyfit(x, y, 1)[0])                        # OLS AR(1); AIC/BIC for (p,q)
+    f = phi * r[t-1]                                           # causal forecast, tradable at t+1
+    if abs(f) > 2.5:                                           # example cost gate
+        submit("BUY" if f > 0 else "SELL", tradable_at=t+1)
+```
+
+Storage per symbol-day (cost-model §4): 1-min bars, 500 symbols ≈ 50 MB total/day → **~0.1 MB per symbol-day** (parquet). Data-quality checklist: timestamp normalization, corporate actions, halts/auctions, DST and half-days, stale quotes (frozen NBBO fakes autocorrelation).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial.** AR(1)/ARMA on 1-min bars is pure vectorized numpy/polars: refitting an AR(1) on 60-bar windows for 500 symbols is a few million flops — sub-millisecond per full-universe refit (cost-model §2: numpy ~50–200M elements/sec; polars simple ops ~10–50M rows/sec). RAM: 500 symbols × 60 days of 1-min bars ≈ 12 MB (cost-model §3) — noise against the 77 GB working budget. Bottleneck is the **feed**, not compute. What breaks first at 500 symbols: the refit scheduler and corporate-action pipeline, not the math.
+
+Engineering band: single-symbol AR(1) prototype is Tier L (4–12 h, cost-model §5); a 500-symbol rolling harness with cost gate, regime monitoring, and the trade–quote VAR validation is **Tier M (20–60 h)** — budget **20–60 h ≈ $3,000–9,000** loaded-cost estimate at $150/hr.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq, Alpaca IEX daily) | Daily bars | ~$0 | Free | No 1-min bars — insufficient |
+| Tier-1 retail (Polygon Stocks Advanced, Alpaca SIP) | 1-min/real-time SIP (Securities Information Processor — the consolidated US quote feed) bars + actions | ~$30–200/mo | Cheap, good enough for 1-min mid returns | SIP latency; NBBO only |
+| Tier-2 professional (Databento Standard) | Honest L1 MBP-1, futures | ~$200/mo + usage | Cleaner timestamps, depth for spread series | Overkill for AR(1) alone |
+| Academic route | TAQ via WRDS (if affiliated) | ~institutional | Publication-grade | Access friction |
+
+*Indicative — verify before budgeting.* **Verdict: build.** The estimator is ~15 lines; the edge lives in your cost gate and your regime filter, which no vendor sells. **Buy** the Tier-1 feed (the crossover: buy the 1-min bars, build everything else).
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Roll (1984), *J. Finance* 39(4) | US equities, trade prices | Bid–ask bounce ⇒ negative first-order serial covariance; spread = 2√(−cov) | Before-cost (it *is* a cost estimator) | Positive sample covariances break the estimator (imaginary spreads) |
+| Hasbrouck (1991), *J. Finance* 46(1) | NYSE issues | Trade **innovations** (not raw volume) forecast quote revisions with protracted lag; VAR(p) with 5–30 lags | Before-cost (documents impact, not P&L) | Information content ≠ tradable profit; impact is concave in size |
+| Bouchaud, Gefen, Potters & Wyart (2004), *Quant. Finance* 4(2) | Paris Bourse | Market orders long-range correlated (persistence); limit orders mean-reverting — the tension AR models exploit | Before-cost (structural fact) | Describes order flow, not an AR(1) trading rule |
+
+**Honest bottom line:** the literature documents the *autocorrelation structure*, not a profitable AR(1) trading rule. No source in this chapter's set reports a live, after-cost Sharpe for AR(1) forecast trading — the standalone per-bar edge is usually smaller than the spread. As a **standalone trigger**, weak/borderline; as a **filter and innovation extractor** (the surprise series fed to T052/T051), genuinely useful. The [SR] innovation rule has no documented efficacy and must be validated out-of-sample, e.g. with the trade–quote VAR (S084) per T052.
+
+### S10. Failure modes & pitfalls
+
+1. **Bounce contamination** (trade prices, not mids) → always use mid/quote-midpoint returns; sanity-check φ̂ sign against Roll's prediction.
+2. **Look-ahead in refit** → forecast at *t* uses only data ≤ *t*; tradable no earlier than *t+1*; refit on a strictly lagged window.
+3. **Cost-gate optimism** → model spread + fees + slippage explicitly; the gate must use *effective* round-trip cost, not the quoted half-spread.
+4. **Regime flips of φ** → φ̂ estimated in a calm window goes stale in a vol event; monitor φ̂ stability and stand down on breaks.
+5. **Overfitting (p,q) by AIC/BIC mining** → cap (p,q) ≤ 3, require stability across sub-periods, prefer p = 1.
+6. **Halt/auction/split bars** → exclude from estimation; a split bar looks like a −50% "return" to a naive AR.
+7. **Microstructure noise vs signal** → at 1-min the noise dominates; the signal's job is to *measure* that, not to wish it away.
+8. **Crowding of the innovation fade** → the [SR] z-rule fades the same shocks everyone else's models see; size it as a timing overlay, not a book.
+
+### S11. Visuals
+
+![S078 worked example — synthetic 12-bar AR(1) forecast vs realized returns with cost gate](images/S078_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(Polygon / Databento MBP-1)"] -- "1-min quote bars" --> ING["Ingest + normalize<br/>(ts, splits, halts)"]
+    ING -- "1-min mid returns (bp)" --> FEAT["Feature compute<br/>(rolling AR(1)/ARMA fit)"]
+    FEAT -- "1-min forecast + innovation z" --> SIG["Signal S078<br/>forecast gate / z-rule"]
+    SIG -- "trade decision (1-min cadence)" --> GATE{"Cost / toxicity<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T052 / T051 / execution)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Roll, R. (1984). "A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient Market." *Journal of Finance*, 39(4), 1127–1139. https://authors.library.caltech.edu/records/afwsc-6bb61
+- Hasbrouck, J. (1991). "Measuring the Information Content of Stock Trades." *Journal of Finance*, 46(1), 179–207. http://ideas.repec.org/a/bla/jfinan/v46y1991i1p179-207.html
+- Bouchaud, J.-P., Gefen, Y., Potters, M. & Wyart, M. (2004). "Fluctuations and response in financial markets: the subtle nature of 'random' price changes." *Quantitative Finance*, 4(2), 176–190. http://ideas.repec.org/p/arx/papers/cond-mat-0307332.html
+- Box, G.E.P. & Jenkins, G.M. (1970). *Time Series Analysis: Forecasting and Control*. Holden-Day. (Canonical AR/ARMA reference per report entry; cited for the documented [D] machinery.)
+- Tsay, R.S. (2005). *Analysis of Financial Time Series*. Wiley. (Canonical intraday time-series reference per report entry.)
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not cite as fact):
+- Duck.ai Q-SB9-1 verified the Kalman worked example to 4th-decimal accuracy but found the PCA worked example internally inconsistent (see S080 disclosure).
+- Duck.ai Q-SB9-2 planning ranges: Kalman/HMM/ARMA prototype 40–80 h; data $50–2,000/mo illustrative (indicative — verify before budgeting).
+
+*Research provenance note — source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).*
+
+---
+## Stage 80/200 — S080: PCA / statistical-factor residual reversal (incl. eigenportfolios)
+
+*Batch SB9 · Signal 80/100 · Provenance [D] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | **PCA** (principal component analysis) splits panel returns into a few shared statistical factors plus **residuals**; the residual is the purest mean-reverting component — trade it market-neutral. |
+| **When it works** | When residuals are genuinely idiosyncratic and mean-revert faster than costs eat them: calm markets, uncrowded names, shortable universe. |
+| **When it dies** | Crowded unwinds (2007-style), factor breaks, borrow recalls, turnover that exceeds the per-trade edge; or when "residual" is just mismeasured beta. |
+| **Build-or-buy in one line** | Build: PCA is one `eigh` call; buy only broad daily/intraday bar coverage. |
+
+Provenance **[D]** (Avellaneda & Lee 2010; restated per report entry).
+
+### S2. How it works — plain human explanation
+
+It is 9:47:03. Two correlated stocks, A and B, both track the market, but in the last hour A drifted +1.5 standard deviations above what B (and the market) would imply, while nothing happened to either company. **PCA** — principal component analysis: a rotation of the return panel into orthogonal directions (**principal components**) ranked by variance explained — says most of what moves A and B together is one shared factor. Subtract it and what remains is the **residual**: the stock's own idiosyncratic wiggle.
+
+An **eigenportfolio** (Avellaneda–Lee 2010) is simply a tradeable version of one principal component: weight each stock by its eigenvector entry divided by its volatility, so the portfolio's return *is* the factor's return. The residual of stock i is then its return minus its loadings on the top few eigenportfolios. Residuals of liquid stocks often behave like an **OU process** — **Ornstein–Uhlenbeck**, the mathematical name for noisy mean reversion: dX = κ(μ−X)dt + σdW, pulled toward μ at speed κ while being buffeted by noise. The signal fades stretched residuals: short the stock whose residual is far above its OU-implied equilibrium, buy the one far below, hedge the factor exposure away so the book is market-neutral.
+
+Why should residuals mean-revert? Mostly microstructure and inventory: a burst of one-sided flow pushes a stock away from its statistical peers; liquidity providers lean against it; the peer relationship reasserts. The catch — the 2007 quant-unwind lesson — is that *everyone* estimates similar factors and fades the same residuals. Then "idiosyncratic alpha" is a crowded trade, and when many desks cut risk at once, the residuals don't revert; they gap.
+
+**Mental model:**
+- Returns = a few shared factors + your stock's own noise; PCA finds the factors without needing to name them.
+- The residual is the only part of a stock's move that is *its*, so it is the only part you can bet on mean-reverting.
+- A residual trade is a bet that the peer relationship holds *and* that you are not standing in a crowded exit with fifty other desks.
+
+### S3. The math — exact formula
+
+**Factor decomposition (documented [D]):**
+
+R_{i,t} = Σⱼ₌₁ᵐ β_{ij}·F_{j,t} + R̃_{i,t}
+
+where R_{i,t} is stock i's (standardized) return, F_{j,t} are the m statistical factors, β_{ij} the loadings, and R̃_{i,t} the residual. Causal timing: factors and loadings are estimated on a window ending at *t*; the residual at *t* is tradable no earlier than *t+1* — **no look-ahead**: only information through *t* may enter.
+
+**PCA estimation:** standardize z_{i,t} = (r_{i,t} − r̄_i)/s_i over window W; Σ = (1/(W−1))·Z^⊤Z; solve Σ·v_j = λ_j·v_j (**eigenvalues** λ_j = variance along direction j; **eigenvectors** v_j = the directions). m-factor reconstruction ẑ_t = Σⱼ₌₁ᵐ v_j(v_j^⊤z_t); residual u_t = z_t − ẑ_t, i.e. u_{i,t} = z_{i,t} − Σⱼ₌₁ᵐ v_{j,i}(v_j^⊤z_t). Signal = −u_{i,t}/σ̂_{u_i}; enter when |u/σ̂| > 1.5–2.5 (example thresholds).
+
+**Eigenportfolio form (Avellaneda–Lee 2010 [D]):** eigendecompose the *correlation* matrix ρ = Σ_k λ_k v_k v_k^⊤. Eigenportfolio weights Q_{ki} = v_{ki}/σ_i; factor returns F_{kt} = Σ_i Q_{ki} r_{it}; residuals X_{it} = r_{it} − Σ_k β_{ik}F_{kt}. Fit OU to each residual; the **s-score** s_{it} = (X_{it} − μ_i)/(σ_i/√(2κ_i)); allocate −1 if s > c_thresh **and** R²_OU > c_crit, +1 if s < −c_thresh, else 0 (c's are examples).
+
+**Parameter table** (every default `example — not an institutional standard`):
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default example |
+|---|---|---|---|---|---|
+| Estimation window | W | 60–250 d (daily); 500–10,000 (intraday) | noisy eigenvectors | stale factors | W = 252 d |
+| # factors | m | 1–5 or 50–80% variance explained | leaves factor in "residual" | fits noise as factors | m = 3 |
+| Residual half-life target | ln2/κ | 2–20 observations | untradable turnover | factor drift eats it | 5 obs |
+| s-score entry | c_thresh | 1.5–2.5 | cost bleed | never trades | 2.0 |
+| OU fit quality | c_crit (R²_OU) | 0.3–0.7 | trades non-MR noise | filters everything | 0.5 |
+
+**Normalization**: standardize by trailing volatility (correlation PCA) so large-vol names don't dominate the eigenvectors; the Avellaneda–Lee eigenportfolio form divides eigenvector weights by σ_i for the same reason. **Variants**: (a) covariance PCA vs correlation PCA (eigenportfolio); (b) sector-neutral residuals (PCA within sectors); (c) s-score trading vs raw −u/σ̂ trading; (d) daily eigenportfolios (1–5 day horizon) vs intraday PCA residuals (minutes–hours).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+> **Disclosure — the research material was wrong here, and this chapter does not repeat the error.** The duck.ai chatbot's worked example printed a 10×3 return panel claiming each column had mean zero, alongside a covariance matrix with diagonal 1.0833 and off-diagonal 0.9722. Recomputed from the printed panel: column A sums to 3.5 (mean **0.35**, not zero), column B sums to −6.5 (mean **−0.65**, not zero) — the "mean zero" claim is **false**. The sample covariances (÷9) are Σ_AA ≈ 1.3611 and Σ_BB ≈ 1.6944, **not** the displayed 1.0833. Only the off-diagonal Σ_AB = 8.75/9 ≈ 0.9722 matches. The printed panel is **not** re-used. What *is* verified: **given the stated Σ** — exact fractions 13/12 and 35/36, displayed rounded as 1.0833/0.9722 — the eigendecomposition (λ_1 = 2.0556, v_1 = (1/√2)[1,1,0]^⊤), the residual derivation u_{A,t} = (A_t − B_t)/2, and the day-1 arithmetic (Â_1 = 0.5, u_{A,1} = 0.5) are all correct. This chapter therefore uses the **stated-Σ route**: Σ is given below, never re-estimated from the bad panel.
+
+**Stated covariance** (3 assets; C is uncorrelated with A, B):
+
+Σ = [[1.0833, 0.9722, 0], [0.9722, 1.0833, 0], [0, 0, 1.0833]]
+
+**Eigendecomposition** (verified): λ_1 = 2.0556, v_1 = (1/√2)[1,1,0]^⊤; λ_2 = 1.0833; λ_3 = 0.1111. Variance explained: 63.25% / 33.33% / 3.42%. The dominant factor is the A–B pair moving together (the "market"); C stands alone.
+
+**Residual construction:** with m = 1 factor, the reconstruction of A is Â_t = (A_t + B_t)/2 (since v_1A·(v_1^⊤z_t) = (A_t+B_t)/2), so the residual is u_{A,t} = A_t − (A_t+B_t)/2 = **(A_t − B_t)/2**. (Symmetrically u_{B,t} = −u_{A,t}: the trade is implicitly a pair.)
+
+**Synthetic panel** — 10 days of *standardized* returns for A and B, **seed 80** (`rng = np.random.default_rng(80)`); day 1 is fixed to the verified arithmetic A_1 = 1.0, B_1 = 0.0 ⇒ Â_1 = 0.500, u_{A,1} = 0.500. Residual z-score uses σ̂_u = 0.72 estimated on these 10 days (pedagogical only — production uses 60–250 days); fade rule: |z| > 2.0 → trade against the residual (example threshold).
+
+| day | A_t | B_t | Â_t = (A+B)/2 | u_{A,t} = (A−B)/2 | z_t | Signal |
+|---|---|---|---|---|---|---|
+| 1 | +1.000 | +0.000 | +0.500 | +0.500 | +0.69 | NONE |
+| 2 | −0.411 | −0.986 | −0.699 | +0.287 | +0.40 | NONE |
+| 3 | −0.580 | +0.425 | −0.078 | −0.502 | −0.70 | NONE |
+| 4 | −1.199 | −0.673 | −0.936 | −0.263 | −0.37 | NONE |
+| 5 | −1.177 | +0.928 | −0.125 | −1.053 | −1.46 | NONE |
+| 6 | +2.553 | −0.510 | +1.021 | +1.532 | **+2.13** | **SHORT A** (fade +residual) |
+| 7 | +0.133 | −0.918 | −0.393 | +0.526 | +0.73 | NONE |
+| 8 | +0.112 | −0.256 | −0.072 | +0.184 | +0.26 | NONE |
+| 9 | +0.867 | −0.825 | +0.021 | +0.846 | +1.17 | NONE |
+| 10 | +0.291 | −0.052 | +0.119 | +0.172 | +0.24 | NONE |
+
+Hand-check day 6: u_{A,6} = (2.553 − (−0.510))/2 = 3.063/2 = +1.532 ✓; z = 1.532/0.72 = +2.13 > 2.0 → SHORT A, expecting the residual to mean-revert toward 0. Day 1 reproduces the verified arithmetic exactly (Â_1 = 0.500, u_{A,1} = 0.500 ✓). (The matching chart — stated-Σ eigendecomposition and the residual fade series — appears in §S11.)
+
+**What to notice:** one signal in ten days — the gate is selective by construction. The residual's z-score is measured against σ̂_u from only 10 observations, which is statistically meaningless; this example teaches the *arithmetic*, not estimation. Real Σ estimation needs hundreds of observations, and even then eigenvectors wobble — which is why crowded residual trades unwind together. No borrow costs, no short-sale constraints, no market impact: do not read this as a backtest.
+
+### S5. Strategies that use this signal
+
+- **T040 — PCA Eigenportfolio Residual Reversal**: *primary trigger* — statistical-factor residual mean reversion with AR-innovation timing (S080 primary, with S039, S078).
+- **T033 — Johansen VECM Basket Arb**: uses S080 residuals as a complementary factor-residual input to cointegrated multi-leg baskets (S055, S080, S051).
+- **T038 — Sector Momentum + Idiosyncratic Fade**: uses S080 to identify and fade idiosyncratic residual extremes while riding sector momentum (S062, S039, S080).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Return panel (broad universe) | float | daily bars (eigenportfolio); intraday bars (PCA residuals) | Tier 1–2 | 500–3000 names; survivorship-bias-free history matters |
+| Volatility estimates | float | daily | Tier 1 | For correlation-PCA standardization and Q_{ki} = v_{ki}/σ_i |
+| Borrow availability / fees | float/bool | daily | Tier 2–3 | Short leg feasibility; recalls kill the trade |
+| Corporate actions, delistings | events | daily | Tier 0–1 | Point-in-time universe; dead names bias eigenvectors |
+
+Collection: any intraday vendor with broad coverage (Polygon, Databento, Alpaca SIP); daily panel via Stooq/Tiingo for prototyping, ≤20-line sketch:
+
+```python
+import polars as pl, numpy as np
+px = pl.read_parquet("panel_daily.parquet").sort(["sym","ts"])   # point-in-time, split-adj
+rets = px.with_columns((pl.col("close")/pl.col("close").shift(1)-1).over("sym").alias("r"))
+Z = rets.pivot("ts","sym","r").fill_null(0).to_numpy()            # T x N
+z = (Z - Z[-252:].mean(0)) / Z[-252:].std(0)                      # standardize, causal window
+Sigma = np.cov(z[-252:].T)                                       # /(W-1)
+lam, V = np.linalg.eigh(Sigma); k = np.argsort(lam)[::-1][:3]    # top-m factors
+F = z[-1:] @ V[:, k]                                             # factor returns at t
+u = z[-1:] - F @ V[:, k].T                                       # residuals, tradable at t+1
+```
+
+Storage per symbol-day (cost-model §4): daily bars for 3,000 stocks ≈ 5 MB total/day — **trivial**; the PCA panel itself is 500×252×8 ≈ 0.96 MiB and the covariance 500×500×8 ≈ 1.91 MiB (byte arithmetic verified). Data-quality checklist: survivorship bias, point-in-time membership, corporate actions, borrow/HTB (hard-to-borrow) flags, cross-panel timestamp alignment.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible, borderline trivial for daily.** A 500×500 eigendecomposition takes ~10–100 ms optimized (cost-model §2; naïve Python 0.5–5 s is an implementation problem, not hardware), the covariance update is sub-millisecond. RAM: panel + covariance ≈ 5–20 MB dense, 0.1–2 GB with cached rolling windows (duck.ai planning estimate) — far under the 77 GB working budget (cost-model §3). Bottleneck: **universe hygiene** (point-in-time membership, delistings), not arithmetic.
+
+Engineering band: basic rolling PCA is **Tier M (20–60 h, cost-model §5)**; a sector-neutral, vol-scaled, point-in-time production version is 100–220 h (duck.ai planning estimate). Budget **~40–60 h ≈ $6,000–9,000 loaded-cost estimate** at $150/hr for a honest research-grade build.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 (Stooq daily) | Daily bars, broad | ~$0 | Free prototyping | Survivorship bias risk; no borrow data |
+| Tier-1 (Tiingo/Polygon) | Daily + 1-min, actions | ~$30–200/mo | Clean actions, broad coverage | Borrow/HTB data thin |
+| Tier-2 (Databento) | Intraday L1 for residual timing | ~$200/mo + usage | Honest intraday residuals | Overkill for daily eigenportfolios |
+| Borrow data (specialized) | HTB flags, fees | ~$$$ | Tells you if the short leg exists | Expensive for a first build |
+
+*Indicative — verify before budgeting.* **Verdict: build.** PCA is one eigendecomposition; the edge is in universe hygiene, the OU fit, and the cost model — none of which are for sale. **Buy** the broad bar coverage (Tier-1) and, before sizing anything real, the borrow data.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Avellaneda & Lee (2010), *Quant. Finance* 10(7) | US equities, 1997–2007 (PCA window from 1996) | Eigenportfolio + OU s-score stat-arb; reported attractive historical risk-adjusted performance | Before-cost reference (canonical in-sample result, NOT a live number) | Pre-publication sample; no borrow/turnover stress; later performance is universe- and cost-dependent |
+| Liew & Roberts (2013), *Risks* 1(3) | US equities, 2001-01-02 → 2010-05-27 | Avellaneda–Lee + Black–Litterman (a Bayesian method for blending views into portfolio weights) blend: **+45% Sharpe vs the unblended AL strategy** | Cost treatment not stated — treat as before-cost | Improvement over a baseline, not an absolute return claim |
+| Epstein, Wang, Choi & Pelger (2025), arXiv:2510.11616 | Largest US equities, Jan 1998–Dec 2021 | PCA + OU-threshold benchmark (K=10): gross Sharpe **0.80 → net Sharpe −4.32 after transaction costs** | **After-cost (documented negative net)** | One study's construction and cost model — but it is the honest shape of the problem |
+
+**Regimes where it fails:** vol spikes (factor correlations jump; eigenvectors estimated in calm regimes mis-hedge), crowded unwinds (2007 quant unwind: correlated long-short books deleveraging together — Marquette review of the episode), low-liquidity names (residual "reversion" is just stale pricing), borrow recalls. Documented decay: post-publication crowding compresses residual premia; the 2025 study above shows a textbook PCA+OU construction going deeply negative net of costs.
+
+**Honest bottom line:** as a **standalone trigger**, PCA residual reversal is historically documented but fragile — attractive in-sample, routinely disappointing net of realistic frictions. As a **residual-extraction technology** (the factor model inside T040/T033/T038), it is indispensable. The after-cost backtest must be R_net = R_gross − Σc_i|Δw_i| − borrow − financing − impact, stressed at 2× spreads, ½ liquidity, borrow recalls, and a 2008-style shock. And remember the documented shape (unverified lead): ~6%/yr can coexist with a ~49% max drawdown — positive mean is not a livable ride.
+
+### S10. Failure modes & pitfalls
+
+1. **Look-ahead in the panel** → estimate Σ only on data ≤ *t*; residuals tradable at *t+1*; keep delisted names in history *as of* each date.
+2. **Mismeasured beta dressed as alpha** → too few factors leaves market exposure in the "residual"; check residual correlation with the market factor.
+3. **Crowding** → many desks estimate similar factors and cut risk in the same vol events; monitor crowding proxies and size down when residual autocorrelation rises.
+4. **Cost blowup** → residuals mean-revert a few bps; turnover at 10 bp round-trip kills the gross edge (see the −4.32 net Sharpe above); model Σc_i|Δw_i| + borrow + financing + impact explicitly.
+5. **Regime breaks** → one-day correlation spikes invalidate the hedge; stress-test and keep a kill switch on factor-vol.
+6. **Short-sale constraints** → HTB names, recalls, buy-ins; gate the universe on borrow availability.
+7. **Overfitting m and thresholds** → cap factors, validate on purged walk-forward splits.
+8. **Stale-price residuals** → in illiquid names the residual is nonsynchronous pricing, not mispricing; restrict to liquid names.
+
+### S11. Visuals
+
+![S080 worked example — stated-Σ eigendecomposition with variance explained and synthetic residual fade series](images/S080_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(Polygon / Databento, broad)"] -- "daily bars, 500–3000 names" --> ING["Ingest + normalize<br/>(PIT = point-in-time universe, actions, delists)"]
+    ING -- "standardized return panel (daily)" --> FEAT["Feature compute<br/>(rolling PCA / eigenportfolios)"]
+    FEAT -- "residuals + OU s-scores (daily)" --> SIG["Signal S080<br/>residual fade, |z|>2"]
+    SIG -- "market-neutral orders (daily)" --> GATE{"Cost / borrow<br/>gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T040 / T033 / T038)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Avellaneda, M. & Lee, J.H. (2010). "Statistical Arbitrage in the U.S. Equities Market." *Quantitative Finance*, 10(7), 761–782. Working paper: https://math.nyu.edu/~avellane/AvellanedaLeeStatArb20090616.pdf
+- Liew, J. & Roberts, R. (2013). "U.S. Equity Mean-Reversion Examined." *Risks*, 1(3), 162–175. https://ideas.repec.org/a/gam/jrisks/v1y2013i3p162-175d31043.html
+- Epstein, E.L., Wang, R., Choi, J. & Pelger, M. (2025). "Attention Factors for Statistical Arbitrage." arXiv:2510.11616. https://arxiv.org/abs/2510.11616v1
+- Connor, G. & Korajczyk, R.A. (1988). "Risk and return in an equilibrium APT: Application of a new test methodology." *Journal of Financial Economics*, 21(1), 341–360. (Asymptotic PCA — canonical reference per report entry; listed for the documented [D] machinery.)
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not cite as fact):
+- "PCA strategies Sharpe ≈ 0.90–0.95 under 10bp round-trip, 1998–2021" — specific model/universe, NOT universal; not independently verified.
+- Public implementation "~6%/yr 2010–2019 with ~49% max drawdown" (QuantConnect) — could not verify the page; kept as a lead.
+- Duck.ai Q-SB9-2 planning figures: rolling PCA per-window ms (optimized) / seconds naïve; 5–20 MB dense, 0.1–2 GB with cache; 100–220 h build (indicative — verify before budgeting).
+
+*Research provenance note — source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).*
+
+---
+## Stage 82/200 — S082: Deep learning on the LOB (DeepLOB + classical ML features)
+
+*Batch SB9 · Signal 82/100 · Provenance [D/SR] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | **DeepLOB** (**deep** neural network on the **limit order book**: **CNN** spatial filters + **LSTM** temporal memory) predicts the next mid-price move from 100 LOB snapshots; a cheaper cousin uses hand-built features in logistic/**GBM** (gradient-boosted machine) models. |
+| **When it works** | When you have synchronized, high-quality event data and the model beats a GBT (gradient-boosted trees) baseline *net of* fees, latency, queue, and turnover — horizons longer than your execution latency, labels on executable prices. |
+| **When it dies** | When 55% accuracy meets a spread ten times the edge; mid-price evaluation traded at bid/ask; assumed fills with no queue model; FI-2010-style (the public LOB benchmark: 5 NASDAQ-Nordic stocks, 10 days — see §S9) toy benchmarks. |
+| **Build-or-buy in one line** | Buy the L2 (level-2: full depth-of-book) data and replay; build the model only after a non-deep baseline, and only if the neural net improves *net-of-cost* consistently. |
+
+Provenance **[D/SR]**: the deep form is documented [D] (Zhang, Zohren & Roberts 2019; Sirignano & Cont 2019); the classical feature-stack form is a standard reconstruction [SR].
+
+> **The central sentence of this chapter, from the research:** *"Accuracy, Sharpe, and gross backtest return are NOT interchangeable with executable profit."* Everything below is an elaboration of it.
+
+### S2. How it works — plain human explanation
+
+It is 9:47:03.000. AAPL's book shows 800 shares bid at 231.40 and 300 offered at 231.41, with similar stacks ten levels deep on each side. The **LOB** — limit order book — is the full ladder of resting limit orders, price by price, size by size. The **microprice** (size-weighted midpoint) sits a hair above the mid: the book is bid-heavy, so the next move is slightly more likely up. That single observation is the entire classical program: hand-built features (imbalance, queue depth, spread, short-horizon return) fed into logistic regression or gradient-boosted trees (**GBT**: ensembles of decision trees like LightGBM/XGBoost, the tabular-data workhorse).
+
+**DeepLOB** (Zhang, Zohren & Roberts 2019) skips the hand-building. It feeds the last 100 ten-level snapshots — a 100×40 tensor (100 events × 10 levels × price+size × bid+ask) — into **convolutional** filters (**CNN**: a layer sliding small weight patterns across an input to find local structure — here, *across book levels*) stacked with **LSTM** modules (**long short-term memory**: a recurrent layer remembering patterns *across time*). Out comes a **softmax** — a normalized probability vector — over {up, flat, down} at horizons of 10/20/50/100 events. Trade the predicted direction above a confidence threshold.
+
+Why should the book predict the next move? Because the book *is* the supply/demand schedule: heavy bid queues mean more buyers waiting than sellers, so the mid drifts toward the heavy side. The deep network's bet is that nonlinear interactions across levels and time carry information that linear features miss. Sirignano & Cont (2019) add a striking finding: a model trained *pooled across ~1,000 stocks* beats per-stock models — the price-formation mechanism is universal, not asset-specific — and long price/order-flow history helps (path dependence).
+
+The honest counterweight: a classifier does not pay the spread. The worked example (§S4) shows a 55%-accurate model losing 0.049 pence per trade, because the expected move is smaller than the half-spread it must cross. *"AUC (area under the ROC curve) does not estimate any of those terms. Even a statistically significant forecast can have negative net P&L if the expected move is smaller than the effective round-trip cost."*
+
+**Mental model:**
+- The LOB is a photograph of supply and demand; DeepLOB learns to read nonlinear patterns in a stack of 100 photographs.
+- Classification accuracy is measured on mid-prices; profit is made at bid/ask — the two live in different currencies.
+- The development sequence is fixed: logistic/trees → feature-rich trees → compact neural → DeepLOB only if neural wins *net-of-cost* → Transformer only if it survives strict walk-forward plus regime tests.
+
+### S3. The math — exact formula
+
+**DeepLOB input [D]:** X_t ∈ ℝ^{100×40}: the 100 most recent 10-level LOB snapshots in *event time* (price and size at each of 10 bid and 10 ask levels = 40 features per snapshot), normalized (z-score per feature in the paper's protocol).
+
+**Labels [D]:** with m_−(t) = average mid over the past k events and m_+(t) = average mid over the next k events, l_t = (m_+(t) − m_−(t))/m_−(t). Class: up if l_t > +α, down if l_t < −α, flat otherwise, at horizons k ∈ {10, 20, 50, 100} events. α is an example threshold (the paper uses small multiples of tick-relative moves — `example — not an institutional standard`).
+
+**Architecture [D]:** convolutional layers over the (time × level) grid extract spatial book features (early filters reconstruct microprice-like quantities across all 10 levels), then LSTM layers for temporal dependence, then a softmax: P(y ∈ {up, flat, down} | X_t). **Trade rule [SR framing]:** trade the argmax direction only if max_c P(c) > p_conf (example: 0.6) *and* the expected move clears the spread-cost filter — calibrate on executable prices, not mid-price labels.
+
+**Classical feature-stack form [SR] (the Kercheval–Zhang-style setup — note the correction: the report entry cites "Kercheval & Seemann," but the published paper is Kercheval & Zhang 2015):** per-bar features — microprice deviation (S004), OFI (order flow imbalance; S001), bid/ask depth ratio, spread, queue imbalance at levels 1–5, short-term return, Lee–Ready (the standard quote-rule algorithm for signing trades as buyer- or seller-initiated) trade-sign imbalance; label = sign of mid change over the next N events; model P(up | features) via logistic regression or GBM; trade when |P − 0.5| > threshold (example) with a spread-cost filter. **Caution [D/SR]:** a published research pipeline, not a plug-and-play rule; reproducing it needs full LOB reconstruction and heavy compute.
+
+**Evaluation metrics:** directional accuracy is misleading on imbalanced 3-class labels — use **balanced accuracy** (1/3)·Σ_c(correct_c/obs_c); for binary reductions use ROC-**AUC** (**area under the receiver-operating curve**: probability a random positive scores above a random negative) or PR-AUC. *"AUC does not estimate any of those terms"* in the net-P&L decomposition: Net P&L = forecast-driven move + captured spread − spread crossed − fees − slippage − adverse selection − impact − infra costs.
+
+**Parameter table** (every default `example — not an institutional standard`):
+
+| Parameter | Symbol | Typical range | Too small | Too large | Default example |
+|---|---|---|---|---|---|
+| Snapshots | T | 50–200 | misses temporal context | compute blowup, stale | T = 100 |
+| Book depth | L | 5–20 levels | misses deep-book info | noise, sparse levels | L = 10 |
+| Horizons | k | 10–100 events | sub-spread noise | signal decay | {10, 20, 50, 100} |
+| Label band | α | 0–3 bp-equiv | label noise | class imbalance → flat | 1 bp-equiv |
+| Confidence | p_conf | 0.5–0.8 | trades noise | never trades | 0.6 |
+| Retrain cadence | — | weekly–quarterly | regime drift | compute cost | monthly |
+
+**Variants:** (a) DeepLOB CNN–LSTM (documented); (b) LSTM-on-events / universal pooled model (Sirignano & Cont); (c) classical GBM on hand-built features [SR]; (d) Transformer/TransLOB successors (higher F1 — harmonic mean of precision and recall — on FI-2010 reported by some — unverified lead — but some report *no trading simulation*, so classification gain ≠ economic value).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+**Setup (stated, hand-checkable):** a classifier with **55% directional accuracy** at a horizon longer than execution latency. When correct, the mid moves **0.06 pence** in our favor; when wrong, 0.06 pence against. We trade with market orders, paying **half the 0.10 p spread = 0.05 p** plus **0.005 p** fees+slippage per trade. (Pence units echo the LSE review lead in §S12; these numbers are synthetic and stated, not measured.) **Reproducibility:** `rng = np.random.default_rng(82)` — the arithmetic below is fully deterministic (no sampling), so the seed fixes the chart-generation environment and is stated so any re-run is byte-identical.
+
+| Outcome | Prob | Mid move (p) | Spread paid (p) | Fees+slip (p) | Net per trade (p) |
+|---|---|---|---|---|---|
+| Correct call | 0.55 | +0.06 | −0.05 | −0.005 | **+0.005** |
+| Wrong call | 0.45 | −0.06 | −0.05 | −0.005 | **−0.115** |
+| **Expected** | 1.00 | +0.006 | −0.05 | −0.005 | **−0.049** |
+
+Hand-check: expected mid move = 0.55×0.06 − 0.45×0.06 = +0.006 p ✓; net = 0.006 − 0.05 − 0.005 = −0.049 p/trade ✓. Correct-call net = 0.06 − 0.055 = +0.005 ✓; wrong-call net = −0.06 − 0.055 = −0.115 ✓. (The matching chart — waterfall of expected per-trade P&L — appears in §S11.)
+
+**What to notice — the accuracy-vs-cost gap:** 55% accuracy *sounds* tradable; the arithmetic says each trade loses 0.049 pence because the expected move (+0.006 p) is an order of magnitude smaller than the half-spread it must cross (0.05 p). This is the review's lead: median simulated gross ≈ **0.01 p/trade** against a Tesco spread of **0.10 p — the spread is exactly 10× the gross edge** (unverified research lead, not asserted as fact). The 55% model is *useless* here for every reason the research lists: the edge is below the spread-crossing cost, turnover multiplies the bleed, and mid-price evaluation flatters what bid/ask trading would pay. This toy assumes fills happen; a real queue model would make it worse. Do not read this as a backtest.
+
+### S5. Strategies that use this signal
+
+- **T055 — DeepLOB + Feature-Stack Classifier**: *primary trigger* — deep learning on LOB sequences stacked with OFI and classical microstructure features (S082 primary, with S083, S001).
+- **T088 — Full-Stack Signal Ensemble**: uses S082 as one base classifier blended with meta-labeling and purged-CV validation (S086, S082, S088).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| LOB snapshots (10–20 levels, price+size) | float/int | **L2 event stream** (per order-book event) | Tier 2–3 | Full reconstruction; SIP L1 is insufficient for the deep form |
+| Trade prints (for labels/signing) | struct | **L2 event stream** | Tier 2–3 | Lee–Ready signing for the classical form |
+| Corporate actions | events | daily | Tier 0–1 | Price-level features must be split-adjusted |
+| Timestamp sync map | metadata | per session | Tier 2–3 | Exchange vs capture clock; label leakage lives here |
+
+Collection: LOBSTER (NASDAQ TotalView-ITCH reconstructions; selectable depth) or Databento MBP-10 (`dbn` schema, 10-deep), ≤20-line sketch:
+
+```python
+import databento as db, polars as pl, numpy as np
+dl = db.Historical(); dl.batch.download("XNAS-20260102.mbp-10.dbn.zst", ...)
+book = pl.read_parquet("snapshots.parquet").sort("ts_event")  # 40 cols: bid/ask px+sz x10
+X = np.lib.stride_tricks.sliding_window_view(                 # 100-snapshot tensor
+        book.select(px_sz_cols).to_numpy(), (100, 40)).squeeze(1)
+k, alpha = 50, 0.0001                                          # horizon + label band (examples)
+m_mid = book["mid"].to_numpy()
+up = (m_mid[k:].mean() ...)                                    # label vs smoothed mids (vectorize!)
+# CAUSAL: labels use only events > t; features only <= t. Leakage check mandatory.
+```
+
+Storage per symbol-day (cost-model §4): L2 MBP-10 liquid name ≈ **10–40 GB parquet** — research-only; never archive naively. Data-quality checklist: timestamp normalization (exchange vs capture), full vs truncated depth, auction/cross events, halts, corporate actions, synchronized clocks across venues (label leakage otherwise).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: heavy — feasible for research, not for production training.** The verified byte arithmetic: a DeepLOB input tensor (batch 256 × 100 × 40 float32) = **4.096 MB input only**; activations/gradients/optimizer multiply that 10–50×, and a training cache of 1–5M examples runs 20–400 GB — training streams from NVMe, it does not sit in RAM (duck.ai planning figures). One liquid name's L2 day is 8–40 GB RAM (cost-model §3) — two names threaten the 77 GB working budget: **use per-symbol daily files + streaming**. Inference on the M5 GPU (planning estimates, not measured): compact DeepLOB 1–10 ms per sequence — adequate for research cadence; *"do NOT put Python preprocessing + GPU sync + deep recurrent model on the critical path"* of any live tick loop.
+
+Engineering band: **Tier H (60–200 h, cost-model §5)** — reproduce DeepLOB 100–250 h; clean pipeline + reproducible training 250–500 h; full L3 replay + queue model + execution sim 1,000–2,000+ h (duck.ai planning estimates). Budget **~150 h ≈ $22,500 loaded-cost estimate** at $150/hr for a faithful reproduction — *after* the GBT baseline exists.
+
+### S8. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 / academic (LOBSTER academic) | MBO (market-by-order — per-order data)/ITCH (NASDAQ's direct order-feed protocol) replay, selectable depth | ~hundreds/yr academic | The honest data at research prices | Academic license limits; NASDAQ-only |
+| Tier-2 (Databento Standard) | MBP-10 L2, OPRA research | ~$200/mo + usage | Clean schemas, broad venues | Usage meter runs fast at L2 |
+| Tier-3 commercial historical L2/L3 | Multi-year, multi-venue depth | several thousand → **$100,000+/yr** | Production-grade history | Budget-destroying for a first build |
+| FI-2010 (public benchmark) | 10 days, 5 stocks, 10 levels, normalized | ~$0 | Free, comparable | **NOT adequate for production validation** |
+
+*Indicative — verify before budgeting.* **Verdict: buy the data, build the model — in the right order.** Crossover: buy L2/replay (building means re-licensing exchange data anyway); build the model **only** after logistic/GBT baselines, and promote to DeepLOB only if the neural net improves *net-of-cost* consistently. Without synchronized high-quality event data and a demonstrated incremental edge after fees/latency/queue/turnover, **GBT is the better cost/performance choice**.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Zhang, Zohren & Roberts (2019), *IEEE Trans. Signal Processing* 67(11) | FI-2010 (5 NASDAQ-Nordic stocks, 10 days) + 1-yr LSE | Beats SVM/MLP/other CNNs on FI-2010 classification; stable OOS (out-of-sample) accuracy on LSE incl. untrained instruments | **Before-cost** (accuracy metric, not P&L) | The v1 preprint's "good profits in a simple trading simulation" is a before-cost simulation only; label definition dominates accuracy |
+| Sirignano & Cont (2019), *Quant. Finance* 19(9) | US equities, billions of quotes/trades | Pooled universal model beats per-stock linear/nonlinear models OOS on *direction* of price moves; stable across time and sectors | **Before-cost** (direction accuracy, not executable P&L) | Documents predictability of direction, not profitability after spread/fees |
+| Kercheval & Zhang (2015), *Quantitative Finance* 15(8) | High-frequency LOB data | SVM classification of price-move direction from limit-order-book features — the classical feature-stack program in published form | **Before-cost** (classification accuracy, not P&L) | Label/feature design dominates results; no executable after-cost P&L reported |
+
+**FI-2010 limits (documented):** Ntakaris et al. (2017), *Journal of Forecasting* — 10 consecutive days, 5 stocks, 10 levels, horizons 10/20/30/50/100 — "NOT adequate for production validation": downsampled, pre-normalized, one illiquid-ish market. Successor papers (e.g. TransLOB) report higher F1 on FI-2010, but a survey notes some report **no trading simulation** — classification gain ≠ economic value (unverified lead).
+
+**Honest bottom line:** DeepLOB is a genuine classification advance — the strongest documented OOS benchmark gains in this batch — and simultaneously the clearest example of the accuracy≠profit gap: *"AUC (area under the ROC curve) does not estimate any of those terms. Even a statistically significant forecast can have negative net P&L if the expected move is smaller than the effective round-trip cost."* As a standalone trigger it is a research-grade edge that usually dies at the spread; as the top of the development sequence (after GBT baselines earn their keep) it is the right tool. Credible deployment requires: horizon > execution latency, labels on executable prices with spread+fees, chronological cross-regime OOS, queue-aware conservative fills, and net-of-everything P&L.
+
+### S10. Failure modes & pitfalls
+
+1. **Mid-price evaluation, bid/ask trading** → evaluate on executable prices; mid-price accuracy flatters by ~half the spread per trade.
+2. **No queue model** → assumed fills overstate capture; use conservative queue-aware fill simulation.
+3. **Label leakage** → features at *t* use only events ≤ *t*; one future timestamp in normalization invalidates everything.
+4. **FI-2010 overfitting** → 10 days, 5 stocks is a toy; require chronological, cross-regime, cross-instrument OOS.
+5. **Turnover bleed** → predictions flipping every 50 events multiply costs; gate on confidence *and* minimum hold.
+6. **Latency illusion** → inference + features must fit inside the horizon; `simulated only — requires MBO/ITCH` for queue-position claims.
+7. **Skipping the GBT baseline** → if trees match the net net-of-cost, the deep model is pure complexity risk; enforce the development sequence.
+8. **Regime drift** → book dynamics change with vol regimes; monitor live accuracy vs backtest and retrain on schedule.
+
+### S11. Visuals
+
+![S082 worked example — waterfall of expected per-trade P&L showing 55 percent accuracy losing 0.049 pence per trade](images/S082_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(LOBSTER / Databento MBP-10)"] -- "L2 event stream (10-level snaps)" --> ING["Ingest + normalize<br/>(ts sync, depth, halts)"]
+    ING -- "100×40 snapshot tensors (event time)" --> FEAT["Feature compute<br/>(tensors + classical features)"]
+    FEAT -- "softmax P(up/flat/down) (event cadence)" --> SIG["Signal S082<br/>DeepLOB / GBM stack"]
+    SIG -- "direction + confidence (event cadence)" --> GATE{"Spread-cost +<br/>confidence gate?"}
+    GATE -->|pass| OUT["Downstream consumer<br/>(T055 / T088 / execution)"]
+    GATE -->|fail| DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+- Zhang, Z., Zohren, S. & Roberts, S. (2019). "DeepLOB: Deep Convolutional Neural Networks for Limit Order Books." *IEEE Transactions on Signal Processing*, 67(11), 3001–3012. arXiv:1808.03668. https://arxiv.org/abs/1808.03668v6
+- Sirignano, J. & Cont, R. (2019). "Universal features of price formation in financial markets: perspectives from deep learning." *Quantitative Finance*, 19(9), 1449–1459. arXiv:1803.06917. https://arxiv.org/abs/1803.06917?context=stat.ML
+- Ntakaris, A., Magris, M., Kanniainen, J., Gabbouj, M. & Iosifidis, A. (2017). "Benchmark Dataset for Mid-Price Forecasting of Limit Order Book Data with Machine Learning Methods." *Journal of Forecasting*. arXiv:1705.03233. https://arxiv.org/abs/1705.03233v4
+- Kercheval, A.N. & Zhang, Y. (2015). "Modelling high-frequency limit order book dynamics with support vector machines." *Quantitative Finance*, 15(8), 1315–1329. https://ideas.repec.Org/a/taf/quantf/v15y2015i8p1315-1329.html
+- Gould, M.D., Porter, M.A., Williams, S., McDonald, M., Fenn, D.J. & Howison, S. (2013). "Limit Order Books." arXiv:1012.0349. https://arxiv.org/abs/1012.0349v2 (Survey: the LOB background this chapter assumes.)
+
+**Unverified leads** (chatbot-provided, not independently checkable — do not cite as fact):
+- Simulated profit/trade ≈ −0.01–0.03 pence, median ~0.01 p; Tesco spread ~0.1 p (exactly 10×) — internally consistent arithmetic, underlying figures not independently verified.
+- DeepLOB commercial historical L2/L3 data "several thousand → $100,000+/yr"; academic free/low-cost (indicative — verify before budgeting).
+- Successor models (TransLOB): higher F1 on FI-2010; survey notes some report no trading simulation.
+- DeepLOB inference/training planning figures (indicative): compact 1–10 ms inference; 1–8 h/epoch moderate training; 500–1,200 h multi-symbol build.
+
+*Research provenance note — source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).*
+
+---
+## Stage 84/200 — S084: Hasbrouck (1991) trade–quote VAR
+
+*Batch SB9 · Signal 84/100 · Provenance [D] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | A vector autoregression (VAR) on the joint dynamics of quote revisions and signed trades; the impulse response of quotes to a trade *innovation* measures that trade's permanent price impact (its information content). |
+| **When it works** | Liquid single-name equities with clean synchronized trade/quote data; used to measure information share of trades, calibrate transaction-cost models, and gate directional signals on trade informativeness. |
+| **When it dies** | Thin, gappy, or mis-synchronized tapes; regime breaks (vol spikes, news); long-memory order flow where a short-lag VAR is misspecified; any venue where you cannot sign trades accurately. |
+| **Build-or-buy in one line** | Build — it is ~50 lines of OLS plus closed-form impulse responses; the hard part is the synchronized tape, which you buy (TAQ/Databento). |
+
+Provenance **[D]** (Hasbrouck 1991, *Journal of Finance*); never upgraded — the formulas below are the paper's, verified against the replication material in this batch's research notes.
+
+### S2. How it works — plain human explanation
+
+A **VAR** (vector autoregression) is a system of regressions where each variable is predicted from *past values of all variables in the system*. A **quote revision** is the change in the mid-price (average of best bid and best ask) from one observation to the next. A **signed trade** is a trade stamped +1 if the buyer initiated it and −1 if the seller initiated it. A **trade innovation** is the *unexpected* part of the signed trade.
+
+Picture 9:47:03: bid $231.40 × 800 / ask $231.41 × 300. A 500-share market buy lifts the ask; the mid moves +$0.005. Was that half-cent *information* or *mechanics* (thin ask side)? Hasbrouck's idea: model the whole joint dance of trades and quote revisions as a VAR, then ask: "if a completely unexpected buy arrives right now, how much does the quote *permanently* move?" The answer is the **impulse response function (IRF)** — the cumulative quote revision after a trade shock — and its limit is the **long-run impact (LRI)**, the trade's permanent price impact. That permanent component is the trade's *information content*: transitory wiggles wash out, but information stays in the price.
+
+Why should this work economically? Two forces. First, **adverse selection**: when an informed trader buys, the book reprices upward — the trade *causes* a permanent revision. Second, **inventory mechanics**: even uninformed flow moves quotes temporarily as liquidity providers manage inventory, and those moves decay. The VAR separates the two: permanent = information, transitory = plumbing. Only the *unexpected* trade moves the needle — expected, autocorrelated order flow is already in the price.
+
+- **Mental model 1:** Trades and quotes are two dancers; the VAR is the choreography sheet. A step that *surprises* (innovation) moves the whole routine permanently; a rehearsed step doesn't.
+- **Mental model 2:** Every trade's price impact has a permanent (information) half-life of forever and a transitory (inventory) half-life of seconds — the IRF draws the boundary between them.
+- **Mental model 3:** This is a *measurement device first, trading signal second*. Its day job is telling you how informative your flow is; T056 turns that measurement into a predictor.
+
+### S3. The math — exact formula
+
+Let $m_t = (a_t + b_t)/2$ be the mid-price (average of best ask $a_t$ and best bid $b_t$, in dollars), $\Delta m_t = m_t - m_{t-1}$ the quote revision, and $q_t$ the signed trade ($+1$ buyer-initiated, $-1$ seller-initiated, or signed size). Stack $x_t = (\Delta m_t, q_t)^\top$. The **VAR(p)** with $p$ lags is:
+
+$$x_t = c + \sum_{\ell=1}^{p} A_\ell\, x_{t-\ell} + u_t,$$
+
+where $c$ is a $2 \times 1$ intercept, each $A_\ell$ is a $2 \times 2$ coefficient matrix, and $u_t$ is the 2-vector of *innovations* (one-step-ahead forecast errors), with $u_t = (u_{m,t}, u_{q,t})^\top$.
+
+The **impulse response function** to a unit trade innovation $e_q = (0,1)^\top$ traces the cumulative quote revision:
+
+$$\mathrm{IRF}(H) = \sum_{h=0}^{H} \Psi_h\, e_q, \qquad \Psi_0 = I,\;\; \Psi_h = \sum_{\ell=1}^{\min(h,p)} A_\ell \Psi_{h-\ell},$$
+
+and the **long-run impact (LRI)** — the permanent price impact of one unexpected trade — is the closed form
+
+$$\mathrm{LRI} = e_m^\top \Bigl(I - \sum_{\ell=1}^{p} A_\ell\Bigr)^{-1} e_q, \qquad e_m = (1,0)^\top.$$
+
+A trade of size $q$ has permanent impact $\approx \mathrm{LRI} \times q$.
+
+| Parameter | Symbol | Typical range | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Lags | $p$ | 5–30 | Too few: long-memory flow missed, IRF biased; too many: overfit, noisy LRI | 10 *— example, not an institutional standard* |
+| Sampling | $\Delta t$ | 1 s – 5 min | Too fine: microstructure noise dominates; too coarse: impact already absorbed | 1-s bars *— example* |
+| IRF horizon | $H$ | 50–500 events | Too short: IRF hasn't converged; too long: adds estimation noise | 100 *— example* |
+| Size transform | $q_t$ | sign / signed shares / signed dollars / $\mathrm{sign}(q)\lvert q\rvert^\beta$ | Raw shares: dominated by prints; sign-only: discards size concavity | signed shares *— example* |
+
+**Normalization:** quote revisions in dollars (or log-mid changes); trade variable as sign, signed shares, or signed dollars. **Causal timing:** the VAR is estimated on data $\le t$; the IRF/LRI at bar $t$ uses only history, so "the next unexpected buy moves the mid by LRI" is tradable no earlier than $t+1$. **Variants:** (1) *duration-augmented VAR* (Dufour & Engle 2000) adds $\ln(T_i)$ inter-trade durations; (2) *asymmetric VEC* (Escribano & Pascual 2006) lets bid and ask respond differently to buys vs sells; (3) *multi-variable VAR* adding spread/depth.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+All numbers below are **synthetic**, generated with seed **42** (`rng = np.random.default_rng(42)`), and the chart plots exactly these numbers. DGP: a VAR(1) in $(\Delta m_t, q_t)$ with true $A_1 = [[0.10, 0.012],[0.05, 0.60]]$ ($\Delta m$ in dollars, $q = \pm 1$), 5,000 events.
+
+First, 6 events of the synthetic tape ($q$ = trade sign):
+
+| t | bid | ask | mid | $\Delta m$ | q |
+|---|---|---|---|---|---|
+| 0 | 99.9932 | 100.0032 | 99.9982 | −0.0018 | +1 |
+| 1 | 100.0048 | 100.0148 | 100.0098 | +0.0116 | +1 |
+| 2 | 100.0057 | 100.0157 | 100.0107 | +0.0010 | +1 |
+| 3 | 100.0152 | 100.0252 | 100.0202 | +0.0095 | +1 |
+| 4 | 100.0380 | 100.0480 | 100.0430 | +0.0228 | +1 |
+| 5 | 100.0340 | 100.0440 | 100.0390 | −0.0040 | −1 |
+
+Estimating the VAR(1) by OLS on all 5,000 events gives $\hat A_1 = [[0.1046,\ 0.0120],[0.1479,\ 0.5958]]$ (close to the true DGP). Hand-check: $\mathrm{IRF}(1) = \hat A_1[0,1] = 0.0120$ dollars = **1.20 cents** per unexpected buy. Cumulating: IRF(2) = 2.04¢, IRF(3) = 2.55¢, IRF(5) = 3.05¢, IRF(10) = 3.31¢, converging to the closed-form LRI $= e_m^\top(I-\hat A_1)^{-1}e_q =$ **3.33 cents** — the permanent impact of one unexpected buy innovation, reached by about event 20 (chart).
+
+**What to notice:** the IRF starts at 0 and *builds* — Hasbrouck's "protracted lag" finding is visible right here. **Limits:** no fees, no spread cost, and the DGP is a clean VAR(1) — real order flow has long memory a 1-lag VAR cannot capture, and the LRI is a measurement of information content, not a backtested profit.
+
+### S5. Strategies that use this signal
+
+- **T056 — Hasbrouck Trade–Quote VAR Predictor** — primary trigger: predicts quote revisions from joint trade–quote dynamics; the IRF *is* the forecast.
+- **T052 — AR/ARMA Innovation Trader** — filter/validator: trades forecast innovations (surprises), validated by the trade–quote VAR — only innovations the VAR deems information-bearing pass.
+- **T030 — Multi-Level OFI Weighted Predictor** — confirmatory: integrated 10-level OFI as directional trigger, VAR-confirmed (the VAR's LRI weights how much of the OFI impulse is permanent).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Trades (price, size, exchange ts) | event | tick | Tier 2–3 | TAQ or Databento; exchange timestamps, not SIP-processed |
+| Quotes (bid/ask, sizes, exchange ts) | event | tick | Tier 2–3 | Same session as trades; NBBO or direct |
+| Corporate actions / halts | reference | daily | Tier 0–1 | Splits/dividends rescale mids; halt bars excluded |
+| Derived: signed trade $q_t$, mid $m_t$ | computed | 1-s bars (example) | — | Lee–Ready or quote-rule signing; asof-join trades to prevailing quotes |
+
+Ingest sketch (Python/polars, ≤20 lines):
+
+```python
+import polars as pl
+tr = pl.read_parquet("taq_trades.parquet")
+qu = pl.read_parquet("taq_quotes.parquet").with_columns(
+    mid=(pl.col("bid")+pl.col("ask"))/2)
+trq = tr.join_asof(qu.sort("ts"), on="ts", strategy="backward")
+trq = trq.with_columns(q=pl.when(pl.col("price")>pl.col("mid")).then(1)
+                          .when(pl.col("price")<pl.col("mid")).then(-1)
+                          .otherwise(None))                    # quote rule
+bars = trq.group_by_dynamic("ts", every="1s").agg(
+    pl.col("mid").last().alias("m"), pl.col("q").sum().alias("qbar"))
+bars = bars.with_columns(dm=pl.col("m").diff())       # VAR input: (dm, qbar)
+```
+
+Storage (per `notes/cost-model.md` §4): L1 quotes+trades for one liquid symbol ≈ 2–8 GB/day parquet; 60 days ≈ 120–480 GB for a single name — per-symbol daily files, never a 500-symbol panel in RAM. Data-quality checklist: exchange vs SIP timestamp normalization; corporate-action adjustment; halted-session exclusion; DST/half-day calendars; stale-quote filtering.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible** (Tier M). The VAR itself is OLS on a few thousand 2×2 observations per refit — microseconds in numpy; the cost is all in tick ingest and the signing/asof join. Per `notes/cost-model.md` §2, a Python event loop handles ~100–500k events/sec (fine for ≤20 symbols of L1), and polars batch recompute (group_by_dynamic + rolling OLS) runs at ~1–10M rows/sec — refitting a 10-lag VAR on 5,000 one-second bars per symbol is milliseconds. RAM: one symbol-day of 1-s bars is kilobytes; even 60 days of 1-s bars for 500 symbols is trivial — the footprint rule of §3 only bites if you keep raw tick panels resident (don't). Engineering (per §5): Tier M, **20–60 h** ≈ **$3,000–9,000** at $150/hr loaded-cost estimate (ingest + signing + rolling VAR + IRF/LRI + monitoring). What breaks first at 500 symbols or full OPRA: the Python per-tick loop — move signing/join to Rust or pre-aggregated bars, and refit on a cadence rather than per event.
+
+| Stack | When to pick |
+|---|---|
+| Python + polars | Default: ingest, signing, 1-s bars, rolling OLS, IRF analytics — everything in this chapter |
+| Rust | >100 symbols tick-level, or sub-millisecond refit cadence |
+| DuckDB | Ad-hoc research over multi-month tick archives without a cluster |
+
+### S8. Buy vs build
+
+Vendor price bands per `notes/cost-model.md` §6.
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 free route (Alpaca IEX / Stooq) | Daily/1-min bars, no real tick quotes | ~$0 | $0 | Cannot sign trades or synchronize quotes — VAR impossible |
+| Tier-1 retail (Polygon Stocks Advanced, Alpaca SIP) | SIP trades+quotes, 1-min/real-time | ~$30–200/mo *indicative — verify before budgeting* | Cheap synchronized tape | SIP latency; no depth; signing noise |
+| Tier-2 professional (Databento Standard) | Exchange-timestamped L1/L2 (MBP-1/10) | ~$200/mo + usage *indicative — verify before budgeting* | Honest timestamps for signing/VAR | Usage meter runs on full universes |
+| Academic/institutional (TAQ via WRDS; LOBSTER) | Publication-grade tick history | hundreds/yr academic *indicative — verify before budgeting* | Gold-standard replay | Academic licensing; delayed |
+
+**Verdict: build the estimator, buy the tape.** The VAR/IRF math is 50 lines and needs your own lags, horizons, and size transforms, but synthesizing exchange-timestamped trades+quotes yourself is re-licensing TAQ — buy Databento or TAQ access. Crossover: if SIP 1-s bars suffice for your horizon (minutes, not seconds), the Tier-1 route wins on cost.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Hasbrouck (1991), *J. Finance* | NYSE issues | Permanent impact positive & concave in size; full impact arrives with protracted lag; large trades widen spreads; wide-spread trades more informative; stronger asymmetries in small firms | Before-cost (measurement) | 1991 market structure — magnitudes not portable |
+| Dufour & Engle (2000), via CFS working-paper discussion | NYSE (duration-augmented VAR) | Shorter inter-trade durations → more informative trades | Before-cost (measurement) | Requires accurate trade-time stamps |
+| Escribano & Pascual (2006), *Empirical Economics* | Multiple microstructures | Buys more informative than sells; bid/ask adjust asymmetrically; symmetry likelihood rises with volatility | Before-cost (measurement) | Model-dependent asymmetries |
+
+Regimes where it fails: volatility spikes (parameters unstable); news jumps (revisions are jump-driven); thin names (signing error dominates); crowded periods where everyone trades the same innovation proxy. **Honest bottom line:** as a standalone trigger this is a *measurement* edge, not a documented net-of-cost alpha — the literature documents the *existence and shape* of trade informativeness, not a tradable Sharpe. As a filter/validator (T052) and cost-model input it is genuinely useful.
+
+### S10. Failure modes & pitfalls
+
+1. **Trade-signing error** (Lee–Ready/quote-rule mislabels mid-spread prints) → mitigate: exchange timestamps, tick-test fallback, report signing-agreement rates.
+2. **Lookahead via quote synchronization** (using the quote *after* the trade to sign it, then predicting that same quote) → mitigate: strict backward asof joins; trade at $t$ sees quotes $\le t$.
+3. **Lag misspecification** (too few lags on long-memory flow) → mitigate: AIC/BIC lag selection per symbol, rolling refits.
+4. **Regime breaks** (FOMC, earnings, vol spikes change $A_\ell$ intraday) → mitigate: regime-gated refits; suspend thresholds in jumps.
+5. **Microstructure noise vs signal confusion** (bid–ask bounce looks like mean-reverting "information") → mitigate: mid-prices only, never trade prices, in the VAR.
+6. **Overfitting the horizon/size transform** (tuning $H$, $\beta$ until the IRF "looks nice") → mitigate: fix transforms a priori; validate LRI stability out-of-sample.
+7. **Cost blindness** (3.33¢ permanent impact means nothing if the spread is 5¢) → mitigate: net the IRF against effective spread + fees before any trading claim.
+
+### S11. Visuals
+
+![S084 worked example — synthetic VAR impulse response converging to the 3.33-cent long-run impact (seed 42)](images/S084_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(TAQ / Databento MBP-1)"] -- "tick trades + L1 quotes" --> ING["Ingest + normalize<br/>(exchange ts, signing, halts)"]
+    ING -- "synchronized 1-s trade/quote bars" --> FEAT["Feature compute<br/>(Δm_t, q_t; VAR(p) OLS refit)"]
+    FEAT -- "VAR coefficient matrices<br/>(per refit window)" --> SIG["Signal S084<br/>IRF(H) / LRI"]
+    SIG -- "IRF/LRI signal<br/>(per bar)" --> GATE{"Cost / toxicity<br/>gate?"}
+    GATE -- "pass (per signal)" --> OUT["Downstream consumer<br/>(T056 predictor / T052 filter)"]
+    GATE -- "fail" --> DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Hasbrouck, Joel (1991). "Measuring the Information Content of Stock Trades." *Journal of Finance* 46(1): 179–207. http://ideas.repec.org/a/bla/jfinan/v46y1991i1p179-207.html
+2. Escribano, Álvaro & Pascual, Roberto (2006). "Asymmetries in bid and ask responses to innovations in the trading process." *Empirical Economics* 30(4): 913–946. http://ideas.repec.org/a/spr/empeco/v30y2006i4p913-946.html
+3. Campigli, F., Bormetti, G. & Lillo, F. "Time and the Price Impact of a Trade." (Structural-VAR extension; documents S-VAR misspecification pitfalls.) https://www.researchgate.net/publication/227532807_Time_and_the_Price_Impact_of_A_Trade
+4. *Journal of Finance*, Vol. 46, Issue 1 (March 1991) — issue listing confirming the Hasbrouck (1991) publication record. https://afajof.org/issue/volume-46-issue-1/
+
+**Unverified leads** (chatbot/batch-research claims without an independently checkable source this batch; do not cite as evidence):
+- Duck.ai Q-SB9-1 formula summary (verified arithmetic): VAR(p), IRF, LRI forms used in §S3; "the informative component = UNEXPECTED trade innovation, not total volume."
+- Dufour & Engle (2000) duration findings as summarized in a CFS working-paper discussion (shorter durations → more informative trades) — widely cited, URL not captured this batch.
+- Source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
+
+---
+## Stage 87/200 — S087: Fractional differentiation (memory-retaining stationarization)
+
+*Batch SB9 · Signal 87/100 · Provenance [D] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | A preprocessing transform: differentiate a price series to a *fractional* order $d$ — just enough to make it stationary (stable mean/variance) while preserving the long memory that integer differencing (returns) destroys. |
+| **When it works** | As a feature-engineering step feeding ML models: stationary inputs that still correlate with price levels, fitted leakage-safely on training data. |
+| **When it dies** | Applied naively with $d$ fitted on the full sample (lookahead); $d$ too high (memory erased) or too low (nonstationary inputs break the model); structural breaks the ADF test cannot see. |
+| **Build-or-buy in one line** | Build — it is a 15-line binomial-weight filter; nothing to buy except the price feed. |
+
+Provenance **[D]** (López de Prado, *Advances in Financial Machine Learning*, 2018, Ch. 5); formulas verified against this batch's hand-checked research notes.
+
+### S2. How it works — plain human explanation
+
+**Stationarity** means a series' statistical properties (mean, variance) don't drift over time — most ML models and statistical tests quietly assume it. A **unit root** is the classic violation: a random-walk price whose level wanders. **Fractional differentiation** generalizes "take returns" to a continuous dial: instead of differencing to integer order 1 (returns: memory erased) or 0 (levels: nonstationary), you differentiate to a *fraction* $d$ between 0 and 1.
+
+The economic intuition: integer differencing is a sledgehammer. A return series is essentially *uncorrelated with the price level it came from* — the entire history of "where we are" is thrown away. López de Prado's resolution: find the *smallest* $d$ (call it $d^*$) at which an **ADF test** (Augmented Dickey–Fuller — a statistical test for the presence of a unit root) first rejects nonstationarity, while the transformed series still correlates strongly with the original log prices. You get stationarity *and* keep most of the memory.
+
+The mechanics are a weighted sum of past log prices with **binomial weights** that decay but never reach zero for $0 < d < 1$ — unlike returns, where the weights are $(1, -1, 0, 0, \dots)$ and history is cut off after one lag. Because the weights never vanish, the window must be **truncated**: drop weights below a tolerance $\tau$ (the **fixed-width window**, FFD), giving a causal, fixed-length filter. **Leakage-safe** means: $d^*$ and the truncation are chosen on *training data only*, and the filter is applied rolling — the value at bar $t$ uses only bars $\le t$.
+
+- **Mental model 1:** Returns are amnesia; levels are a fever dream (nonstationary). Fractional $d$ is the dimmer switch between them — turn it up just until the ADF test says "stationary."
+- **Mental model 2:** The weights are a fading memory: yesterday matters a lot, last month a little, and — unlike returns — last month still matters *at all*.
+- **Mental model 3:** This is plumbing, not alpha. It never generates a trading signal by itself; it makes the *inputs* to your models well-behaved.
+
+### S3. The math — exact formula
+
+The fractional difference operator $(1-L)^d$ (where $L$ is the lag operator, $Lx_t = x_{t-1}$) expands as an infinite weighted sum:
+
+$$(1-L)^d x_t = \sum_{k=0}^{\infty} w_k\, x_{t-k}, \qquad w_0 = 1,\;\; w_k = -w_{k-1}\,\frac{d-k+1}{k}.$$
+
+The **fixed-width** version truncates at lag $L-1$, the first lag with $\lvert w_{L-1}\rvert < \tau$:
+
+$$\tilde x_t(d, L) = \sum_{k=0}^{L-1} w_k\, x_{t-k}.$$
+
+Boundary cases: $d = 0$ gives $\tilde x_t = x_t$ (identity); $d = 1$ gives weights $(1, -1, 0, \dots)$, i.e. first differences. For $d \in (0,1)$, weights satisfy $-1 < w_k < 0$ for all $k > 0$ — the alternation that keeps the filtered series stationary while memory decays.
+
+| Parameter | Symbol | Typical range | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Fractional order | $d$ | 0.1–0.4 memory-retaining; 0.4–0.8 stronger stationarization; $>1$ usually unnecessary | Too small: ADF fails, inputs nonstationary; too large: correlation with levels collapses — you've reinvented returns | smallest $d$ with ADF $p < 0.05$ *— example rule, not an institutional standard* |
+| Truncation tolerance | $\tau$ | $10^{-3}$–$10^{-5}$ (illustrative) | Too large: fixed window too short, memory cut; too small: enormous $L$, wasted compute | $10^{-5}$ *— example* |
+| Window / input | $x_t$ | log prices | Raw prices with splits/dividends: jumps corrupt weights | log prices *— example* |
+
+**Normalization:** apply to log prices (never raw prices across corporate actions). **Causal timing:** $\tilde x_t$ uses only $x_{t}, \dots, x_{t-L+1}$ — tradable no earlier than $t+1$ is automatic since this is a feature transform, but $d^*$ must be selected on a strictly-prior training window (purged/embargoed per S088). **Variants:** (1) *expanding window* (weights grow with $t$ — early points carry different memory; deprecated in favor of FFD); (2) *ARFIMA-style* estimation of $d$ via the fractional-integration parameter; (3) *per-regime $d$* refit on rolling windows.
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+All numbers below are **synthetic** (seed **2**, `rng = np.random.default_rng(2)`); the chart plots exactly these numbers. DGP: a 5,000-bar random-walk log-price series (a pure unit root — the hard case).
+
+**Step 1 — the weights.** For $d = 0.4$, the recursion gives (truncation tolerance $\tau = 10^{-3}$, illustrative):
+
+| $k$ | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| $w_k$ | 1.000000 | −0.400000 | −0.120000 | −0.064000 | −0.041600 | −0.029952 | −0.022963 | −0.018371 | −0.015156 | −0.012798 |
+
+Hand-check: $w_1 = -0.4$; $w_2 = -(-0.4)(0.4-1)/2 = -0.12$; $w_3 = -(-0.12)(0.4-2)/3 = -0.064$. ✓. Applied to the five values $100, 99, 98, 97, 96$ at lags 0–4: $\tilde x = 100 - 0.4(99) - 0.12(98) - 0.064(97) - 0.0416(96) = 100 - 39.6 - 11.76 - 6.208 - 3.9936 = \mathbf{38.438}$. (Caution: at least one popular online explainer prints 30.576 for this arithmetic — recompute it yourself; the recursion above is correct.) Sanity boundaries: $d = 0$ returns the input unchanged (123.45 → 123.45); $d = 1$ returns the first difference (100, 99 → 1.00).
+
+**Step 2 — truncation.** At $\tau = 10^{-5}$ the fixed-width lag is $L = 3382$ for $d = 0.2$, $L = 927$ for $d = 0.5$, and $L = 228$ for $d = 0.8$ — smaller $d$ means slower weight decay means a longer fixed window. The chart's left panel shows this decay.
+
+**Step 3 — the tradeoff.** Scanning $d$ from 0 to 1 on the synthetic random walk:
+
+| $d$ | ADF $p$-value | corr($\tilde x$, log-price) |
+|---|---|---|
+| 0.00 | 0.7354 (nonstationary) | 1.000 |
+| 0.25 | 0.2070 (nonstationary) | 0.889 |
+| **0.30** | **0.0267 — first rejection → $d^*$** | **0.882** |
+| 0.50 | 0.0000 | 0.549 |
+| 1.00 | 0.0000 | 0.015 (memory gone) |
+
+**What to notice:** at $d^* = 0.30$ the series is stationary (ADF $p = 0.0267 < 0.05$) yet still 88% correlated with the price level — compare with returns ($d = 1$), whose correlation with levels is 0.015: pure amnesia. **Limits:** this is a clean random walk; real prices have breaks and regime shifts the ADF test can miss, and $d^*$ is sample-dependent — refit it only on training data, never the evaluation window.
+
+### S5. Strategies that use this signal
+
+- **T057 — Fractional-Differentiation Memory Trader** — primary trigger: trades fractionally-differenced series preserving long memory, AR-timed — this signal *is* the feature pipeline.
+- **T088 — Full-Stack Signal Ensemble** — feature preprocessing: blends all S001–S100 with meta-labeling; FFD is the memory-retaining stationarization applied to price-based ML inputs before the ensemble (a preprocessing role, not a trigger — stated honestly).
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Log prices (any symbol) | numeric | any frequency (1-min bars used here) | Tier 0–2 | Any price feed; corporate-action-adjusted |
+| ADF test statistics | computed | per $d$ candidate | — | statsmodels or hand-rolled |
+| $d^*$, truncation lag $L$ | fitted | per training window | — | Fitted on training data only |
+
+Ingest/feature sketch (Python, ≤20 lines):
+
+```python
+import numpy as np
+def ffd_weights(d, tau=1e-5):
+    w = [1.0]
+    while abs(w[-1]) >= tau or len(w) == 1:
+        k = len(w)
+        w.append(-w[-1] * (d - k + 1) / k)   # binomial recursion
+    return np.array(w[:-1])
+def ffd(logp, d, tau=1e-5):
+    w = ffd_weights(d, tau)                   # fixed-width, causal
+    y = np.convolve(logp, w, mode="full")[:len(logp)]
+    return y, len(w) - 1                      # drop first L-1 as warmup
+# select d*: smallest d with ADF p < 0.05 on TRAINING window only
+```
+
+Storage (per `notes/cost-model.md` §4): 1-min bars for 500 symbols ≈ 50 MB/day parquet; a 60-day panel ≈ 3 GB — archive freely. FFD adds one float column per $d$; the weights vector is kilobytes. Data-quality checklist: corporate-action-adjusted log prices; no forward-filled gaps longer than $L$; session calendars consistent between fitting and application windows.
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: trivial** (Tier M, low end — the transform is a convolution). Per `notes/cost-model.md` §2, numpy vectorized math runs ~50–200M elements/sec: a 500-symbol × 252-bar panel convolved with a 1,000-weight kernel is sub-millisecond to a few milliseconds — this batch's own research notes put FFD at "sub-ms/500 symbols." The real work is the $d^*$ search (one ADF per $d$ candidate per symbol per refit), still seconds for a full universe. RAM: tens of MB (§3); the weights are negligible. Engineering (per §5): Tier M low end, **~20–40 h** ≈ **$3,000–6,000** at $150/hr loaded-cost estimate — the standalone filter is an afternoon; the leakage-safe rolling version with stationarity testing, purged $d^*$ selection, and a feature-store integration is the rest. What breaks first at 500 symbols: nothing in compute — what breaks is *discipline*: refitting $d^*$ on overlapping windows without purging (see S088).
+
+| Stack | When to pick |
+|---|---|
+| Python + numpy | Everything in this chapter — the reference implementation |
+| Python + polars | When FFD is one of many rolling features over a bar panel |
+| Rust | Only if FFD sits inside a tick-level hot loop (rare) |
+
+### S8. Buy vs build
+
+Vendor price bands per `notes/cost-model.md` §6.
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0 free (Stooq, Alpaca IEX) | Daily bars | ~$0 | $0 start for daily-frequency FFD research | Coarse frequency only |
+| Tier-1 retail (Polygon, Tiingo) | 1-min/real-time SIP bars | ~$30–200/mo *indicative — verify before budgeting* | Cheap intraday panels for $d^*$ search | — |
+| Build the transform | 15-line filter + ADF search | eng time only | Your own $d^*$, $\tau$, rolling discipline | — |
+| Academic route | The AFML book itself (Wiley, 2018) | book price *indicative — verify before budgeting* | Canonical reference | — |
+
+**Verdict: always build the transform; buy only the price feed.** There is nothing to license — FFD is a published formula. The crossover question is not build-vs-buy but *which frequency of bars to buy* for the $d^*$ search: daily bars (free) suffice to learn the method; 1-min bars (Tier 1) for production features.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| López de Prado (2018), *AFML* Ch. 5 | Equities/FX (book examples) | $d^*$ typically well below 1 (often ~0.3–0.6), with high correlation to the original level at $d^*$ | N/A (feature transform) | Book examples, not a trading backtest |
+| Practitioner reproduction at scale (Binance USD-M perpetuals, 568 pairs, hourly) | Crypto, hourly | FFD reproduced causally with no lookahead; fixed-width truncation stable across the cross-section | N/A (replication) | Crypto cross-section; method validation, not P&L |
+| Ritchie Ng / RAPIDS explainer | Illustrative | Hand-worked weight arithmetic for $d = 0.4$ | N/A | Pedagogical; recompute the arithmetic yourself (see §S4 erratum note) |
+
+No documented standalone Sharpe exists for "fractional differentiation" — it is not a signal, it is a *preprocessing step*, and the literature treats it that way. Regimes where it fails: structural breaks (a break makes $d^*$ meaningless); ultra-short windows where $L$ exceeds the available history; assets whose "memory" is spurious (then FFD preserves noise, beautifully stationary noise). **Honest bottom line:** as a standalone trigger this has no edge and claims none; as a feature transform it is the disciplined alternative to returns — the evidence is methodological (stationarity + retained memory), and its trading value flows entirely through the models it feeds (T057, T088).
+
+### S10. Failure modes & pitfalls
+
+1. **Lookahead in $d^*$ selection** (choosing $d$ on the full sample, then "predicting" in-sample) → mitigate: select $d^*$ on a strictly prior training window with purging/embargo (S088).
+2. **$d$ too high** (memory erased — you've built expensive returns) → mitigate: monitor corr($\tilde x$, log-price) at $d^*$; if it collapses, the transform adds nothing.
+3. **$d$ too low** (ADF fails — nonstationary inputs silently break downstream models) → mitigate: hard gate on the ADF $p$-value before the features enter any model.
+4. **Truncation too aggressive** (large $\tau$ cuts the long tail that *is* the memory) → mitigate: keep $\tau \le 10^{-5}$ unless you can show the tail is numerically irrelevant.
+5. **Corporate actions / unadjusted prices** (a split looks like a permanent shock the weights smear across $L$ bars) → mitigate: log prices from an adjusted feed, always.
+6. **Refitting $d^*$ on overlapping windows** (churn and implicit lookahead) → mitigate: refit on a fixed cadence on non-overlapping training blocks.
+7. **ADF test fragility** (size/power issues, heteroskedasticity, breaks) → mitigate: complement with a KPSS check; never let one test statistic be the only gate.
+
+### S11. Visuals
+
+![S087 worked example — FFD binomial weights for d=0.2/0.5/0.8 with truncation lags, and the memory-vs-stationarity tradeoff with d*=0.30 (seed 2, synthetic random walk)](images/S087_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(any price feed)"] -- "log-price bars<br/>(1-min, adjusted)" --> ING["Ingest + normalize<br/>(corp actions, calendars)"]
+    ING -- "clean log-price series<br/>(per symbol)" --> FEAT["Feature compute<br/>(FFD weights, ADF d* search)"]
+    FEAT -- "stationary FFD features<br/>(per bar, causal)" --> SIG["Signal S087<br/>FFD(d*) series"]
+    SIG -- "feature vector<br/>(per bar)" --> GATE{"Stationarity +<br/>leakage gate?"}
+    GATE -- "pass (per bar)" --> OUT["Downstream consumer<br/>(T057 / T088 ML inputs)"]
+    GATE -- "fail" --> DROP["No trade"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. López de Prado, Marcos (2018). *Advances in Financial Machine Learning.* Wiley, Chapter 5 "Fractionally Differentiated Features." ISBN 978-1-119-48208-6. https://biblio.com.au/9781119482086
+2. Practitioner reproduction: "Fractional Differentiation at Scale (López de Prado, AFML Ch. 5)" — FFD reproduced on 568 Binance USD-M perpetuals, causal, no lookahead. https://github.com/darufinance/lopez-de-prado-work-review/blob/HEAD/projects/02_fractional_differentiation/writeup/README.md
+3. Ng, Ritchie. "Fractional Differencing to Minimize Memory Loss While Making a Time Series Stationary." *RAPIDS AI* (Medium). https://medium.com/rapids-ai/rapid-fractional-differencing-to-minimize-memory-loss-while-making-a-time-series-stationary-2052f6c060a4
+4. AFML practitioner skill summary (transformation guidance: minimum fractional-differencing order for stationarity; fit order and threshold within training data). https://github.com/nutdnuy/afml-book-skill/blob/HEAD/.github/skills/lopez-de-prado-financial-ml/SKILL.md
+
+**Unverified leads** (batch-research claims without an independently checkable source this batch):
+- Duck.ai Q-SB9-1 formula summary (verified arithmetic): $(1-L)^d$ expansion, $w_k$ recursion, fixed-width form, truncation rule, $d$ bands (0.1–0.4 / 0.4–0.8), "smallest $d$ passing stationarity while retaining price correlation."
+- "d\* often ~0.3–0.6 on equities/FX" per the reproduction README's summary of the book — literature summary, not an independent measurement.
+- Source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
+
+---
+## Stage 89/200 — S089: Avellaneda–Stoikov inventory-skew market making
+
+*Batch SB9 · Signal 89/100 · Provenance [D] · Family F — Statistical/ML Infrastructure*
+
+### S1. One-line verdict
+
+| | |
+|---|---|
+| **What it is** | The closed-form optimal market-making rule: quote around a *reservation price* (mid-price shifted against your inventory) at an *optimal spread* set by volatility, risk aversion, and book depth. |
+| **When it works** | As a quoting framework for inventory control in simulation and in live market making with real microstructure infrastructure (colocation, queue priority, fee-tier access). |
+| **When it dies** | Retail/small-account live trading: no colocation, poor queue position, adverse selection, and inventory limits you can't absorb — the paper's assumptions do not survive contact with a real book. |
+| **Build-or-buy in one line** | Build the math (closed form, an afternoon); buy the connectivity, colocation, and market-data — and paper-trade for months before risking capital. |
+
+Provenance **[D]** (Avellaneda & Stoikov 2008, *Quantitative Finance*); formulas use the corrected $\ln(1+\gamma/\kappa)$ form per this batch's verified extraction notes. **The paper does NOT document that a live trader will earn the theoretical spread** — keep that sentence in mind for the entire chapter.
+
+### S2. How it works — plain human explanation
+
+A **market maker** continuously posts both a bid and an ask, earning the **spread** (the gap between them) when both sides get hit. **Inventory** is the position accumulated along the way — long 500 shares you didn't want is inventory. **Risk aversion** ($\gamma$) is how much you dislike holding that inventory overnight. **Adverse selection** is the market maker's nightmare: the traders who hit your quotes often know more than you, so your fills predict the price moving against you.
+
+Avellaneda and Stoikov's insight: quote around a **reservation price** instead — your *personal* fair value, the mid-price *minus* a penalty proportional to your inventory. Long inventory? Your reservation price drops below the mid, so both quotes drop: your ask gets cheaper (inviting sellers to take you out of the long) and your bid backs away. The quotes *breathe* with the position, constantly leaning toward flat.
+
+The **optimal spread** balances two forces: quote tighter and you get filled more often but earn less per fill; quote wider and each fill pays more but fills arrive rarely (**Poisson arrivals** — fill rates decaying exponentially in distance from the mid). Volatility widens the spread; more time left in the session widens it too.
+
+Now the small-account reality, which the paper's math assumes away: **continuous prices, Brownian mid-price, Poisson arrivals, no queue priority, no latency, no market impact, simplified fees**. In a real book your quote sits behind fifty others at the same price, a faster trader reprices before your cancel arrives, and the fill that arrives is disproportionately the informed one. **A fill is not necessarily good news.** For a small account there is no colocation and poor queue priority. The real objective is **survival-adjusted net P&L**: hard inventory limits, kill switches, volatility-triggered spread widening, stale-quote cancels, conservative sizing.
+
+- **Mental model 1:** The reservation price is a thermostat: inventory is the temperature, and the quotes are the heating/cooling that push it back toward zero.
+- **Mental model 2:** The spread is the wage you demand for standing in front of informed flow — volatility and time-to-close set the wage; the book's depth sets how fast the work arrives.
+- **Mental model 3:** The formula is the *starting point of an engineering project*, not a strategy. The edge, if any, lives in queue position, latency, fees, and risk controls — none of which are in the equations.
+
+### S3. The math — exact formula
+
+Let $s$ be the mid-price (dollars), $q$ the inventory (shares, positive = long), $\gamma$ the risk-aversion coefficient (per dollar²), $\sigma$ the mid-price volatility over the horizon (dollars), $T-t$ the time remaining (same time units as $\sigma$), and $\kappa$ the order-book depth parameter (per dollar) governing how fast fill arrivals decay with quote distance. The **reservation price** is:
+
+$$r(s,q,t) = s - q\,\gamma\sigma^2(T-t).$$
+
+The **optimal total spread** (corrected form — $\ln(1+\gamma/\kappa)$, *not* $\ln(1+\gamma\kappa)$) is:
+
+$$\delta_a + \delta_b = \gamma\sigma^2(T-t) + \frac{2}{\gamma}\ln\!\left(1+\frac{\gamma}{\kappa}\right), \qquad \delta^* = \tfrac{1}{2}\bigl[\gamma\sigma^2(T-t) + \tfrac{2}{\gamma}\ln(1+\gamma/\kappa)\bigr],$$
+
+with quotes $p_a = r + \delta^*$ and $p_b = r - \delta^*$. Fill **arrival intensities** decay exponentially in distance from the mid:
+
+$$\lambda_a = A e^{-\kappa(p_a - s)}, \qquad \lambda_b = A e^{-\kappa(s - p_b)},$$
+
+where $A$ is the baseline fill intensity at the mid, calibrated from empirical fill counts.
+
+| Parameter | Symbol | Typical range (consistent units) | Too small / too large | Default (example) |
+|---|---|---|---|---|
+| Risk aversion | $\gamma$ | $10^{-3}$–$1$ per $² | Too small: inventory balloons, ruin risk; too large: quotes too wide, no fills | 0.1 *— example, not an institutional standard* |
+| Book depth | $\kappa$ | 0.1–10 per $ | Too small: fills assumed too easy; too large: spread explodes via $\ln(1+\gamma/\kappa)$ | 1.5 *— example* |
+| Volatility | $\sigma$ | per-horizon $ | Mismatched horizon vs $T-t$: spread mispriced | 0.3 $/session *— example* |
+| Horizon | $T-t$ | one execution cycle → one session | Too long: over-wide spreads; too short: underprices inventory risk | 1 session *— example* |
+| Baseline intensity | $A$ | from empirical fill counts | Invented $A$: fill-rate forecasts are fiction | 140/session *— example* |
+
+**Causal timing:** $r$ and $\delta^*$ are recomputed on every quote update from the *current* mid, inventory, and vol estimate — every input must be $\le t$ (stale inputs = picked off). **Variants:** (1) *infinite-horizon* (drop the $T-t$ terms); (2) *asymmetric $\delta_a \ne \delta_b$* (the full HJB solution skews each side separately); (3) *volatility-regime A-S* (widen $\gamma$ or $\sigma$ inputs in stress).
+
+### S4. Worked example — step-by-step numbers (SYNTHETIC)
+
+All numbers below are **synthetic** (seed **21**); the chart plots exactly these numbers. Parameters: $s = 100.00$, $\gamma = 0.1$, $\sigma = 0.3$, $T-t = 1$, $\kappa = 1.5$, $A = 140$.
+
+**Step 1 — the spread.** $\gamma\sigma^2(T-t) = 0.009000$; $(2/\gamma)\ln(1+\gamma/\kappa) = 20 \times \ln(1.066667) = 1.290770$. Total spread $= 1.299770$; half-spread $\delta^* = 0.649885$.
+
+**Step 2 — quotes vs inventory.** $r(q) = 100 - 0.009\,q$ (hand-check: $r(20) = 100 - 0.18 = 99.82$ ✓):
+
+| $q$ (shares) | $r(q)$ | bid $p_b$ | ask $p_a$ | $\lambda_b$ | $\lambda_a$ |
+|---|---|---|---|---|---|
+| −20 | 100.1800 | 99.5301 | 100.8299 | 69.19 | 40.32 |
+| 0 | 100.0000 | 99.3501 | 100.6499 | 52.82 | 52.82 |
+| +20 | 99.8200 | 99.1701 | 100.4699 | 40.32 | 69.19 |
+
+At $q = +20$: the reservation price drops to $99.82$, the ask drops to $100.4699$ (cheaper — inviting sellers to lift your long), and $\lambda_a$ rises to 69.19/session while $\lambda_b$ falls to 40.32. The skew is doing its job — *in the model*. (The chart plots the full −20…+20 sweep.)
+
+**Step 3 — fills are random, and randomness is the risk.** Simulating 200 sessions of Poisson fills at $q = 0$ on the ask ($\lambda_a = 52.82$/session, seed 21): mean **53.34** fills (theory 52.82), std **7.43** (theory 7.27), range 29–73. Hand-check: $\lambda_a(0) = 140\,e^{-1.5 \times 0.649885} = 52.82$ ✓.
+
+**What to notice:** the reservation-price line is beautifully linear and the skew logic is airtight — and none of it includes queue position, latency, or the fact that the 53 fills are disproportionately the informed ones. At $q = 0$ your bid is $99.3501$ — you "earn" $\delta^* = 0.65$ when lifted; if the mid then falls $1.00$ on news your fill front-ran, that fill *cost* you $0.35$ net. **Limits:** no fees/rebates, no partial fills, no latency — and the paper documents none of this as live P&L.
+
+### S5. Strategies that use this signal
+
+- **T021 — Avellaneda–Stoikov Inventory Skew MM** — primary trigger: quotes skewed by inventory around a microprice/OFI fair value — this signal *is* the quoting engine's brain.
+- **T085 — Resiliency Market Maker** — core mechanism: quotes around LOB resiliency with A-S inventory skew — the skew from this chapter modulates a resiliency-based quoting grid.
+
+### S6. Data required — exact spec
+
+| Field | Type | Granularity | Source tier | Notes |
+|---|---|---|---|---|
+| Mid-price $s$ | numeric | tick (quoting cadence) | Tier 1–2 | Low-latency direct feed for live; any intraday feed for research |
+| Inventory $q$ | internal | per fill | — | Your own execution system — must be exact, not estimated |
+| Vol estimate $\sigma$ | computed | per refit (e.g. 5-min) | — | Short-horizon realized vol; stale $\sigma$ = mispriced spread |
+| Fill counts → $A$, $\kappa$ | calibrated | per symbol/venue | — | From your own fill history or message-level replay |
+| Fees/rebates schedule | reference | per venue | — | Taker/maker fees, tier thresholds — the model's blind spot |
+
+Ingest/quote-loop sketch (Python — research version; live belongs in Rust/C++):
+
+```python
+import numpy as np
+def as_quotes(s, q, gamma=0.1, sigma=0.3, Tt=1.0, kappa=1.5):
+    r = s - q * gamma * sigma**2 * Tt
+    dstar = 0.5 * (gamma*sigma**2*Tt + (2/gamma)*np.log(1+gamma/kappa))
+    return r - dstar, r + dstar
+for update in book_stream:                       # tick events
+    s = update.mid
+    sigma = vol_estimator.recent()               # must be fresh
+    bid, ask = as_quotes(s, inventory.q)
+    if risk_checks(q=inventory.q, sigma=sigma).ok:
+        venue.replace_quotes(bid, ask)           # risk gate FIRST, always
+```
+
+Storage (per `notes/cost-model.md` §4): quoting research needs message-level books — L2 MBP-10 ≈ 10–40 GB/symbol-day parquet; keep per-symbol daily files and replay, don't archive naively. Data-quality checklist: exchange timestamps (not SIP) for live; versioned fee/rebate schedule; corporate actions; halt handling (cancel-all on halt); clock sync (PTP).
+
+### S7. Local build on M5 Max / 128GB
+
+**Feasibility: feasible for research and simulation; the live loop is a different machine.** The A-S math itself is microseconds (this batch's research notes: <10 µs in C++/Rust, 10–100 µs in well-written Python per tick) — per `notes/cost-model.md` §2 a Python event loop at ~100–500k events/sec handles a few symbols' quoting cadence, and the M5 Max is "an excellent research/medium-throughput machine, NOT a substitute for colocated hardware." **Build the model, simulator, and risk layer on the Mac; the live quoting engine needs colocation you cannot buy in this budget.** No Python preprocessing + GPU sync + deep recurrent model on the critical quoting path — the book handler updates features asynchronously, the model scores at cadence, the quoting engine stays deterministic. RAM: <100 MB for quoting state (§3). Engineering (per §5): **180–400 h** ≈ **$27,000–60,000** at $150/hr loaded-cost estimate for event-driven quoting + inventory/risk (Tier H-adjacent); exchange adapter + certification is another 400–1,000+ h *per venue*.
+
+Python + numpy/polars is the default for formula research, Monte Carlo fill simulation, and parameter sweeps; Rust/C++ for any live or realistic replay quoting loop; an hftbacktest-style replay for message-level backtests with queue-aware fills before paper trading.
+
+### S8. Buy vs build
+
+Vendor price bands per `notes/cost-model.md` §6.
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Build the math (this chapter) | Closed-form quotes, simulator | eng time only | Full control of $\gamma$, $\kappa$, skew | — |
+| Buy pro feed (Databento) | Exchange-timestamped L1/L2 | ~$200/mo + usage *indicative — verify before budgeting* | Honest replay for queue-aware fill simulation | Still not colocation |
+| Serious multi-venue MM data/connectivity | Direct feeds, colocated servers | $10,000–100,000+/yr *indicative — verify before budgeting* | The actual infrastructure A-S assumes | Institutional budget |
+
+**Verdict: build the model, buy the connectivity — and don't go live until the replay says so.** The formula is free; the *prerequisites* (colocation, queue priority, fee tiers, message-level replay with conservative queue-aware fills) are what cost $10k–$100k+/yr. Crossover: paper-trade the A-S quoter on message-level replay for months; if net-of-everything P&L (spread captured − adverse selection − inventory liquidation − fees/rebates mismatch − latency loss − queue loss − hedging cost) isn't positive, there is no live business.
+
+### S9. Success ratio / efficacy — documented evidence
+
+| Study / source | Market & period | Metric | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Avellaneda & Stoikov (2008), *Quant. Finance* | Theory + simulations | Closed-form optimal quotes; simulations show positive P&L *under the model's own assumptions* | Before-cost (theoretical) | **Does NOT document that a live trader will earn the theoretical spread** |
+| Independent reproduction (Monte Carlo + hftbacktest on real Binance L2 + Hummingbot paper-trade) | Crypto ETF 1-min bars, 2023–2026 (196,415 bars) | Inventory-skewed quoting: 12,652 fills, inventory std 2.58 vs symmetric 9,901 fills, std 11.82; 3–9× inventory-variance reduction across all three tracks | Before-cost (simulation/paper) | Not live capital; crypto market structure |
+
+Regimes where it fails: volatility explosions, one-sided informed flow, fee-tier changes, latency shocks. **Honest bottom line:** as a standalone "strategy" this is an *optimization framework with no documented live net-of-cost edge* — the paper is primarily theoretical, and the replications confirm inventory control, not profitability. Its value is the quoting discipline inside T021/T085, wrapped in risk controls the paper doesn't discuss.
+
+### S10. Failure modes & pitfalls
+
+1. **Adverse selection** (fills predict moves against you) → mitigate: toxicity filters (VPIN/S008), widen on informed-flow proxies.
+2. **Queue-position blindness** (model assumes fills arrive at rate $\lambda(\delta)$; reality: you're last in line) → mitigate: message-level replay with *conservative* queue-aware fills; assume zero price improvement.
+3. **Latency / stale quotes** (mid moves, your quote doesn't) → mitigate: colocate or don't play; stale-quote cancel on every book update.
+4. **Inventory blowout** (one-sided flow overwhelms the skew) → mitigate: hard inventory limits + kill switches *outside* the formula — the formula never says "stop."
+5. **Volatility misestimation** (stale $\sigma$ → mispriced spread) → mitigate: short-horizon vol estimator, regime-triggered widening, halt in jumps.
+6. **Fee/rebate mismatch** (maker rebates assumed; taker fees realized on hedges) → mitigate: model the *actual* venue fee schedule, including tier minimums you can't reach.
+7. **Overfit $\gamma$/$\kappa$** (tuned on a calm month, deployed into a storm) → mitigate: calibrate on stressed periods; prefer conservative parameters.
+
+### S11. Visuals
+
+![S089 worked example — A-S reservation price and optimal quotes vs inventory (left), and fill-intensity curve with Poisson fill dispersion across 200 simulated sessions (right); seed 21, synthetic](images/S089_example.png)
+
+```mermaid
+flowchart LR
+    FEED["Raw feed<br/>(direct L1/L2 + fills)"] -- "tick quotes + own fills<br/>(per event)" --> ING["Ingest + normalize<br/>(exchange ts, fee schedule)"]
+    ING -- "mid, inventory q,<br/>vol estimate (per tick)" --> FEAT["Feature compute<br/>(r(q), δ*, λ(δ))"]
+    FEAT -- "bid/ask quotes<br/>(per quote update)" --> SIG["Signal S089<br/>A-S skew quoter"]
+    SIG -- "quotes<br/>(per update)" --> GATE{"Risk / inventory<br/>gate?"}
+    GATE -- "pass (per update)" --> OUT["Downstream consumer<br/>(T021 / T085 quoting engine)"]
+    GATE -- "fail" --> DROP["Cancel all / kill switch"]
+    style SIG fill:#aed6f1,stroke:#1f3a5f
+```
+
+### S12. Sources
+
+1. Avellaneda, Marco & Stoikov, Sasha (2008). "High-frequency trading in a limit order book." *Quantitative Finance* 8(3): 217–224. https://doi.org/10.1080/14697680701381228
+2. Analytical and Monte Carlo replication of Avellaneda–Stoikov (2008) — closed-form verification, reservation-price surfaces, inventory-vs-symmetric experiments. https://github.com/quantcodeautomata/qca-analytical-replication-of-the-avellaneda-stoikov-m
+3. A-S reproduction via Monte Carlo, hftbacktest on real Binance L2, and Hummingbot paper-trade — 3–9× inventory-variance reduction; inventory std 2.58 vs 11.82. https://github.com/ericxuzhesheng/avellaneda-stoikov-reproduction
+4. Market-making simulator comparing A-S vs fixed-spread strategies on simulated price/fill processes (documents the model equations used). https://github.com/marek-hubar/market-making-simulation
+
+**Unverified leads** (batch-research claims without an independently checkable source this batch):
+- Duck.ai Q-SB9-1/Q-SB9-3 formula and framing summaries (verified arithmetic): reservation price, corrected $\ln(1+\gamma/\kappa)$ spread, fill intensities, parameter bands, the MM P&L decomposition, and the small-account reality notes.
+- Source log: Duck.ai answered Q-SB9-1–Q-SB9-3 (2026-09-10); Grok/Cursor answers pending (checked 2026-09-10).
 
 ---
 <!-- SIGNAL CHAPTERS APPEND BELOW -->
