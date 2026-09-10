@@ -340,3 +340,23 @@ Honest use. Close imbalance / MOC is the documented, lower-impact place to put f
 | Open auction imbalance | Daily imbalance predicts (2004); open auction itself is illiquid and indicative mean-reverts | Close auction / MOC; use open imb as risk state | Going with open imb as a latency-sensitive alpha |
 
 For the research chapter: write these five as conditional state variables (trend/chop, compressed vol, gap size × location, clock-slot, auction state). The after-cost literature does not support wiring all five as unconditional 1-minute entries on 500 names.
+
+---
+
+## Tape reconstruction (orchestrator, 2026-09-10) — NOT Grok verbatim
+
+Grok's Q-SB5-1 answer described a synthetic 30-bar tape and printed derived values but never printed the full OHLCV rows. The file `batches/SB5/ohlcv_30bar.csv` (this directory) reconstructs a self-consistent tape from the answer's printed anchors. **This tape is a reconstruction, not Grok's verbatim output.**
+
+Anchors matched exactly:
+- Closes bars 11–30 (20 printed values, e.g. bar-30 close 101.65)
+- Highs/lows bars 10–29 (20 printed values each; Donchian upper 101.45 / lower 99.80)
+- EMA(20) seed = SMA(closes 1–20) = 100.1275 (forced by construction)
+- Bollinger BW at bar 30 = 0.019424, rolling stub values bar 20–30 reproduced
+- IBH = 100.70 / IBL = 99.50 (bars 1–12), bar-30 upside extension 0.79× IBR
+- Stretched-move z at bar 30 = +2.6865 (population σ)
+- Bar-30 high 101.80 breaks both Donchian(20) and Keltner(20, 2×ATR) upper bands
+
+Known deviations from Grok's printed internals (Grok's own arithmetic did not close):
+1. ATR(20) on bars 11–30 (SMA of Wilder TR) = **0.334** from this tape vs Grok's printed 0.329. Grok's printed TR list was itself inconsistent (its bar-30 TR alone must be ≥ |101.80 − 101.30| = 0.50, which no 20-bar window averaging to 0.329 can contain).
+2. EMA(20) at bar 30 = **100.4915** vs Grok's printed 100.509883. Grok's own chain was already inconsistent: its bar-21 value (100.110595) does not follow from its stated seed (100.1275) and bar-21 close (100.25), which give 100.1393. The reconstruction's EMA chain is exact given the seed and printed closes.
+3. Closes/highs/lows for bars 1–9 and all opens/volumes are chosen (opens = prior close; volumes moderate early, compressing mid, rising into the bar 25–30 rally). Any tape satisfying the anchors is admissible; this one is valid (L ≤ min(O,C), H ≥ max(O,C) on every bar).

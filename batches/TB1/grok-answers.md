@@ -6,7 +6,7 @@
 - Batch: TB1 — Flagship strategies (T001–T010)
 - Status: **COMPLETE** — all three questions asked one at a time, full answers captured verbatim via page text extraction.
 - Handling: treat as *leads*, not facts. Anything without a checkable source goes under `Unverified leads`.
-- Capture fidelity: LaTeX-rendering duplication de-duplicated; bracketed notes are the browser task's own capture notes, not Grok's text. Note: Q-TB1-3 as asked ended mid-sentence ("capacity notes,") — Grok answered all requested dimensions anyway.
+- Capture fidelity: LaTeX-rendering duplication de-duplicated; bracketed notes are the browser task's own capture notes, not Grok's text. Repair note (2026-09-10): Q-TB1-3 as asked was cut off mid-sentence at "capacity notes," — the full bank text continues "documented decay, and the specific regimes where it fails. Honest bottom line for a small (≤$1M) paper operation." Grok nevertheless answered all of those dimensions (decay, failure regimes, bottom line) without being re-prompted; the answer is complete as captured.
 - All numeric thresholds are illustrative examples, not estimated or claimed-optimal parameters. Nothing here is a live-trading spec.
 
 ---
