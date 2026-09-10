@@ -76,9 +76,9 @@ bars = np.arange(len(CLOSES_A))
 ax1.plot(bars, CLOSES_A, color=PALETTE["price"], lw=1.8, marker="o", ms=4,
          label="SYNX 5-min closes (synthetic, $)")
 ax1.scatter([7], [CLOSES_A[7]], s=130, marker="^", color=PALETTE["profit"],
-            zorder=5, edgecolors="black", linewidths=0.8, label="Long entry bar 7")
+            zorder=5, edgecolors="black", linewidths=0.8, label="Long fill: bar-8 open")
 ax1.scatter([11], [CLOSES_A[11]], s=130, marker="v", color=PALETTE["loss"],
-            zorder=5, edgecolors="black", linewidths=0.8, label="Exit bar 11 (time stop)")
+            zorder=5, edgecolors="black", linewidths=0.8, label="Exit: bar-12 open (time stop)")
 ax1.axvspan(6.5, 7.5, color=PALETTE["signal2"], alpha=0.10)
 ax1.text(7, 200.36, "expansion bar\n(range ratio 2.83)", fontsize=8,
          ha="center", color=PALETTE["signal2"])
