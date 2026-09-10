@@ -123,3 +123,4 @@
 
 ## Part II — strategies (T001–T100)
 - 2026-09-10 ~20:30 UTC: Part II START. TB1–TB8 grok-answers.md landed (31–55KB each); TB9/TB10 pending (will poll). 3 TB1 writers dispatched (A: T001–T003, B: T004–T007, C: T008–T010). Pipeline per batch: write → strict 22-item QC review → rework (max 2 attempts) → merge in stage order → push.
+- 2026-09-10 ~21:00 UTC: TB1 WRITING COMPLETE 10/10 (T001–T010; seeds 101–110; all plots exit 0 verified; candid notes on file). Strict TB1 reviewer dispatched (22-item QC, attempt 1/2). TB2 writers dispatched in parallel (A: T011–T013, B: T014–T017, C: T018–T020).
