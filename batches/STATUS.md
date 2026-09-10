@@ -98,3 +98,6 @@
 - 2026-09-10 18:43 UTC: pushed 2712f57 "Stage: SB3 rework 1/2 files (re-review pending)" -> origin/main OK.
 - 2026-09-10 18:44 UTC: pushed 0c7a099 "Stage: SB6 S059/S060 C4+V4 polish (in-flight)" -> origin/main OK.
 - 2026-09-10 18:45 UTC: pushed ccd6c07 "Stage: SB10 rework 1/2 files (re-review pending)" -> origin/main OK.
+- 2026-09-10 18:47 UTC: pushed 00aa963 "Stage: SB2 final re-review 10/10 APPROVED (attempt 2/2)" -> origin/main OK.
+- SB2 final re-review COMPLETE (2026-09-10, attempt 2/2): **10/10 APPROVED, 0 quarantined**. All 8 attempt-1 failures repaired and independently verified. SB2 cleared for merge (merge not performed).
+- SB6 final re-review COMPLETE (2026-09-10, attempt 2/2): **1/10 APPROVED (S046), 9/10 FAILED** — all failures are trivial C4 first-use definitions (FX: S034/S036/S041/S060; DST: S037/S038/S041/S048; TAQ: S038/S059/S060; SIP: S059/S060; L1: S039/S059; NBBO: S039; OPRA: S048; ADR: S060; MBO/ITCH: S038; bps: S059) plus S036 missing explicit "counterfactual" label for the vetoed fade tape. All are one-line fixes; quarantine-vs-fix decision is the orchestrator's per merge-protocol.
