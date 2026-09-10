@@ -44,6 +44,7 @@ SHARES = 2000
 HALF_SPREAD, COMM, TICKET = 0.015, 0.005, 0.50
 CS_CAP = 8.0  # bps (example)
 cost_rt = 2 * (HALF_SPREAD * SHARES) + 2 * (COMM * SHARES + TICKET)
+MOC_SLIP = 0.005 * SHARES  # T2: 0.5c/share slippage on the MOC leg, deducted per traded day
 
 # r_first%: 9:30->15:00; imb: open-auction final sign; rho%: |I|/Q_paired; d: bps displacement;
 # cs: 20-day mean CS spread bps; r_last%: 15:00->close
@@ -61,7 +62,7 @@ for i, d in enumerate(days, 1):
     if np.sign(d["imb"]) == np.sign(d["rf"]) and d["cs"] <= CS_CAP:
         side = int(np.sign(d["rf"]))
         gross = side * SHARES * PX * (d["rlast"] / 100)
-        net = gross - cost_rt
+        net = gross - cost_rt - MOC_SLIP  # 0.5c/share MOC slippage deducted
         dec = f"{'LONG' if side > 0 else 'SHORT'} 2000"
     elif np.sign(d["imb"]) != np.sign(d["rf"]):
         dec = "FLAT (imbalance disagrees)"

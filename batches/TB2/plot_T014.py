@@ -132,6 +132,7 @@ _, mid, up, lo, sd, bw = compute(px)
 
 SHARES = 1000
 HALF_SPREAD, COMM, TICKET = 0.01, 0.005, 0.50
+BREAKOUT_COVER_SLIP = 0.5 * 0.01 * SHARES  # T2: 0.5-tick slippage on vol-breakout covers
 cost_rt = 2 * (HALF_SPREAD * SHARES) + 2 * (COMM * SHARES + TICKET)
 
 trades = [
@@ -144,6 +145,8 @@ print("bar_e, entry, bar_x, exit, gross, net")
 for tr in trades:
     gross = tr["side"] * (tr["x"] - tr["e"]) * SHARES
     net = gross - cost_rt
+    if "breakout cover" in tr["note"]:  # Trade 3 only: T2 0.5-tick cover slippage
+        net -= BREAKOUT_COVER_SLIP
     tr["gross"], tr["net"] = gross, net
     cum += net
     tr["cum"] = cum

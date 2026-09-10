@@ -63,7 +63,7 @@ for e in events:
     net = 0.0
     if trade:
         gross = shares * PX * (abs(e["cont"]) / 100)
-        net = gross - 2 * (HALF_SPREAD * shares) - 2 * (COMM * shares + TICKET)
+        net = gross - 2 * (HALF_SPREAD * shares) - 2 * (COMM * shares + TICKET) - 0.01 * shares  # T2 entry slippage
         e["dec"] = f"{'LONG' if e['Rj'] > 0 else 'SHORT'} {shares}"
     else:
         e["dec"] = "FLAT (z<kappa)" if z <= KAPPA else "FLAT (no identified news)"
