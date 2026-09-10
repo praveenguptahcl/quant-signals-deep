@@ -1,0 +1,4 @@
+# TYPE: validation-run
+ts_ns,cumvol,baseline
+1789052400000000000,0.55,1.0
+1789052700000000000,0.95,1.0

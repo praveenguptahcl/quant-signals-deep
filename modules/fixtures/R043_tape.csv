@@ -1,0 +1,5 @@
+# TYPE: validation-run
+ts_ns,name,short_pct_float,days_to_cover
+1789070400000000000,AAA,0.18,6.2
+1789070400000000000,BBB,0.04,1.5
+1789070400000000000,CCC,0.25,9.0

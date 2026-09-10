@@ -1,0 +1,4 @@
+# TYPE: validation-run
+ts_ns,state,value,module_state
+1789052400000000000,THIN,0.55,OK
+1789052700000000000,NORMAL,0.95,OK
