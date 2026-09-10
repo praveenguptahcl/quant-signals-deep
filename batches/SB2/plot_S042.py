@@ -58,7 +58,7 @@ for t in range(len(closes)):
           f"{(losses[t]+losses[t-1])/2:>5.2f}  {rsi2[t]:>6.1f}")
 
 THETA = 10.0  # oversold threshold, example — not an institutional standard
-entry_day = int(np.where(rsi2 < THETA)[0][0]) + 1  # first day RSI-2 < 10 (D10)
+entry_day = int(np.where(rsi2 < THETA)[0][0]) + 1  # first day RSI-2 < 10 (D3)
 
 days = np.arange(1, len(closes) + 1)
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(10, 5.2),

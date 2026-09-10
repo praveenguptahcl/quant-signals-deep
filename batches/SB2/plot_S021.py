@@ -44,6 +44,7 @@ bars = np.array([
     [100.6, 100.8, 100.2, 100.7], # B6
     [100.7, 101.0, 100.5, 100.9], # B7
     [100.9, 101.3, 100.8, 101.2], # B8
+    [101.2, 101.5, 101.1, 101.4], # B9 (t+1 entry fill bar)
 ])
 O, H, L, C = bars.T
 n = len(bars)
@@ -66,17 +67,17 @@ ax.axhline(ORL, color=PALETTE["signal"], ls="--", lw=1.5, label=f"ORL = {ORL:.1f
 # entry offsets (example delta)
 ax.axhline(LONG, color=PALETTE["profit"], ls=":", lw=1.8, label=f"long trigger {LONG:.1f} (ORH+δ, δ=0.30 ex.)")
 ax.axhline(SHORT, color=PALETTE["loss"], ls=":", lw=1.8, label=f"short trigger {SHORT:.1f} (ORL−δ)")
-# entry marker on bar 8
-ax.plot(8, C[7], marker="^", color=PALETTE["profit"], ms=12, label="long entry @ 101.2 (bar 8)")
-ax.annotate("long 101.2", xy=(8, 101.2), xytext=(6.3, 101.45),
+# entry marker at the bar-9 open (t+1 fill of the bar-8 trigger)
+ax.plot(9, O[8], marker="^", color=PALETTE["profit"], ms=12, label="long entry @ 101.2 (bar-9 open, t+1 fill)")
+ax.annotate("long 101.2", xy=(9, 101.2), xytext=(6.3, 101.45),
             arrowprops=dict(arrowstyle="->", color=PALETTE["profit"]),
             color=PALETTE["profit"], fontsize=9, weight="bold")
-ax.set_title("S021 — Opening-range breakout (Crabel): 8×5-min synthetic tape")
-ax.set_xlabel("5-minute bar (1..6 = opening range, 7..8 = post-range)")
+ax.set_title("S021 — Opening-range breakout (Crabel): 9×5-min synthetic tape")
+ax.set_xlabel("5-minute bar (1..6 = opening range, 7..9 = post-range)")
 ax.set_ylabel("price ($)")
 ax.set_xticks(idx)
 ax.legend(loc="upper left")
-ax.set_ylim(99.2, 101.6)
+ax.set_ylim(99.2, 101.7)
 
 # ---- SYNTHETIC WATERMARK (mandatory) ----
 fig = plt.gcf()

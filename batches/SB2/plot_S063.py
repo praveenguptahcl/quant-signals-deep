@@ -55,8 +55,10 @@ gk_var = 0.5 * ln(H / L) ** 2 - (2 * ln(2) - 1) * ln(C / O) ** 2           # Gar
 rs_var = ln(H / C) * ln(H / O) + ln(L / C) * ln(L / O)                     # Rogers-Satchell
 # Yang-Zhang (window-level): overnight var + k * open-close var + (1-k) * RS var
 s2o = np.mean(ln(O[1:] / C[:-1]) ** 2)
+s2c = np.mean(ln(C / O) ** 2)            # actual open-to-close variance (NOT mean GK)
 k_w = 0.34 / (1.34 + (n + 1) / (n - 1))
-yz_var = s2o + k_w * gk_var.mean() + (1 - k_w) * rs_var.mean()
+yz_var = s2o + k_w * s2c + (1 - k_w) * rs_var.mean()
+print("S063: s2o=%.8f s2c=%.8f yz_var=%.8f ann=%.2f%%" % (s2o, s2c, yz_var, np.sqrt(yz_var) * np.sqrt(252) * 100))
 
 days = np.arange(1, n + 1)
 fig, ax = plt.subplots()
