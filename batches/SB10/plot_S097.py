@@ -85,10 +85,10 @@ ln = ax1b.plot(days, z, color=PALETTE["signal"], marker="o", lw=2,
 ax1b.axhline(3, color=PALETTE["signal"], ls=":", lw=1.2)
 ax1b.axhline(-3, color=PALETTE["signal"], ls=":", lw=1.2)
 ax1b.set_ylabel("z-score (sd units)")
-ax1b.set_ylim(-4.5, 12)
+ax1b.set_ylim(-4.5, 30)
 ax1.set_title("S097 — Social/media sentiment: 10-day synthetic tape (seed 97)")
-ax1.annotate("attention spike\nz = +%.1f" % z[6],
-             xy=(7, z[6]), xytext=(8.6, 9.5), fontsize=9, color=PALETTE["signal"],
+ax1.annotate("attention spike\nz = +%.1f" % z[5],
+             xy=(6, z[5]), xytext=(7.8, 24), fontsize=9, color=PALETTE["signal"],
              arrowprops=dict(arrowstyle="->", color=PALETTE["signal"]),
              bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#7f8c8d", alpha=0.95))
 h1, l1 = ax1.get_legend_handles_labels(); h2, l2 = ax1b.get_legend_handles_labels()
