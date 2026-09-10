@@ -126,3 +126,4 @@
 - 2026-09-10 ~21:00 UTC: TB1 WRITING COMPLETE 10/10 (T001–T010; seeds 101–110; all plots exit 0 verified; candid notes on file). Strict TB1 reviewer dispatched (22-item QC, attempt 1/2). TB2 writers dispatched in parallel (A: T011–T013, B: T014–T017, C: T018–T020).
 - 2026-09-10 ~21:06 UTC: TB2 WRITING COMPLETE 10/10 (T011–T020; seeds 111–120; all plots exit 0 verified). TB3 writers dispatched (A: T021–T023, B: T024–T027, C: T028–T030). TB1 strict review still running (attempt 1/2).
 - 2026-09-10 ~21:08 UTC: TB1 first review COMPLETE (attempt 1/2): 0/10 approved. Universal V4 (mermaid edge labels all 10); T002 C3+S2; T004-T008 S1/S3/S4/C4 one-liners; T009 S2 sizing; T010 C4. All mechanical. Rework attempt 1/2 dispatched.
+- 2026-09-10 ~21:11 UTC: TB1 rework attempt 1/2 COMPLETE (all 10: V4 edge labels, T002 C3+S2, T004-T008 S1/S3/S4/C4, T009 S2 sizing recompute, T010 C4; all plots exit 0). Final re-review attempt 2/2 dispatched (failures → quarantine).
