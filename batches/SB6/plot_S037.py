@@ -1,6 +1,8 @@
 """S037 plot: Lee-Mykland Z/T statistics with the 2.970 threshold + jump-filter decision.
-Uses the CORRECTED worked example (bot single-digit typo fixed: 0.000011649 -> 0.000011749).
-Chart numbers are the S4 numbers in batches/SB6/S037.md.
+Uses the NORMALIZED worked example: the (k-1) local-average normalization that the
+published Lee-Mykland formula and the chapter's own S6 ingest code require
+(Vhat = (pi/2)*(1/9)*Sigma for the 10-return window). The earlier draft's
+unnormalized Vhat = (pi/2)*Sigma contradicted both; this script matches S4.
 Run: python3 batches/SB6/plot_S037.py   (cwd = quant-signals-deep)
 """
 import matplotlib
@@ -39,50 +41,51 @@ PALETTE = {
 
 rng = np.random.default_rng(37)  # stated in chapter text
 
-# ---- corrected Lee-Mykland chain (independent recomputation confirms bot correction) ----
+# ---- normalized Lee-Mykland chain (matches S4; (k-1) local-average normalization) ----
 r_open = float(np.log(102 / 100))          # 0.019803
-Sigma = 0.000087954                        # corrected adjacent |r||r| sum
-Vhat = (np.pi / 2.0) * Sigma                # 0.00013816
-sq = float(np.sqrt(Vhat))                   # 0.011754
-Z = r_open / sq                             # 1.685
+Sigma = 0.000087954                        # corrected adjacent |r||r| sum (9 products)
+n_prod = 9                                 # k=10 returns -> k-1 adjacent products
+Vhat = (np.pi / 2.0) * (Sigma / n_prod)     # 0.0000153509 (NOT (pi/2)*Sigma)
+sq = float(np.sqrt(Vhat))                   # 0.0039180
+Z = r_open / sq                             # 5.0542
 C, S_ = 3.031, 0.2894                       # extreme-value normalization (Delta=1/390)
-T = (abs(Z) - C) / S_                       # -4.65
+T = (abs(Z) - C) / S_                       # 6.99 -> JUMP at 5% (and at 1%)
 q95, q99 = 2.970, 4.600
-print(f"r(open)={r_open:.6f} Vhat={Vhat:.8f} sqrt={sq:.6f} Z={Z:.3f} T={T:.2f} "
+print(f"r(open)={r_open:.6f} Vhat={Vhat:.10f} sqrt={sq:.7f} Z={Z:.4f} T={T:.2f} "
       f"q95={q95:.3f} q99={q99:.3f} -> {'JUMP' if T > q95 else 'NOT a jump'}")
 
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.2),
                                gridspec_kw={"height_ratios": [1.35, 1]}, sharex=False)
 
-# panel A: the corrected arithmetic chain as a waterfall-ish bar of the key inputs
+# panel A: the normalized arithmetic chain as a waterfall-ish bar of the key inputs
 labels = ["|r(4)|·|r(5)|\n(×10⁶)", "Σ adjacent\n|Δp|·|Δp| (×10⁶)",
           "V̂ (×10⁶)", "√V̂ (×10³)", "|Z(open)|", "T(open)"]
 vals = [0.000011749 * 1e6, Sigma * 1e6, Vhat * 1e6, sq * 1e3, abs(Z), T]
-colors = [PALETTE["volume"]] * 4 + [PALETTE["signal2"], PALETTE["profit"]]
+colors = [PALETTE["volume"]] * 4 + [PALETTE["signal2"], PALETTE["signal"]]
 bars = ax1.bar(labels, vals, color=colors, edgecolor="#2c3e50", lw=0.8)
-ax1.set_title("S037 — Lee–Mykland opening-jump test: corrected arithmetic (synthetic tape)")
+ax1.set_title("S037 — Lee–Mykland opening-jump test: normalized arithmetic (synthetic tape)")
 ax1.set_ylabel("value (scaled)")
 for b, v in zip(bars, [0.000011749, Sigma, Vhat, sq, abs(Z), T]):
     ax1.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.03 * (b.get_height() or 1),
              f"{v:.6g}", ha="center", va="bottom", fontsize=9)
-ax1.text(0.02, 0.94, "typo fixed: |r(4)|·|r(5)| = 0.000011749 (printed 0.000011649)",
+ax1.text(0.02, 0.94, "V̂ = (π/2)·Σ/9 — (k−1) local-average normalization (see S4)",
          transform=ax1.transAxes, fontsize=9, color=PALETTE["signal"],
          bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=PALETTE["signal"], alpha=0.9))
 
 # panel B: T(open) on the decision axis with the extreme-value thresholds
-ax2.axvspan(q95, 6.5, color=PALETTE["signal"], alpha=0.18, label="reject no-jump (α=5%)")
-ax2.axvspan(-6.5, q95, color=PALETTE["profit"], alpha=0.12, label="no jump — fade allowed")
+ax2.axvspan(q95, 8.5, color=PALETTE["signal"], alpha=0.18, label="reject no-jump (α=5%)")
+ax2.axvspan(-7.0, q95, color=PALETTE["profit"], alpha=0.12, label="no jump — fade allowed")
 ax2.axvline(q95, color=PALETTE["signal"], lw=2.0, ls="--", label=f"q(0.95) = {q95:.3f}")
 ax2.axvline(q99, color=PALETTE["loss"], lw=1.5, ls=":", label=f"q(0.99) = {q99:.3f}")
 ax2.axvline(0, color=PALETTE["zero"], lw=1.0)
 ax2.scatter([T], [0.5], color=PALETTE["price"], s=160, zorder=5, edgecolors="white", lw=1.2)
-ax2.annotate(f"T(open) = {T:.2f}", xy=(T, 0.5), xytext=(T - 0.4, 0.78),
+ax2.annotate(f"T(open) = {T:.2f}", xy=(T, 0.5), xytext=(T - 1.6, 0.78),
             fontsize=11, weight="bold", color=PALETTE["price"],
             arrowprops=dict(arrowstyle="->", color=PALETTE["price"]))
-ax2.annotate("−4.65 < 2.970\nNOT a Lee–Mykland jump at 5%\n→ fade the gap",
-            xy=(T, 0.5), xytext=(-4.3, 0.18), fontsize=10, color=PALETTE["profit"],
-            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec=PALETTE["profit"], alpha=0.95))
-ax2.set_xlim(-6.5, 6.5)
+ax2.annotate("6.99 > 2.970\nLee–Mykland JUMP at 5%\n→ stand down — do NOT fade",
+            xy=(T, 0.5), xytext=(0.4, 0.18), fontsize=10, color=PALETTE["signal"],
+            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec=PALETTE["signal"], alpha=0.95))
+ax2.set_xlim(-7.0, 8.5)
 ax2.set_ylim(0, 1)
 ax2.set_yticks([])
 ax2.set_xlabel("Lee–Mykland extreme-value statistic T(i)  (rejection: T > q(1−α))")

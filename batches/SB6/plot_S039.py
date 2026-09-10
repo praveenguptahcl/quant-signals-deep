@@ -56,7 +56,7 @@ rawB2 = np.array([0.10, 0.08, 0.12])   # B reverts
 resB2 = rawB2 - beta["B"] * mkt2
 entry_px, exit_px = 100.0 + cum_rawB[-1], 100.0 + cum_rawB[-1] + rawB2.sum()
 gross_bp = (exit_px / entry_px - 1) * 10000
-net_bp = gross_bp - 3.0 * 2 - 1.0      # effective half-spread 3bp x2 + 1bp fees
+net_bp = gross_bp - 3.0 * 2 - 1.0 - 2.0  # half-spread 3bp x2 legs + 1bp fees + 2bp slippage/impact
 
 print("== S039 synthetic panel (seed 43) ==")
 print(" bkt | mkt% | rawA% | resA% | rawB% | resB%")
@@ -65,7 +65,7 @@ for i in range(L):
 print(f"A: cum raw {rawA.sum():+.2f}%  cum residual {resA.sum():+.2f}%  z={zA:+.2f}")
 print(f"B: cum raw {rawB.sum():+.2f}%  cum residual {resB.sum():+.2f}%  z={zB:+.2f}  (threshold |z|>=1.5 example -> fade B only)")
 print(f"hold buckets: rawB2={rawB2} sum {rawB2.sum():+.2f}%, resB2 sum {resB2.sum():+.2f}%")
-print(f"fade-B trade: long {entry_px:.3f} -> {exit_px:.3f}; gross {gross_bp:+.1f}bp, net (spread+fees) {net_bp:+.1f}bp")
+print(f"fade-B trade: long {entry_px:.3f} -> {exit_px:.3f}; gross {gross_bp:+.1f}bp, net (spread+fees+slippage) {net_bp:+.1f}bp")
 
 bk = np.arange(1, 10)
 fig, ax = plt.subplots()
@@ -80,7 +80,7 @@ ax.annotate(f"fade trigger (bkt 6)\nB: z={zB:.2f} (fade)\nA: z={zA:.2f} (skip)",
             xy=(6, cum_resB[-1]), xytext=(7.4, -0.75), fontsize=8.5, ha="left",
             arrowprops=dict(arrowstyle="->", color=PALETTE["zero"]),
             bbox=dict(boxstyle="round,pad=0.4", fc="white", ec=PALETTE["zero"], alpha=0.92))
-ax.annotate(f"exit: net {net_bp:+.0f}bp after spread+fees",
+ax.annotate(f"exit: net {net_bp:+.0f}bp after spread+fees+slippage",
             xy=(9, cum_rawB[-1] + rawB2.sum()), xytext=(4.2, 0.35), fontsize=8.5, ha="left",
             arrowprops=dict(arrowstyle="->", color=PALETTE["profit"]))
 ax.axhline(0, color=PALETTE["zero"], lw=0.8)

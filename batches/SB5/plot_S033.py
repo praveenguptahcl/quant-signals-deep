@@ -60,7 +60,7 @@ print(f"final imbalance ratio = {imb_ratio[-1]:.1%}; final indicative vs ref = {
 open_print = 150.55
 m1 = np.array([150.62, 150.70, 150.66, 150.74, 150.81])
 print(f"open print = {open_print:.2f}; 1-min closes 09:30-09:35 = {m1}")
-print(f"5-min continuation = {(m1[-1] - open_print):+.2f} = {(m1[-1]-open_print)/open_print*1e4:+.1f} bps before costs")
+print(f"5-min continuation (tradable entry m1[0]={m1[0]:.2f}) = {(m1[-1] - m1[0]):+.2f} = {(m1[-1]-m1[0])/m1[0]*1e4:+.1f} bps before costs")
 
 # ---- PLOT ----
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.2), sharex=True,
