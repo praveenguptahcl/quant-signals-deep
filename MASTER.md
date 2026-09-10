@@ -5,7 +5,7 @@
 > synthetic data unless stated otherwise with a real web-sourced citation.
 > Local-build costing assumes a sunk-cost Apple Mac with M5 Max chip and 128GB unified memory.
 
-**Build status:** Stage 190/200 merged · last updated 2026-09-10 · 0 chapters deferred
+**Build status:** Stage 200/200 merged · last updated 2026-09-10 · 0 chapters deferred
 
 ## Build log
 - Stage 0/200 — scaffold created 2026-09-10. Planner + chatbot scouts dispatched.
@@ -200,6 +200,16 @@
 - Stage 188/200 — T088 merged 2026-09-10 · reviewer: 4a82e6b6 · plot verified (seed 188)
 - Stage 189/200 — T089 merged 2026-09-10 · reviewer: 4a82e6b6 · plot verified (seed 189)
 - Stage 190/200 — T090 merged 2026-09-10 · reviewer: 4a82e6b6 · plot verified (seed 190)
+- Stage 191/200 — T091 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 191)
+- Stage 192/200 — T092 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 192)
+- Stage 193/200 — T093 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 193)
+- Stage 194/200 — T094 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 194)
+- Stage 195/200 — T095 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 195)
+- Stage 196/200 — T096 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 196)
+- Stage 197/200 — T097 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 197)
+- Stage 198/200 — T098 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 198)
+- Stage 199/200 — T099 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 199)
+- Stage 200/200 — T100 merged 2026-09-10 · reviewer: 79fda2d1 · plot verified (seed 200)
 
 ## Table of contents
 
@@ -436,6 +446,17 @@
 - [x] Stage 188/200 — [T088 — Full-Stack Signal Ensemble](#stage-188200--t088-full-stack-signal-ensemble)
 - [x] Stage 189/200 — [T089 — Quote-Matcher (SIP-vs-Direct)](#stage-189200--t089-quote-matcher-sip-vs-direct)
 - [x] Stage 190/200 — [T090 — Overnight Inventory Carry Manager](#stage-190200--t090-overnight-inventory-carry-manager)
+#### TB10 — Advanced hybrids & capstone (Stages 191–200)
+- [x] Stage 191/200 — [T091 — Multi-Level Book-Pressure Swing](#stage-191200--t091-multi-level-book-pressure-swing)
+- [x] Stage 192/200 — [T092 — PIN-Gated Informed-Flow Avoidance](#stage-192200--t092-pin-gated-informed-flow-avoidance)
+- [x] Stage 193/200 — [T093 — Options-to-Equity Lead Trader](#stage-193200--t093-options-to-equity-lead-trader)
+- [x] Stage 194/200 — [T094 — Squeeze Breakout (Options-Confirmed)](#stage-194200--t094-squeeze-breakout-options-confirmed)
+- [x] Stage 195/200 — [T095 — Dispersion + GEX Regime Switch](#stage-195200--t095-dispersion--gex-regime-switch)
+- [x] Stage 196/200 — [T096 — Kalman + HMM Adaptive Trend](#stage-196200--t096-kalman--hmm-adaptive-trend)
+- [x] Stage 197/200 — [T097 — Sub-Hour Microstructure Reversal Scalper](#stage-197200--t097-sub-hour-microstructure-reversal-scalper)
+- [x] Stage 198/200 — [T098 — Jump-Validated Momentum Ignition](#stage-198200--t098-jump-validated-momentum-ignition)
+- [x] Stage 199/200 — [T099 — ADR + Borrow Corporate Arb](#stage-199200--t099-adr--borrow-corporate-arb)
+- [x] Stage 200/200 — [T100 — Grand Ensemble — 100 Signals, One Book](#stage-200200--t100-grand-ensemble--100-signals-one-book)
 
 ## Part I — Signal deep dives (S001–S100)
 
@@ -34577,3 +34598,1610 @@ flowchart TD
 - The Stübinger–Schneider performance figures (51.47% p.a., Sharpe 2.38) carry the replication caveats noted in S037's chapter; do not quote them as achievable.
 
 *Source log: Grok answered Q-TB9-1..3 (2026-09-10); all claims independently verified or labeled unverified.*
+
+## Stage 191/200 — T091: Multi-Level Book-Pressure Swing
+
+*Batch TB10 · Strategy 91/100 · Signals S005, S002, S076 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday swing, microstructure-directional: minutes-to-hours positions on persistent limit-order-book shape |
+| **Edge source** | Persistent multi-level resting-depth imbalance (S005, the *photograph*) plus multi-level order-flow imbalance (S002, the *movie*), exited on volatility-breakout state changes (S076); persistence and spread gates convert flicker into tradable pressure |
+| **Typical holding period** | 20–90 minutes (example); flat by the close |
+| **Capacity hint** | $2–10M per name-family before depth participation caps bind (example); sized by displayed size on the first three opposite book levels |
+| **Build-or-buy in one line** | Build the features in a weekend; buy (or rent) the MBP-10 feed — the feed is the whole cost, the math is free |
+
+### T2. Full mechanics
+
+**Universe & session.** 50–150 liquid large-caps (example universe), ADV (average daily volume) above $50M (example) so that displayed depth means something. Regular trading hours, 10:00–15:30 ET (example; avoids the open auction's special dynamics and the close auction). Exclusions: earnings-day names (S030's evidence shows squeezes misbehave around scheduled events), halts, and any symbol whose 5-day median relative spread exceeds 25 bps (example) — the strategy is a guest of the spread, not its master.
+
+**The signals, plainly.** The *limit order book* is the exchange's queue of resting buy (bid) and sell (ask) orders, stacked price level by price level. **Book pressure** (S005) is a still photograph: at each snapshot, compute per-level order-book imbalance
+
+$$\mathrm{OBI}_{l,t}=\frac{V^{\mathrm{bid}}_{l,t}-V^{\mathrm{ask}}_{l,t}}{V^{\mathrm{bid}}_{l,t}+V^{\mathrm{ask}}_{l,t}+\varepsilon}$$
+
+for levels l = 1…10 (example), where V is resting share quantity, and combine them with exponentially decaying weights (w_l ∝ e^(−0.35(l−1)), so level 1 carries ~30% and level 10 ~2%; example λ = 0.35):
+
+$$P_t=\sum_{l=1}^{10} w_l\,\mathrm{OBI}_{l,t}$$
+
+A positive P_t means resting demand outweighs resting supply across the visible book. **Multi-level order-flow imbalance** (S002) is the movie: it counts *changes* — bid additions and ask cancellations — per level between events (Cont-style OFI, aggregated across levels with Ridge-regularized weights per Xu–Gould–Howison 2019). **Volatility breakout** (S076) measures whether realized range is expanding or the tape is chopping — it times exits and vetoes entries in dead tapes.
+
+**Combination score (example weights).**
+
+$$S^A_t = 0.55\,z(P^*_t) + 0.35\,z(\mathrm{IOFI}^*_t) + 0.10\,z(\mathrm{trade\text{-}OBI}_t)$$
+
+where each z is a rolling 2-hour z-score (standardized score: (value − mean)/standard deviation) clipped to [−3, 3], P*_t is the 20-sample EMA of P_t, IOFI*_t is the smoothed multi-level OFI, and trade-OBI is signed executed volume over the same window (less sensitive to fleeting quotes). All weights are marked `example` — the plan's honesty rule: these are starting points, not institutional standards.
+
+**Entry rule.** Enter long when ALL of: (i) S_A > +1.25 (example); (ii) sign(P*_t) has persisted for K = 8 consecutive 60-second snapshots (example — the flicker filter); (iii) relative spread ≤ s_max (8 bps large-cap, 25 bps mid-cap; example); (iv) no refill event — if depth on the thin side recovered >50% within the last 2 snapshots, halve |P*_t| first (the spoof/flicker penalty, example). **Causal timing, stated explicitly: the score S_A is computed from the snapshot at bar t, using only data ≤ t; the earliest legal fill is the t+1 bar's open.** There is no same-bar trading — a signal computed at 10:23:00 from the 10:23:00 book cannot trade at 10:23:00.
+
+**Exit rule.** Profit target +1.25 × σ_20 (example; σ_20 is the 20-bar rolling standard deviation of bar returns, an ATR-style (average true range) volatility unit); stop-loss −0.85 × σ_20 (example); time stop 45–90 minutes or end of session, flat by the close (example); signal-flip exit if the mid crosses session VWAP (volume-weighted average price) against the position by 0.5σ (example).
+
+**Position sizing.** q = (r × equity) / stop_distance (example), with r = 0.30% of equity risked per trade (example), then capped at 8% of the displayed size on the first three opposite book levels (example) — you never demand more than the book visibly offers. Portfolio heat: max 3 concurrent positions (example).
+
+**Risk limits.** Kill the session after 2 consecutive stopped trades (example); realized spread + fees on the day must stay below the expected move, else stand down; max gross 1.5× equity (example); daily loss stop −1.5% of the sleeve (example).
+
+**Cost model.** 1.5¢/share round-trip (example: ~0.5¢ half-spread paid each side on a liquid large-cap plus ~0.5¢ all-in fees/slippage), applied explicitly in the worked example below. Borrow is N/A (intraday long/short on easy-to-borrow large caps; hard-to-borrow names are excluded).
+
+**Order/execution sketch.** Post passive limit orders at the touch; if not filled within 2 snapshots, cross the spread for at most 50% of the order and cancel the rest (example participation discipline). Queue position on a SIP (Securities Information Processor consolidated feed) or MBP-10 (market-by-price, 10 levels) reconstruction is *not* knowable — any fill-rate assumption here is `simulated only — requires MBO/ITCH` (market-by-order / ITCH direct-feed message data) per the honesty rules.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S005 (multi-level book pressure) | Primary trigger | 0.55 weight (example) in S_A; persistence K = 8 bars (example) on sign(P*_t) |
+| S002 (MLOFI / integrated OFI) | Confirmation | 0.35 weight (example); must agree in sign with P*_t, else no entry |
+| S076 (vol breakout / squeeze state) | Exit + regime gate | no entry if bandwidth is at a 6-month low AND no breakout has printed yet (dead tape); exits on vol-expansion reversal |
+
+Pseudocode (≤25 lines):
+```
+every 60 s snapshot t on symbol s:                      # granularity: 60-s MBP-10 snapshots
+    P[t]  = sum_l w_l * OBI(l, t)                        # S005, L=10, lambda=0.35 example
+    Ps[t] = EMA(P, 20)                                   # smoothed pressure
+    I[t]  = MLOFI(t)                                     # S002, Ridge-weighted levels
+    SA[t] = 0.55*z(Ps, 2h) + 0.35*z(I, 2h) + 0.10*z(tradeOBI, 2h)  # clipped +-3
+    if thin_side_refilled_50pct(last 2 snaps): SA[t] *= 0.5
+    if SA[t] > 1.25 and sign_stable(Ps, K=8) and spread <= s_max:   # example
+        if vol_state != DEAD_SQUEEZE:                    # S076 gate
+            submit(q) at next bar open                   # fill t+1, never t
+# exits: PT +1.25*sigma20 / SL -0.85*sigma20 / time 45-90m / VWAP cross-against
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 25-minute tape on fictional liquid name **GENL** (prices synthetic, seed 191). 60-second MBP-10 snapshots. λ = 0.35 → weights ≈ (0.30, 0.21, 0.15, 0.11, 0.07, 0.05, 0.04, 0.03, 0.02, 0.02) (example). Entry threshold S_A > +1.25 (example).
+
+| t (min) | Weighted OBI P_t | Persistence | S_A | Action | Mid ($) | Position |
+|---|---|---|---|---|---|---|
+| 0–7 | +0.12 → +0.41 | building | 0.60 → 1.10 | flat (K not met) | 100.02 → 100.06 | 0 |
+| 8 | +0.58 | 8 bars ✓ | +1.41 | **BUY 12,000 @ 100.06** (fill t+1 after the t=8 signal) | 100.06 | +12,000 |
+| 12 | +0.62 | — | +1.50 | hold | 100.14 | +12,000 |
+| 18 | +0.21 | fading | +0.70 | hold (no flip exit) | 100.21 | +12,000 |
+| 24 | −0.05 | — | +0.10 | **SELL 12,000 @ 100.33** (profit target 100.34 touched; exit pays half-spread) | 100.34 | 0 |
+
+Ledger (fully costed):
+- Buy: 12,000 × $100.06 = $1,200,720 notional
+- Sell: 12,000 × $100.33 = $1,203,960
+- Gross: $1,203,960 − $1,200,720 = **+$3,240**
+- Costs: 12,000 sh × $0.015 RT = **$180**
+- **Net: +$3,060**
+
+**Session net: +$3,060 on the one swing (synthetic; demonstrates the entry/exit arithmetic, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The tape is hand-shaped: pressure builds monotonically, never spoofs, and the mid drifts obligingly toward the profit target. Real books flicker — level-1 OBI reverses sign several times a minute on busy names, and the persistence gate that "saved" this trade also keeps you out of half the genuine moves. The 1.5¢/share round-trip assumes mid-touch fills and no partial fills; a real 12,000-share order walks the book and pays impact. The σ_20 = 0.22 pts stop/PT calibration is assumed known, not estimated with error. No latency, no queue position, no adverse selection from the very informed flow that creates book pressure in the first place.
+
+![T091 worked example — synthetic 25-minute book-pressure swing trade, mid price with entry/exit markers and S_A score panel](images/T091_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 191; plotted series are the T4 table values above.*
+
+### T5. Data & infra — what must run
+
+**Feed.** MBP-10 (market-by-price, 10 levels) snapshots or event deltas on 50–150 names, every 60 s for the swing clock plus full-resolution deltas for the MLOFI estimator (S002's Cont-style OFI needs per-event updates). Collection: Databento MBP-10 (Standard ~$200/mo or Plus ~$1,500–$1,750/mo, `indicative — verify before budgeting`) or equivalent; SIP L1 is *not* sufficient — there is no depth on the consolidated tape, so S005 cannot be computed from it.
+
+**Jobs.** Pre-open: build the 2-hour rolling z-score baselines from the prior session's snapshots. Intraday loop: every 60 s, recompute P_t, IOFI_t, S_A, spread guard, refill check across the universe (trivial vectorized work). Post-close: log persistence/refill statistics and markout; refit the Ridge weights for S002 weekly (example cadence).
+
+**Storage.** Per cost-model §4, L1 quotes+trades on a liquid name run ~2–8 GB/symbol-day in parquet; MBP-10 event deltas are heavier — per-symbol daily files; 60-day history on 150 names is **90–360 TB** (150 × 60 × 10–40 GB/symbol-day, per §4) — archive-infeasible; do not archive naively. The 60-day hot feature store (1-min S_A scores + mid prices) is ~50 MB — trivial.
+
+**M5 Max feasibility.** Per cost-model §2, polars handles ~10–50M rows/sec on simple ops; the per-minute recompute across 150 names is milliseconds. The weekly Ridge fit on ~10M book-event rows is minutes. Verdict: **feasible** — the machine is idle 99% of the session; the bottleneck is the feed license and the book-reconstructor's snapshot/delta correctness, not FLOPs. RAM: the live working set (10-level books × 150 names + feature cache) is a few GB — comfortably inside the 77GB working budget (cost-model §3).
+
+**Engineering.** Tier H for the L2/MBO pipeline per cost-model §5 (60–200 h; one line: MBP-10 reconstruction and event-alignment correctness dominate), plus Tier M+ for the strategy harness (40–100 h). Planning band: **100–200 h ≈ $15k–$30k loaded-cost estimate** at $150/hr. What breaks first at 500 symbols: the MBP-10 usage bill and the per-symbol daily-file bookkeeping, not the CPU.
+
+**Feed-drop failure plan.** If the depth feed stalls: cancel all working orders, flatten at the touch within 2 minutes (example), and block new entries until 5 consecutive clean snapshots arrive — fail closed, because a stale P_t is worse than no P_t.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: SIP L1 only (Alpaca IEX / Stooq) | Free top-of-book | ~$0, `indicative — verify before budgeting` | $0 marginal | No depth: S005 uncomputable — this strategy cannot exist on this route |
+| Tier-1: Polygon Stocks Advanced | SIP-class bars + WS, no depth | ~$199/mo individual, `indicative — verify before budgeting` | Easy ingest | Still no L2; buy this for the mid-price tape, not the book |
+| Tier-2: Databento Standard/Plus | Live + historical MBP-10/MBO | ~$200–$1,750/mo + usage, `indicative — verify before budgeting` | The honest research feed for this strategy | Historical L2 beyond ~1 month is usage-priced; years of depth get expensive |
+| Tier-3: LOBSTER (academic) | MBO/ITCH replay | ~hundreds/yr academic, `indicative — verify before budgeting` | True queue dynamics for fill simulation | Academic license, limited universes |
+| Institutional: TAQ / full OPRA production | Production tick | Institutional $$$$, `indicative — verify before budgeting` | Everything | The bill ends the small-shop case |
+
+**Verdict: buy the feed (Tier 2), build everything else.** The crossover: if you need true queue-position fill modeling (MBO/ITCH replay for the participation logic), the build moves to Tier H+ and the buy case strengthens — honesty about fills is bought, not coded. Nothing off the shelf sells the persistence/refill/threshold parameterization; that is the (thin) proprietary layer.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only. All figures below are *before-cost* unless stated; the honest reading follows.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Cont, Kukanov & Stoikov (2014), "The Price Impact of Order Book Events" | US equities, LOB events | Top-of-book OFI explains ~65% of contemporaneous mid-price variance (order of magnitude, per Cont, Kukanov & Stoikov 2014) | Before cost (explanatory, not traded) | Contemporaneous R² is measurement, not a trading rule; it says nothing about t+1 fillability |
+| Xu, Gould & Howison (2019), "Multi-Level Order-Flow Imbalance in a Limit Order Book" | LOB data | Ridge on 10-level MLOFI cut OOS RMSE 15–30% on small-tick names and substantially on large-tick names vs single-level OFI; deep-level coefficients significant once collinearity is regularized | Before cost (forecast error) | The Ridge-vs-OLS contrast is the lesson: naive level-adding (OLS) added almost nothing (Cont et al. 2014); regularization recovered the increment |
+| Cont, Cucuringu & Zhang (2023), "Cross-Impact of Order Flow Imbalance in Equity Markets", *Quant. Finance* 23(10) | Equities | Integrated (PCA) OFI beats top-of-book for contemporaneous impact; multi-asset cross-impact adds little contemporaneously once multi-level own-book OFI is present | Before cost | More model, same fit — complexity without the right estimator is noise |
+
+**Documented decay/conditionality.** The multi-level increment is largest on large-tick, thick-book names and decays with horizon: sub-second the touch dominates; seconds belong to OFI/shallow MLOFI; minutes get only weaker, replenishment-conditional aggregates. No published paper validates this chapter's exact swing rule (persistence K = 8, ±1.25 thresholds, refill halving) as a traded strategy — the evidence supports the *measurement* (multi-level pressure explains the mid better than the touch), not the *trade*.
+
+**Honest bottom line.** As a standalone trigger on a ≤$1M paper book: a measurement edge with a cost problem — the documented increment lives at horizons where the spread is the same size as the move. As a filter/exit-timer inside a slower strategy: the credible use — spread guards, refill vetoes, and vol-breakout exits are where book data demonstrably keeps traders out of bad prints. For the institutional desk: the same, at 100× the data bill.
+
+### T8. Failure modes
+
+- **Spoofing / fleeting depth.** One-sided displayed size can be a lie posted to move the mid. Mitigation: the refill penalty (halve |P*_t| on fast thin-side recovery) and the trade-OBI 10% weight, which only counts executed volume.
+- **Lookahead via z-score baselines.** A rolling 2-hour z-score that includes the current snapshot leaks the present into "history". Mitigation: baselines computed strictly on t−1 and earlier; unit-test with a known spike.
+- **Stale-book fills.** MBP-10 snapshots are not the matching engine; the book you score at t is not the book you trade at t+1. Mitigation: 8% displayed-size cap and the assumption that fills are `simulated only — requires MBO/ITCH`.
+- **Persistence-gate whipsaw.** K = 8 bars of same-sign pressure can be 8 bars of a spoof campaign. Mitigation: the spread guard plus a hard 2-consecutive-stop kill.
+- **Regime breaks.** Maker-taker changes, tick-size pilots, and zero-DTE flow reshape what "persistent pressure" means. Mitigation: weekly Ridge refits and a dead-man switch on the 20-day hit rate.
+- **Cost blowup.** 1.5¢/share RT is a liquid-name assumption; mid-caps run 3–6¢. Mitigation: the s_max spread guard is also a cost guard — costs are inside the entry condition, not beside it.
+- **Overfit thresholds.** ±1.25, K = 8, λ = 0.35 are example values tuned on nothing. Mitigation: sensitivity grid in the research notebook; any threshold that must be exact to work is rejected.
+
+### T9. Visuals
+
+![T091 worked example — synthetic 25-minute book-pressure swing trade, mid price with entry/exit markers and S_A score panel](images/T091_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 191; plotted series are the T4 table values.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(MBP-10 depth, 60-s snapshots)"] -->|"MBP-10 depth<br/>(60-s snapshots + event deltas)"| SIGS["Signals<br/>S005 book pressure, S002 MLOFI, S076 vol state"]
+    SIGS -->|"1-min snapshots<br/>+ per-event OFI deltas"| ENTRY{"Entry logic<br/>(S_A > ±1.25, K=8 persistence,<br/>spread guard; fill t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(0.30% risk to stop;<br/>8% displayed-size cap)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"child orders ≤ depth cap"| EXEC["Execution<br/>(passive at touch;<br/>SIP/MBP fills simulated only)"]
+    EXEC -->|"fills"| MON["Monitor + exits<br/>(PT +1.25σ / SL −0.85σ /<br/>time stop / VWAP cross)"]
+    MON -->|"net of 1.5¢/sh RT"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Cont, R., Kukanov, A. & Stoikov, S. (2014). "The Price Impact of Order Book Events." *Journal of Financial Econometrics* 12(1): 47–88. https://arxiv.org/abs/1011.6402 — canonical OFI definition; top-of-book OFI explains the contemporaneous mid move. arXiv API re-checked 2026-09-10 — title matches.
+2. Xu, K., Gould, M. D. & Howison, S. D. (2019). "Multi-Level Order-Flow Imbalance in a Limit Order Book." arXiv:1907.06230. https://arxiv.org/abs/1907.06230 — 10-level MLOFI with Ridge regularization; OOS RMSE cuts over single-level OFI. arXiv API re-checked 2026-09-10 — title matches; the S9 figure-vs-Table-10 check is inherited from S002's earlier-batch verification (not re-checked this pass).
+3. Cont, R., Cucuringu, M. & Zhang, C. (2023). "Cross-Impact of Order Flow Imbalance in Equity Markets." *Quantitative Finance* 23(10): 1373–1393. https://arxiv.org/abs/2112.13213 — integrated (PCA) OFI beats top-of-book for contemporaneous impact; cross-impact adds little once multi-level own-book OFI is present. arXiv API re-checked 2026-09-10 — title matches; the finding-vs-paper check is inherited from S002's earlier-batch verification (not re-checked this pass).
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All thresholds in T2/T3 (±1.25, K = 8, λ = 0.35, the 0.55/0.35/0.10 blend, 1.5¢/share RT) are `example` values from the batch design (2026-09-10), not published recommendations.
+- Databento plan prices (~$200–$1,750/mo) are vendor bands, `indicative — verify before budgeting`.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. The three arXiv identifiers above were re-checked via the arXiv API on 2026-09-10 (titles match); the Cont–Kukanov–Stoikov figure-vs-table check is inherited from S002's earlier-batch verification and was not re-checked this pass. Anything else not independently re-checked this pass is flagged in Unverified leads or the caveats above.*
+
+## Stage 192/200 — T092: PIN-Gated Informed-Flow Avoidance
+
+*Batch TB10 · Strategy 92/100 · Signals S009, S008, S086 · Provenance [D]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Risk-managed directional overlay: takes candidate trades from any signal library but only in tape states where flow toxicity is low |
+| **Edge source** | Avoidance, not prediction — VPIN (S008) vetoes entries when informed one-sided flow is flooding the tape; structural PIN (S009) sets a slow-moving background condition; meta-labeling (S086) gives a second opinion on each candidate trade |
+| **Typical holding period** | Whatever the underlying candidate strategy dictates (minutes to days); this strategy is a gate, not a clock |
+| **Capacity hint** | Scales with the base strategy's capacity, minus 20–40% (example) for the gate's fill-rate haircut |
+| **Build-or-buy in one line** | Build the gates in a week on L1 data; buy nothing new — VPIN and PIN run on trades and quotes you already have |
+
+### T2. Full mechanics
+
+**The idea, plainly.** Most losses in short-horizon trading don't come from bad signals — they come from trading *into* flow you can't see: informed sellers hitting every bid while your mean-reversion model fades the tape. **PIN** (probability of informed trading, S009) estimates the chance that any given trade is information-driven, using a structural model of order arrival (Easley, Kiefer, O'Hara & Paperman 1996; Easley, Hvidkjaer & O'Hara 2002). **VPIN** (volume-synchronized probability of informed trading, S008) is its high-frequency cousin: instead of calendar time, it buckets trades by *volume* — each bucket holds the same number of shares — and measures buy/sell imbalance per bucket. A burst of one-sided buckets means toxic flow. **Meta-labeling** (S086) trains a second machine-learning model whose only job is to predict whether the primary strategy's trades will be winners — a "second opinion" that can veto or down-size.
+
+**The key asymmetry, honored throughout this chapter.** PIN is a **slow-moving structural condition** — it updates monthly or quarterly and describes the background information environment of a name. VPIN is a fast intraday gate — it moves bucket to bucket. Neither is a directional trigger: high toxicity tells you *not to play*, not which way to bet. The direction comes from whatever candidate strategy you plug in underneath.
+
+**VPIN construction (example parameters).** Bucket volume V = ADV / 50 (example; 50 buckets per day). Within each bucket, sign trades with bulk volume classification (BVC: allocate each trade's volume to buy/sell by where it printed inside the spread — trades at the ask count as buys). VPIN over the trailing 50 buckets (example window):
+
+$$\mathrm{VPIN}_t = \frac{\sum_{b=1}^{50} |V^b_{\mathrm{buy}} - V^b_{\mathrm{sell}}|}{50 \times V}$$
+
+Toxicity is the z-score of VPIN against its own 20-day rolling distribution; the gate blocks entries when toxicity ≥ 2.0 (example threshold).
+
+**PIN usage.** Estimate PIN monthly per name via the Easley–Hvidkjaer–O'Hara maximum-likelihood fit on daily buy/sell counts (Lee–Ready signed). Compute the name's cross-sectional percentile; the background condition requires PIN percentile ≤ 75th (example) — in the most information-asymmetric names, the strategy stands down entirely for the month, because no intraday gate reliably survives a tape dominated by informed flow.
+
+**Meta-label (S086).** Primary strategy proposes a trade (direction + size). The meta-model — a calibrated gradient-boosted classifier trained on the primary's historical trades with features [VPIN toxicity, PIN percentile, spread, RVOL, hour-of-day, the primary signal's own z-score] (example feature set) — outputs p̂ (probability the trade is a winner). Trade only if p̂ ≥ 0.55 (example); size = base × (0.5 + p̂) (example: p̂ = 0.6 → 1.1×, p̂ = 0.9 → 1.4×).
+
+**Entry/exit logic.** This chapter supplies *gates*, not entries: a candidate trade passes only if (i) VPIN toxicity at the latest closed bucket ≤ 2.0 (example), (ii) the name's PIN percentile ≤ 75 (example), and (iii) meta p̂ ≥ 0.55 (example). Direction, stop, and target come from the underlying strategy. **Causal timing, stated explicitly: VPIN for bucket t is computed when bucket t closes; the earliest a candidate trade may be gated-and-filled is during bucket t+1.** PIN percentiles update on the monthly refit date and apply from the next session. Meta p̂ is computed from features available at the decision bar and fills at t+1.
+
+**Sizing & costs.** Sizing is the underlying strategy's sizing multiplied by the meta scaler. Cost model for the worked example: 1.5¢/share round-trip (example), i.e., $30 per 2,000-share candidate trade.
+
+**Risk limits.** The gate itself is the risk control; add: if the veto rate exceeds 80% over a rolling week (example), the underlying strategy is likely misfiring in the current regime — investigate, don't just widen the gate. Max 2% daily loss on the sleeve (example).
+
+**Order/execution.** No special execution: the gate decides *whether*, the base strategy decides *how*.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S008 (VPIN toxicity) | Fast intraday veto gate | hard veto when toxicity ≥ 2.0 (example); no weight — a gate, not a blend |
+| S009 (structural PIN) | Slow background condition | hard monthly condition: PIN percentile ≤ 75 (example); updates monthly, applies next session |
+| S086 (meta-labeling) | Second opinion | p̂ ≥ 0.55 to trade (example); size multiplier 0.5 + p̂ (example) |
+
+Pseudocode (≤25 lines):
+```
+monthly refit: estimate PIN per name (EHO MLE on Lee-Ready counts)  # S009
+    if PIN_percentile[s] > 75: BLOCK_MONTH[s] = True               # example threshold
+every closed volume bucket t (V = ADV/50, BVC-signed):             # granularity: volume buckets
+    VPIN[t] = mean |buy-sell| / V over trailing 50 buckets         # S008
+    tox[t] = z(VPIN[t], 20d rolling)                              # toxicity
+    for each candidate trade c proposed by base strategy at t:    # fills at t+1 earliest
+        if BLOCK_MONTH[s]: veto("structural PIN")
+        elif tox[t] >= 2.0: veto("toxic flow")                     # example
+        elif meta_p[c] < 0.55: veto("meta-label")                  # S086, example
+        else: take c at 0.5 + meta_p size scale                    # example
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic $500k paper book, one session, six candidate trades of 2,000 shares each (gross outcomes are the candidates' illustrative marks). Seed 192.
+
+| # | Bucket | Toxicity | PIN pct | Meta p̂ | Decision | Illustrative gross |
+|---|---|---|---|---|---|---|
+| 1 | 12 | 0.8 | 41 | 0.71 | **TAKE** | +$1,240 |
+| 2 | 30 | 3.1 | 44 | 0.62 | VETO (toxic) | −$980 |
+| 3 | 41 | 1.2 | 39 | 0.48 | VETO (meta) | −$620 |
+| 4 | 49 | 2.6 | 82 | 0.70 | VETO (toxic + PIN) | −$1,150 |
+| 5 | 55 | 0.4 | 46 | 0.66 | **TAKE** | −$410 |
+| 6 | 68 | 3.8 | 50 | 0.58 | VETO (toxic) | −$340 |
+
+Ledger (fully costed), taken trades only:
+- Taken gross: +$1,240 − $410 = **+$830**
+- Costs: 2 trades × $30 = **$60**
+- **Gated net: +$770**
+
+Counterfactual, all six taken (ungated):
+- Gross: +$830 − $980 − $620 − $1,150 − $340 = **−$2,260**
+- Costs: 6 × $30 = **$180**
+- **Ungated net: −$2,440**
+
+**Session net: +$770 gated vs −$2,440 ungated (synthetic; demonstrates the veto arithmetic — the value is entirely in the avoided losses, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The vetoed trades' "would-have-lost" figures are the chapter's least honest input — real veto evaluation requires the base strategy to actually take the vetoed trades (or a careful counterfactual accounting), and toxicity gates have a well-documented habit of vetoing the *recovery* trades too. The $30/trade cost is fixed regardless of outcome, which flatters the vetoed side slightly (losers often cost more via slippage). VPIN here is computed on clean synthetic buckets; real BVC (bulk volume classification) mis-signs mid-spread prints, and toxicity z-scores drift with the 20-day window choice. The PIN percentile is assumed known at month-start with no estimation error — the EHO MLE is famously noisy on thin names.
+
+![T092 worked example — synthetic VPIN toxicity tape with taken vs vetoed candidate trades and gated/ungated P&L walk](images/T092_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 192; taken/vetoed marks match the T4 table.*
+
+### T5. Data & infra — what must run
+
+**Feed.** L1 trades and quotes (SIP-class is sufficient — VPIN needs only signed trade volume, PIN needs Lee–Ready trade direction from quotes). No depth feed required: this is the chapter's economic argument.
+
+**Jobs.** Monthly: PIN MLE refit per name (the likelihood optimization is the only heavy step; minutes per name on the M5 Max). Intraday: accumulate volume buckets, BVC-sign in real time, maintain the 50-bucket VPIN and its 20-day z-score baseline. Per decision bar: score meta p̂ (a GBM inference is microseconds).
+
+**Storage.** 60 days of L1 trades+quotes per cost-model §4: ~2–8 GB/symbol-day in parquet — the bucketed features are kilobytes. The meta-label training set (base strategy's trade history with features) is megabytes.
+
+**M5 Max feasibility.** Per cost-model §2 (polars 10–50M rows/sec): the monthly PIN fit is the only real job and runs in minutes. Intraday bucketing is trivial. Verdict: **feasible** — this is the cheapest chapter in the batch to run. Engineering: Tier M (20–60 h) for the gate service plus Tier M for the meta-label pipeline; planning band **40–100 h ≈ $6k–$15k loaded-cost estimate** at $150/hr. What breaks first at 500 symbols: the monthly PIN refit wall-clock and Lee–Ready signing correctness across corporate actions, not the CPU.
+
+**Feed-drop failure plan.** If the trade feed stalls: buckets stop closing, so the last *computed* toxicity stands — entries are blocked (fail closed) and existing positions are managed by the base strategy's own stops. Never extrapolate toxicity across a feed gap.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: Alpaca/SIPC L1 + self-built VPIN/PIN | Free trades+quotes | ~$0, `indicative — verify before budgeting` | $0 marginal; everything needed for VPIN | PIN MLE and BVC signing are your code to debug |
+| Tier-1: Polygon Stocks Advanced | Clean SIP bars + WS | ~$199/mo individual, `indicative — verify before budgeting` | Cleaner corporate-action handling | No depth, but this chapter needs none |
+| Build the meta-label in-house | GBM on your trade history | engineering hours only | Your base strategy's actual veto patterns | Needs hundreds of labeled trades before p̂ calibrates |
+| Buy "toxicity" from a vendor | Precomputed flow metrics | institutional $$, `indicative — verify before budgeting` | Saves the bucketing code | Black-box thresholds you can't audit |
+
+**Verdict: build it all; buy nothing.** This chapter is pure software on data you already collect. The only honest buy is cleaner L1 (Tier-1) if your free feed's corporate-action handling is corrupting Lee–Ready signing.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Easley, López de Prado & O'Hara (2011/2012), "Flow Toxicity and Liquidity in a High Frequency World" | US futures/equities, 2007–2010 | VPIN spikes preceded the May 6, 2010 Flash Crash and other liquidity events; toxicity is a measurable precursor of stress | Before cost (predictive of events, not a traded P&L) | VPIN predicts *liquidity stress*, not direction — exactly this chapter's gate use, but the jump from "toxicity precedes stress" to "vetoing improves a strategy's Sharpe" is not in the paper |
+| Easley, Hvidkjaer & O'Hara (2002), "Is Information Risk a Determinant of Asset Returns?" *J. Finance* | NYSE 1983–1998 | PIN (structural informed-trading probability) is priced in the cross-section | Before cost | Duarte & Young (2009) later showed much of PIN's premium is illiquidity, not information asymmetry — PIN as a *condition* is defensible; PIN as a *priced risk factor* is contested |
+| López de Prado (2018), *Advances in Financial Machine Learning*, Ch. 3 | — | Meta-labeling: a secondary ML model on bet outcomes improves the primary strategy's precision/F1 by vetoing and sizing, without changing its side | Before cost (method) | The improvement is in *classification metrics on the primary's own history*; purged/embargoed CV (S088) is required, and the meta-model inherits every overfitting sin of the primary |
+| Andersen & Bondarenko (2014), "VPIN and the Flash Crash" | US equities, 2010 | Replication contesting VPIN: poor short-run volatility predictor; its behavior is largely mechanical trading intensity and classification-dependent | Before cost (critique) | The counterweight to row 1 — VPIN's predictive content is disputed, which is why this chapter uses it as a *conservative veto* (fails safe when overstated) rather than a timing signal |
+
+**Honest bottom line.** As a standalone "strategy": not a strategy at all — a gate has no P&L without a base strategy underneath. As a filter: the credible use — toxicity vetoes are the highest-sharpe-per-line-of-code improvement most short-horizon desks actually implement. As a production system: requires the base strategy's trade history for the meta-label, so the real cost is organizational (logging discipline), not computational.
+
+### T8. Failure modes
+
+- **Toxicity vetoes the recovery.** VPIN stays elevated through the bounce; the gate blocks the trades that would have repaired the day. Mitigation: cooldown — after a veto, re-arm only when toxicity falls below 1.0 for 3 consecutive buckets (example), not the instant it dips.
+- **PIN estimation noise.** The EHO MLE is unstable on thin or volatile names; a bad monthly percentile blocks (or admits) a name for weeks. Mitigation: shrink percentiles toward the cross-sectional median; require 60 days of clean data before unblocking.
+- **BVC mis-signing.** Mid-spread prints (dark-pool crosses reported to the tape) get misallocated by bulk volume classification. Mitigation: the gate is conservative by design; mis-signing mostly *overstates* toxicity, which fails safe.
+- **Meta-label overfitting.** With a few hundred trades, the GBM memorizes which hours were lucky. Mitigation: purged/embargoed CV (S088), calibration plots, and a minimum of ~500 labeled trades (example) before p̂ gates real size.
+- **Gate-threshold overfit.** Toxicity ≥ 2.0 and p̂ ≥ 0.55 are example values; the strategy's entire P&L can hinge on them. Mitigation: report the veto P&L across a threshold grid; reject the gate if only a knife-edge works.
+- **Lookahead in bucketing.** Using the bucket's final imbalance to gate a fill *inside* the same bucket. Mitigation: gates use only closed buckets; fills at t+1 — the rule is stated in T2 and unit-tested.
+
+### T9. Visuals
+
+![T092 worked example — synthetic VPIN toxicity tape with taken vs vetoed candidate trades and gated/ungated P&L walk](images/T092_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 192; the four vetoed marks sit at the T4 bucket indices; the walk shows gated +$770 vs ungated −$2,440.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(L1 trades + quotes, daily bars)"] -->|"volume buckets (V=ADV/50)<br/>+ monthly PIN refit"| SIGS["Signals<br/>S008 VPIN toxicity, S009 structural PIN,<br/>S086 meta-label p̂"]
+    SIGS -->|"gate scores"| ENTRY{"Entry / gate logic<br/>(tox ≤ 2.0 AND PIN pct ≤ 75<br/>AND p̂ ≥ 0.55; fill t+1)"}
+    ENTRY -->|pass| SIZE["Sizing<br/>(base trade × (0.5 + p̂))"]
+    ENTRY -->|veto| WAIT["Stand down<br/>(log counterfactual)"]
+    SIZE -->|order| EXEC["Execution<br/>(base strategy's own logic)"]
+    EXEC -->|fills| MON["Monitor + exits<br/>(base strategy's own logic)"]
+    MON -->|"fills net of 1.5¢/sh RT"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Easley, D., López de Prado, M. M. & O'Hara, M. (2012). "Flow Toxicity and Liquidity in a High Frequency World." *Review of Financial Studies* 25(5): 1457–1493. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1695596 — VPIN construction; toxicity preceded the 2010 Flash Crash. RePEc/EconPapers page re-checked 2026-09-10 — title, authors, journal, volume/pages match (the 2011 working-paper version circulated first; the RFS version is the citable one).
+2. Easley, D., Hvidkjaer, S. & O'Hara, M. (2002). "Is Information Risk a Determinant of Asset Returns?" *Journal of Finance* 57(5): 2185–2221. http://ideas.repec.org/a/bla/jfinan/v57y2002i5p2185-2221.html — structural PIN via MLE on order arrival. RePEc page confirmed in S009's S12, verified in an earlier batch (not re-checked this pass).
+3. López de Prado, M. M. (2018). *Advances in Financial Machine Learning*, Chapters 3–4. Wiley. https://www.wiley.com/en-us/9781119482086 — meta-labeling (secondary ML on bet outcomes) and the triple-barrier labeling method it pairs with. Wiley page returned HTTP 403 on re-check 2026-09-10 — identifier not re-verified this pass; citation inherited from S086's S12.
+4. Duarte, J. & Young, L. (2009). "Why is PIN Priced?" *Journal of Financial Economics* 91(2): 119–138. https://ideas.Repec.org/a/eee/jfinec/v91y2009i2p119-138.html — much of PIN's return premium is illiquidity, not information asymmetry; the honest counterweight. RePEc page re-opened 2026-09-10 — title and journal match (also confirmed in S009's S12, earlier batch).
+5. Andersen, T. G. & Bondarenko, O. (2014). "VPIN and the Flash Crash." *Journal of Financial Markets* 17: 1–46. https://ideas.repec.org/a/eee/finmar/v17y2014icp1-46.html — replication contesting VPIN: poor short-run volatility predictor; behavior largely mechanical trading intensity. RePEc page re-opened 2026-09-10 — title, journal, volume/pages match (also confirmed in S008's S12, earlier batch).
+
+**Unverified leads** (not confirmed facts — verify before use):
+- The gate thresholds (toxicity 2.0, PIN 75th percentile, p̂ 0.55, size scaler 0.5 + p̂) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- Easley–López de Prado–O'Hara's Flash Crash result is about *liquidity stress prediction*; the step to "vetoing improves strategy Sharpe" is this chapter's design, not their finding.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: RePEc/EconPapers pages for Easley–López de Prado–O'Hara (2012), Duarte–Young (2009), and Andersen–Bondarenko (2014) (titles/journals match); the Wiley publisher page returned HTTP 403 and was not re-verified. Easley–Hvidkjaer–O'Hara (2002) citation inherited from S009's earlier-batch verification (not re-checked this pass). Gate thresholds are the chapter's own example design values.*
+
+## Stage 193/200 — T093: Options-to-Equity Lead Trader
+
+*Batch TB10 · Strategy 93/100 · Signals S071, S073, S060 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Directional equity swing, 1–8 sessions, led by derivatives-market positioning |
+| **Edge source** | Options traders move first: 25-delta risk-reversal skew flattening (S071) plus unusually heavy signed call/put flow (S073) front-run the underlying, with Hayashi–Yoshida lead-lag (S060) confirming the timing; the equity leg harvests the catch-up |
+| **Typical holding period** | 1–8 sessions (example), exited when skew mean-reverts or the stop prints |
+| **Capacity hint** | $1–5M per name (example) — you are trading the *equity* leg, so equity liquidity is the cap, but the signal only fires on names with listed options flow |
+| **Build-or-buy in one line** | Build the skew/lead-lag estimators; buy the OPRA feed — the flow data is the moat, not the math |
+
+### T2. Full mechanics
+
+**The idea, plainly.** Informed traders often express views in options first (leverage, defined risk), and the equity catches up. Three measurements triangulate the same phenomenon. **Risk reversal** (S071): the 25-delta call implied volatility minus the 25-delta put implied volatility (IV_call25 − IV_put25). When put skew collapses (puts cheapen relative to calls), it reads as bullish positioning — the classic "skew flattening = bullish" heuristic, though it can also mean put writers collecting premium, so it is never traded alone. **Unusual options activity** (S073): today's call volume (or put/call ratio) versus its trailing average — 3× normal call flow (example) with most of it on the ask side is the footprint. **Hayashi–Yoshida lead-lag** (S060): a covariance estimator for *asynchronous* data — it asks whether options-implied moves systematically precede equity moves (or vice versa) over a trailing window, without requiring synchronized timestamps.
+
+**The direction-inference honesty rule.** Options prints don't carry trader IDs: a big call buy could be a bull, a short covering, or a market-maker hedging. S073's canon is explicit — direction is *inferred*, never observed. This strategy therefore requires all three signals to agree before it acts: skew flattening + heavy signed call flow + a measured options-lead over the equity. Any single leg is a rumor; three legs are a signal.
+
+**Combination score (example weights).**
+
+$$S^B_t = 0.45\,z(-\Delta\mathrm{skew}_t) + 0.35\,z(\mathrm{signedCallFlow}_t) + 0.20\,\mathrm{LeadLag}_t$$
+
+where −Δskew rewards flattening (defined so positive = bullish), signedCallFlow is (ask-side call volume − bid-side call volume) relative to its 20-day mean, LeadLag is the HY lead-lag statistic scaled to [−1, 1], and z is a 20-day rolling z-score clipped to [−3, 3]. All weights `example`.
+
+**Entry rule.** Enter long when: (i) S_B > +1.25 (example); (ii) the skew impulse computed over the trailing 5 sessions is negative (flattening); (iii) call-volume ratio ≥ 3.0× its 20-day mean (example); (iv) relative equity spread ≤ 10 bps (example). **Causal timing, stated explicitly: S_B is computed from the options close and the equity close at day t; the earliest legal fill is the day t+1 open.** There is no same-bar trading — the options market is closed when you decide.
+
+**Exit rule.** Skew mean-reversion exit: cover when the 25-delta skew returns to within 0.5 vol points of its 20-day mean (example). Hard stop: −1.1 × σ_20d (example). Time stop: 8 sessions (example). Target: +2.2 × σ_20d (example).
+
+**Position sizing.** q = (0.40% × equity) / stop_distance (example), capped at 5% of the name's 20-day ADV (example) — the equity leg must not move the stock it is front-running.
+
+**Risk limits.** Max 4 concurrent names (example); daily sleeve stop −2% (example); no new entries in the 2 sessions before scheduled earnings (options flow is noise then).
+
+**Cost model.** Equity leg: 2.0¢/share round-trip (example) — 1.5¢ spread+fees and 0.5¢ estimated impact. Options data cost is infrastructure (T5), not per-trade. Borrow: N/A in the worked example — the example is long-only, so no borrow line appears in the ledger; a short variant would add one.
+
+**Order/execution.** VWAP-style participation on the t+1 open (example): work 30% of the order in the first 30 minutes, the rest passively — the informed flow you're following is still being digested, so don't sprint.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S071 (25-delta risk reversal) | Primary lead: skew flattening over trailing 5 sessions | 0.45 weight (example) in S_B; the impulse direction |
+| S073 (unusual options activity) | Confirmation: signed call-flow magnitude | 0.35 weight (example); call volume ≥ 3× mean (example) gate |
+| S060 (HY lead-lag) | Timing confirmation | 0.20 weight (example); requires measured options-lead > 0 (options lead equity) |
+
+Pseudocode (≤25 lines):
+```
+daily close t:                                            # granularity: daily options close + equity bars
+    skew[t] = IV_call25 - IV_put25                        # S071
+    impulse = skew[t] - skew[t-5]                         # 5-session flattening
+    uoa = signed_call_vol[t] / mean(signed_call_vol, 20)  # S073, direction inferred
+    ll = hayashi_yoshida_leadlag(opt_ret, eq_ret, 20d)    # S060, async-safe
+    SB[t] = 0.45*z(-impulse,20d) + 0.35*z(uoa,20d) + 0.20*ll
+    if SB[t] > 1.25 and impulse < 0 and uoa >= 3.0 and spread <= 10bps:  # example
+        enter LONG at next open                            # fill t+1, never t
+# exits: skew back within 0.5 vol pts of 20d mean / stop -1.1*sigma20d /
+#        target +2.2*sigma20d / time 8 sessions
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic mid-cap **INNO** (fictional), 13-session window, seed 193. Options close data synthetic; skew in vol points; equity in dollars.
+
+| Day | 25-delta skew | Call vol ratio | S_B | Action | Equity ($) |
+|---|---|---|---|---|---|
+| −5 | 5.5 | 1.1× | +0.2 | flat | 50.00 |
+| −3 | 3.7 | 1.6× | +0.6 | flat | 50.40 |
+| −1 | 2.2 | 2.8× | +1.1 | flat (below gate) | 50.52 |
+| 0 | 1.8 | 3.4× | +1.46 | **signal at close** | 50.55 |
+| +1 | 1.5 | 2.1× | — | **BUY 8,000 @ 50.61** (t+1 fill) | 50.61 |
+| +3 | 1.3 | 1.4× | — | hold | 51.40 |
+| +5 | 1.4 | 1.1× | — | hold | 51.80 |
+| +7 | 2.4 | 1.0× | — | **SELL 8,000 @ 52.05** (skew mean-reverted) | 52.05 |
+
+Ledger (fully costed):
+- Buy: 8,000 × $50.61 = $404,880
+- Sell: 8,000 × $52.05 = $416,400
+- Gross: **+$11,520**
+- Costs: trading 8,000 × $0.02 = $160; slippage 8,000 × $50.61 × 0.0003 = $121.46
+- Total costs: **$281.46**
+- **Net: +$11,238.54**
+
+**Session net: +$11,238.54 (synthetic; demonstrates the options-lead entry/exit arithmetic, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The skew flattens exactly as the equity rallies — in real data the correlation between skew impulse and next-week equity returns is weak and sign-unstable (Bali & Hovakimian 2009 find *volatility spreads* predict, but that's a different construction). The 3.4× call-volume print is assumed to be informed buying; it could be a covered-call program or market-maker hedging — direction is inferred, never observed. The t+1 open fill at 50.61 assumes no overnight gap against the position; the options signal is computed after the close, so gap risk is the strategy's unmodeled tax. There is no borrow line in the ledger because the example is long-only; a short variant would add one, and hard-to-borrow names (where skew signals are often strongest) would charge multiples of a placid 0.35% rate.
+
+![T093 worked example — synthetic 25-delta skew flattening with signed call flow, equity entry at t+1 and skew mean-reversion exit](images/T093_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 193; plotted series match the T4 table.*
+
+### T5. Data & infra — what must run
+
+**Feed.** OPRA (all US options quotes/trades) or a vendor consolidation (e.g., CBOE DataShop, LiveVol) for 25-delta IVs and signed volume; equity bars from SIP. Signed flow needs trade-by-trade options prints with quote context — end-of-day summaries don't carry it.
+
+**Jobs.** Nightly: compute 25-delta skew per name (needs a vol surface or vendor Greeks), signed call/put flow ratios, 20-day z baselines, HY lead-lag over the trailing 20 sessions. Morning: rank names by S_B; emit the entry list before the open.
+
+**Storage.** Per cost-model §4, OPRA is the heavy feed in this batch — full OPRA history is TB-scale and usage-priced; a 500-name subset of daily Greeks + intraday prints is GB-scale and manageable. The daily signal panel (skew, ratios, z-scores) is megabytes.
+
+**M5 Max feasibility.** The nightly job is a few thousand surface fits + z-scores — minutes in polars/numpy. The HY estimator is O(n) per pair. Verdict: **feasible** — compute is trivial; the binding constraint is the OPRA license and surface-quality QA. Engineering: Tier H for the options surface + signed-flow pipeline per cost-model §5 (60–200 h), Tier M+ for the strategy (40–100 h); planning band **100–250 h ≈ $15k–$37k loaded-cost estimate** at $150/hr. What breaks first at 500 names: OPRA usage billing and the dividend/early-exercise adjustments in the surface fitter, not the CPU.
+
+**Feed-drop failure plan.** If the options feed is stale at the close: no new signals are computed (fail closed — yesterday's S_B does not carry), existing positions keep their own stops.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: free end-of-day options summaries | Daily volume/OI | ~$0, `indicative — verify before budgeting` | $0 | No Greeks, no signed flow — S071/S073 uncomputable |
+| Tier-1: Polygon Options / Tradier | Options bars + Greeks | ~$199–$500/mo, `indicative — verify before budgeting` | Cheapest path to 25-delta skew | Signed intraday flow quality varies; HY on bars is coarse |
+| Tier-2: CBOE DataShop / LiveVol | OPRA-derived analytics | ~$500–$2,000/mo, `indicative — verify before budgeting` | Production-grade skew + flow | Still a black box on signing methodology |
+| Tier-3: raw OPRA via Databento | Every quote/trade | usage-priced, institutional $$, `indicative — verify before budgeting` | Full control | You build the surface fitter (the Tier H job) |
+
+**Verdict: buy Tier-1 or Tier-2 for the analytics, build the combinators.** Nobody sells the S_B blend or the HY timing overlay; everybody sells the skew. The proprietary layer is the *combination and the discipline to require all three legs* — which is exactly what the UOA (unusual options activity) newsletter industry does not do.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Pan & Poteshman (2006), "Option Volume and Stock Prices: Evidence on Where Informed Traders Trade" | CBOE 1990–2001 | Put-call ratios from option volume predict next-day stock returns; informed traders use options | Before cost | Predictability is short-horizon and concentrated; transaction costs in the underlying eat much of it |
+| Xing, Zhang & Zhao (2008/2010), "What Does Individual Option Volatility Smirk Tell Us About Future Equity Returns?" | US equities 1996–2005 | Stocks with the steepest volatility smirks underperformed by ~10.9% annually risk-adjusted; smirk shape forecasts returns up to 6 months | Before cost | The smirk *level* predicts; this chapter trades smirk *changes* (flattening) — a related but distinct claim with weaker documentation |
+| Johnson & So (2012), "The Option to Stock Volume Ratio and Future Returns" | US 1996–2009 | O/S (option-to-stock volume) predicts next-week returns; informed flow migrates to options | Before cost | The lead is days, not minutes — consistent with this chapter's 1–8 session horizon, but the effect is cross-sectional, not a timing rule |
+| Bali & Hovakimian (2009), "Volatility Spreads and Expected Stock Returns" | US 1996–2005 | Volatility spreads (option IV vs realized) predict stock returns | Before cost | Volatility *spread* (level) predicts; skew *impulse* (change) is this chapter's extension, less documented |
+
+**Honest bottom line.** The literature supports "options flow contains information about future equity returns" at days-to-weeks horizons — the direction this chapter bets. It does *not* support the specific S_B blend, the ±1.25 gate, or the skew-mean-reversion exit as a traded rule. The documented effects are cross-sectional and before-cost; a timing strategy on a handful of names is a different, harder claim.
+
+### T8. Failure modes
+
+- **Inferred direction is wrong.** The 3.4× call print was a covered-call overwrite, not informed buying. Mitigation: the three-leg rule — skew must flatten *and* HY must show options-lead; single-leg flow is never traded.
+- **Overnight gap against the position.** The signal is computed after the close; the t+1 open can gap through the stop. Mitigation: size for gap risk (the 0.40% risk is to the stop, but the true risk is the gap) — halve size on high-IV names (example).
+- **Skew mean-reverts without the equity moving.** The exit fires flat. Mitigation: that's the design — the exit is a signal-decay exit, not a profit guarantee; the stop bounds the damage.
+- **Surface-fitting artifacts.** Bad dividends or stale quotes create fake skew moves. Mitigation: vendor Greeks with QA flags; drop any name-day where the surface fit RMSE exceeds tolerance (example).
+- **Earnings contamination.** Options flow before earnings is vol positioning, not direction. Mitigation: the 2-session earnings exclusion.
+- **Lookahead in z-scores.** Baselines including day t. Mitigation: trailing-only windows, unit-tested.
+- **Threshold overfit.** ±1.25, 3×, 0.5 vol points are examples. Mitigation: grid sensitivity in research; reject knife-edge thresholds.
+
+### T9. Visuals
+
+![T093 worked example — synthetic 25-delta skew flattening with signed call flow, equity entry at t+1 and skew mean-reversion exit](images/T093_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 193; the shaded band is the 5-session impulse window; the vertical dotted line marks the t close signal; fills are t+1.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(OPRA options prints + Greeks,<br/>daily equity bars)"] -->|"OPRA options prints + Greeks<br/>+ daily equity bars"| SIGS["Signals<br/>S071 25d risk reversal, S073 signed UOA,<br/>S060 HY lead-lag"]
+    SIGS -->|"daily close values<br/>+ 20-day z baselines"| ENTRY{"Entry logic<br/>(S_B > +1.25, skew flattening,<br/>call vol ≥ 3×; fill t+1 open)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(0.40% risk to stop;<br/>5% ADV cap)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"VWAP participation"| EXEC["Execution<br/>(equity leg only;<br/>options leg not traded)"]
+    EXEC -->|"fills net of 2¢/sh RT"| MON["Monitor + exits<br/>(skew mean-revert /<br/>−1.1σ stop / +2.2σ target)"]
+    MON -->|"net of costs"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Pan, J. & Poteshman, A. M. (2006). "The Information in Option Volume for Future Stock Prices." *Review of Financial Studies* 19(3): 871–908. https://doi.org/10.1093/rfs/hhj024 — option volume contains information for future stock prices. Identifier re-checked 2026-09-10 via Crossref API (title + journal + year match).
+2. Xing, Y., Zhang, X. & Zhao, R. (2010). "What Does Individual Option Volatility Smirk Tell Us About Future Equity Returns?" *Journal of Financial and Quantitative Analysis* 45(3): 641–662. SSRN: http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1107464 — steepest-smirk stocks underperformed ~10.9% annually risk-adjusted; persistence up to six months. SSRN working-paper page re-opened 2026-09-10 — title and abstract match; the JFQA 45(3) volume/pages are carried from the prior draft (not re-verified this pass).
+3. Johnson, T. L. & So, E. C. (2012). "The Option to Stock Volume Ratio and Future Returns." *Journal of Financial Economics* 106(2): 262–286. https://doi.org/10.1016/j.jfineco.2012.05.008 — O/S ratio predicts next-week returns. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+4. Hayashi, T. & Yoshida, N. (2005). "On Covariance Estimation of Non-Synchronously Observed Diffusion Processes." *Bernoulli* 11(2): 359–379. https://www.projecteuclid.org/journals/bernoulli/volume-11/issue-2/On-covariance-estimation-of-non-synchronously-observed-diffusion-processes/10.3150/bj/1116340299.short — the asynchronous lead-lag estimator this chapter uses for timing confirmation. Project Euclid page re-opened 2026-09-10 — title, journal, and DOI match.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All blend weights and thresholds in T2/T3 (0.45/0.35/0.20, ±1.25, 3× call volume, 0.5 vol-point exit, ±1.1σ/2.2σ) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- The claim that skew *flattening* (change) predicts as the smirk *level* does is this chapter's extension; the verified literature is on levels (Xing et al.) and spreads (Bali & Hovakimian).
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: Pan–Poteshman citation corrected to the Crossref-verified DOI 10.1093/rfs/hhj024 (title + journal + year match); SSRN 1107464 working-paper page re-opened (title + abstract match); Johnson–So DOI re-checked (resolves, title matches); Hayashi–Yoshida Project Euclid page re-opened (title + journal + DOI match). The long-only borrow line was removed as a ledger error — net recomputed as $11,520 − $160 − $121.46 = $11,238.54. Thresholds remain the chapter's own example design values.*
+
+## Stage 194/200 — T094: Squeeze Breakout (Options-Confirmed)
+
+*Batch TB10 · Strategy 94/100 · Signals S030, S073, S076 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Directional breakout swing, 1–10 sessions: coiled volatility + options-flow confirmation |
+| **Edge source** | A volatility squeeze (S030) is direction-neutral stored energy; the breakout direction is confirmed by unusual options activity (S073) and volatility-expansion state (S076) — three independent witnesses before the trade |
+| **Typical holding period** | 2–10 sessions (example); the breakout leg is fast or it's wrong |
+| **Capacity hint** | $1–3M per name (example) — breakout entries are liquidity-demanding by construction |
+| **Build-or-buy in one line** | Build the squeeze/breakout detector; buy the options-flow feed — the confirmation is the product |
+
+### T2. Full mechanics
+
+**The idea, plainly.** A **volatility squeeze** (S030) is a coiled spring: Bollinger bandwidth (band width divided by the moving average) at a multi-month low means the market has stopped moving — and stopped-moving markets are usually *about* to move. The squeeze itself is direction-neutral; it says *when*, not *which way*. **Unusual options activity** (S073) supplies the *which way*: heavy signed call (or put) volume into the squeeze's end is the informed-flow footprint. **Volatility expansion** (S076) confirms the breakout is real: range must expand *with* the price move, not after it.
+
+**Squeeze definition (example).** Bollinger bandwidth % = 100 × (upper − lower) / middle, 20-session, 2σ. Squeeze = bandwidth below its 6-month 10th percentile (example) for ≥ 10 sessions (example). Breakout = daily close beyond the band *plus* volume ≥ 1.5× its 20-day mean (example).
+
+**Options confirmation (example).** Within the 3 sessions before or on the breakout: call-volume ratio ≥ 3.5× its 20-day mean (example) for a long breakout (put ratio for shorts), with ≥ 60% of the volume on the ask side (example). Direction inferred, never observed — the S073 honesty rule.
+
+**Vol-expansion confirmation (example).** The breakout bar's true range ≥ 1.8× the 20-day mean true range (example); otherwise the "breakout" is a drift and the trade is skipped.
+
+**Entry rule.** Enter in the breakout direction when ALL three confirm: squeeze → band break + volume → options flow agrees → vol expansion. **Causal timing, stated explicitly: the breakout is confirmed on the close of bar t; the earliest legal fill is the t+1 open.** Chasing the breakout bar itself is prohibited — the fill would be at the worst print of the move.
+
+**Exit rule.** Target: +2.0 × the breakout bar's true range (example) — the move should pay for its own volatility. Stop: the opposite band edge at entry, or −1.0 × σ_20d, whichever is tighter (example). Time stop: 10 sessions (example) — breakouts that stall are false. False-break filter: if the price closes back inside the band within 2 sessions, exit at the next open regardless of P&L (example).
+
+**Position sizing.** q = (0.50% × equity) / stop_distance (example), capped at 6% of 20-day ADV (example).
+
+**Risk limits.** Max 3 concurrent breakouts (example); a false break (stopped within 2 sessions) triggers a 5-session stand-down on that name (example); daily sleeve stop −2% (example).
+
+**Cost model.** Equity leg: 4.0¢/share round-trip all-in (example: 1.5¢ spread/fees + 2.5¢ breakout-chase impact — breakouts are expensive to enter). Options confirmation is *data*, not a traded leg — but the ×100 contract multiplier matters for understanding why: mirroring the 4,000-share equity leg in options would be 40 contracts (4,000 ÷ 100); a $0.20 quoted straddle spread × 100 shares/contract × 40 contracts = $800 round-trip friction on the options leg alone — which is exactly why this strategy trades the equity leg and only *reads* the options tape. (Multiplier shown explicitly per the batch cost-model rule.)
+
+**Order/execution.** Limit order at the t+1 open ±0.3% (example); if unfilled after 30 minutes, cancel — a breakout you can't enter cleanly is a breakout you skip.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S030 (squeeze: bandwidth percentile + breakout) | Setup + trigger | squeeze ≥ 10 sessions (example) → band break + 1.5× volume (example) = trigger |
+| S073 (unusual options activity) | Directional confirmation | call/put ratio ≥ 3.5× mean, ≥60% ask-side (example); must agree with break direction |
+| S076 (volatility expansion) | Breakout validation | breakout-bar true range ≥ 1.8× mean (example); false-break exit rule |
+
+Pseudocode (≤25 lines):
+```
+daily close t:                                              # granularity: daily bars + options prints
+    bw[t] = 100*(upper20 - lower20)/mid20                    # S030
+    squeeze = percentile(bw[t], 6m) < 10 for last 10 sess    # example
+    breakout = close[t] > upper20 and vol[t] >= 1.5*mean(vol,20)   # example
+    uoa_ok = signed_opt_ratio[t-3:t] >= 3.5 and ask_share >= 0.60  # S073, example
+    volx_ok = true_range[t] >= 1.8*mean(TR, 20)             # S076, example
+    if squeeze and breakout and uoa_ok and volx_ok:
+        enter at next open in break direction               # fill t+1, never t
+# exits: target +2.0*breakout_TR / stop band edge or -1.0*sigma20d /
+#        false-break: close back inside band within 2 sessions -> exit next open
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Two synthetic names, seed 194 — one true breakout, one false break, to show the exit discipline.
+
+**Trade 1 — VOLT (true breakout, long).** 14-session squeeze (bandwidth at 2nd percentile), upper-band break on volume 1.9× mean, call ratio 4.2× with 68% ask-side, breakout-bar range 2.1× mean. Signal at close; fill t+1.
+
+| Leg | Detail |
+|---|---|
+| BUY | 4,000 @ $84.24 (t+1 open) = $336,960 |
+| SELL | 4,000 @ $88.10 (target +2.0 × breakout range) = $352,400 |
+| Gross | **+$15,440** |
+| Costs | 4,000 × $0.04 RT = $160 |
+| **Net** | **+$15,280** |
+
+**Setup 2 — DEAD (false break, vetoed — no fill).** Squeeze + band break, but call ratio only 1.8× — below the 3.5× confirmation gate, so the disciplined strategy takes no fill and books no ledger line. The avoided outcome, for the record: had the gate been ignored, entry 4,000 @ $31.55 with the false-break exit at $31.02 would have printed gross −$2,120, costs $160, net **−$2,280** — that is the loss the veto saved, not a booked trade.
+
+**Session net: +$15,280 (synthetic; demonstrates the confirmation/exit arithmetic — the vetoed false break is avoided tuition, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** VOLT's breakout runs a clean +4.6% to target with no intraday shakeout below the band — real breakouts retest, and the retest is where the false-break exit gets whipsawed (exit, then watch it run). DEAD's false break is *vetoed* by the options gate it failed — in production the 3.5×/60% thresholds are example values, and marginal passes are where real losses live. The 4¢/share cost assumes the t+1 open fill is orderly; true volatility breakouts gap, and gap fills pay multiples of the modeled cost. The 14-session squeeze at the 2nd percentile is a cherry-picked coil; most squeezes resolve into drift, which is why the three-confirmation rule exists — and why it keeps you out of most trades.
+
+![T094 worked example — synthetic VOLT true breakout (squeeze → band break → target) and DEAD false break (band re-entry → stopped), with bandwidth panel](images/T094_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 194; the bandwidth panel shows the squeeze line at 8% (example); trade marks match the T4 table.*
+
+### T5. Data & infra — what must run
+
+**Feed.** Daily equity bars (SIP-class) for the squeeze/breakout detector; options prints + signed flow for the UOA confirmation (Tier-1/2 per T093's table — same feed, shared cost).
+
+**Jobs.** Nightly: bandwidth percentiles, band breaks, volume ratios, options-flow ratios, vol-expansion check across the universe; emit the confirmed-breakout list before the open. Intraday: monitor the false-break rule (close back inside the band) for open positions.
+
+**Storage.** Daily bars + options summaries: GB-scale for a 500-name universe. Trivial.
+
+**M5 Max feasibility.** A nightly scan of 500 names is seconds. Verdict: **feasible** — the cheapest compute in the batch after T092; the work is feed QA, not FLOPs. Engineering: Tier M (20–60 h) for the detector + Tier M for the options-confirmation join; planning band **40–100 h ≈ $6k–$15k loaded-cost estimate** at $150/hr. What breaks first at 500 names: the options-flow join (matching prints to names across corporate actions), not the CPU.
+
+**Feed-drop failure plan.** If the options feed is stale: no new confirmations (fail closed — an unconfirmed breakout is not traded). If the equity feed drops intraday: existing positions keep exchange-native stops; no new entries.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: free daily bars, no options | Squeeze detector only | ~$0, `indicative — verify before budgeting` | $0 | No UOA confirmation — you trade every false break |
+| Tier-1: Polygon Options | Options bars + Greeks | ~$199–$500/mo, `indicative — verify before budgeting` | Cheapest confirmed-breakout stack | Signed-flow granularity varies |
+| Tier-2: CBOE DataShop / LiveVol | Production flow analytics | ~$500–$2,000/mo, `indicative — verify before budgeting` | Cleaner confirmation | Same build for the detector |
+| Newsletter UOA services | Pre-flagged unusual activity | ~$100–$300/mo, `indicative — verify before budgeting` | Saves the join | Black-box flags; no ask-side share; can't audit the 3.5×/60% rule |
+
+**Verdict: build the detector, buy Tier-1/2 for confirmation.** The squeeze math is 20 lines; the options join is the product. Never buy the *signal* (newsletter flags) — you can't risk-manage a flag you can't recompute.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| The squeeze/breakout pattern is practitioner literature (Bollinger 2001; Carter's "squeeze" framework) | — | Bandwidth compression precedes expansion; the pattern is a volatility-regime observation | N/A (practitioner) | No peer-reviewed P&L evidence for the squeeze-breakout *trading rule* — the pattern is descriptive, and "compression precedes expansion" is symmetric (expansion can be down) |
+| Pan & Poteshman (2006) | CBOE 1990–2001 | Option volume predicts next-day stock returns | Before cost | Supports the UOA confirmation leg, not the squeeze trigger |
+| Johnson & So (2012) | US 1996–2009 | Option-to-stock volume predicts next-week returns | Before cost | Same: confirmation leg only; the joint rule (squeeze + UOA + vol-expansion) is this chapter's construction, untested in print |
+
+**Honest bottom line.** This chapter's trigger (the squeeze) has *no* peer-reviewed traded-P&L evidence; its confirmation legs (options flow predicts returns) have some. The honest claim: a disciplined, three-confirmation breakout rule that loses little on false breaks (the DEAD leg) and participates in true ones (the VOLT leg) — with the emphasis on *loses little*, because breakout strategies historically pay their tuition in false breaks and this chapter's only innovation is making the tuition explicit.
+
+### T8. Failure modes
+
+- **False breaks dominate.** Most band breaks fail; the 3.5× options gate is the only thing standing between the strategy and a false-break bleed. Mitigation: the false-break exit (2 sessions) and the per-name 5-session stand-down.
+- **Gap-through-stop.** Breakouts gap; the t+1 open fill can be far from the signal close. Mitigation: the ±0.3% limit at the open — unfilled means skipped, not chased.
+- **Options confirmation is noise.** 4.2× call flow can be hedging. Mitigation: the ≥60% ask-side requirement and the vol-expansion leg — three witnesses, not one.
+- **Squeeze mismeasurement.** Bandwidth percentile depends on the lookback; a 6-month window in a vol-regime change mislabels everything. Mitigation: dual lookbacks (3-month and 12-month); squeeze requires both (example).
+- **Threshold overfit.** 3.5×, 60%, 1.8×, 10 sessions are examples. Mitigation: grid sensitivity; the rule must survive ±30% threshold perturbation.
+- **Lookahead.** Using the breakout bar's close range to "confirm" a fill on the same bar. Mitigation: fills at t+1 — stated in T2, unit-tested.
+
+### T9. Visuals
+
+![T094 worked example — synthetic VOLT true breakout and DEAD false break with Bollinger bandwidth squeeze panel](images/T094_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 194; session net +$15,280 fully costed; the DEAD false break is vetoed with no fill.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(daily equity bars +<br/>options prints)"] -->|"daily equity bars<br/>+ options prints"| SIGS["Signals<br/>S030 squeeze/breakout, S073 UOA,<br/>S076 vol expansion"]
+    SIGS -->|"daily close values<br/>+ 20-day flow ratios"| ENTRY{"Entry logic<br/>(squeeze → band break →<br/>UOA + vol-expansion confirm;<br/>fill t+1 open)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(0.50% risk to stop;<br/>6% ADV cap)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"limit at t+1 open ±0.3%"| EXEC["Execution<br/>(unfilled = skipped)"]
+    EXEC -->|"fills net of 4¢/sh RT"| MON["Monitor + exits<br/>(+2.0 TR target / band-edge stop /<br/>false-break exit)"]
+    MON -->|"net of costs"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Bollinger, J. (2001). *Bollinger on Bollinger Bands.* McGraw-Hill. ISBN 9780071373685. https://en.wikipedia.org/wiki/Bollinger_Bands — the canonical squeeze/bandwidth framework (practitioner literature; no peer-reviewed P&L claim). Wikipedia's "Bollinger Bands" page re-opened 2026-09-10 — its bibliography lists the McGraw-Hill book under ISBN 978-0-07-137368-5.
+2. Pan, J. & Poteshman, A. M. (2006). "The Information in Option Volume for Future Stock Prices." *Review of Financial Studies* 19(3): 871–908. https://doi.org/10.1093/rfs/hhj024 — option volume contains information for future stock prices; supports the UOA confirmation leg. Identifier re-checked 2026-09-10 via Crossref API (title + journal + year match).
+3. Johnson, T. L. & So, E. C. (2012). "The Option to Stock Volume Ratio and Future Returns." *JFE* 106(2): 262–286. https://doi.org/10.1016/j.jfineco.2012.05.008 — O/S predicts next-week returns. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All squeeze/breakout/confirmation thresholds (10th percentile, 10 sessions, 1.5× volume, 3.5× flow, 60% ask-side, 1.8× range) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- There is no peer-reviewed evidence for the squeeze-breakout *trading rule* as specified here; the pattern evidence is practitioner/descriptive.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: Pan–Poteshman citation corrected to the Crossref-verified DOI 10.1093/rfs/hhj024; Wikipedia "Bollinger Bands" page re-opened (bibliography lists the McGraw-Hill book); Johnson–So DOI re-checked (resolves, title matches). The DEAD false break is now a vetoed setup with no fill and no ledger line — strategy net recomputed as +$15,280. Thresholds are the chapter's own example design values.*
+
+## Stage 195/200 — T095: Dispersion + GEX Regime Switch
+
+*Batch TB10 · Strategy 95/100 · Signals S075, S074, S068 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Volatility-relative-value, market-neutral: long single-name variance, short index variance, with a gamma-exposure regime switch |
+| **Edge source** | The correlation risk premium (S075): index implied correlation persistently exceeds realized correlation, so short-index-vol/long-single-vol harvests the spread; modeled gamma exposure (S074) and the VIX term-structure regime (S068) decide *when* the harvest is safe |
+| **Typical holding period** | 5–20 sessions (example) per dispersion vintage; the regime switch can halve it mid-trade |
+| **Capacity hint** | $10–50M (example) — index options are the deepest vol market on earth; the single-name basket is the constraint |
+| **Build-or-buy in one line** | Build the dispersion pricer; buy OPRA + a GEX feed — the modeled exposure is only as good as the full-chain OI underneath it |
+
+### T2. Full mechanics
+
+**The idea, plainly.** **Dispersion** (S075): buy straddles (long call + long put, a bet on movement either way) on a basket of single names, sell straddles on the index. If the stocks move independently (low realized correlation) while the index stays calm, the single-name straddles pay and the index straddles decay — you harvest the correlation risk premium. **Gamma exposure (GEX)** (S074): an estimate of how much dealer hedging will amplify or dampen moves — positive GEX (dealers long gamma) dampens; negative GEX amplifies. It is a *modeled proxy* from listed options open interest under assumed positioning signs — it does not reveal actual dealer positioning. **VIX term structure** (S068): contango (upward-sloping) = calm carry regime; backwardation = stress — the regime gate for the whole trade.
+
+**Regime logic (example).** Trade the dispersion only when: (i) VIX term structure is in contango (front month < 3-month, example); (ii) modeled aggregate GEX is positive (example); (iii) the dispersion spread (index implied correlation − realized correlation) is above its 20-day median (example). If GEX flips negative mid-trade: cut the position 50% (example) — the regime switch that names the chapter. If VIX flips to backwardation: flatten entirely (example).
+
+**Construction (example).** Long: 8 large-cap straddles, 30-day expiry, delta-hedged daily. Short: SPX 30-day straddles in index-beta-weighted notional. Rebalanced weekly; each vintage held 5–20 sessions.
+
+**Entry/exit.** Enter when the three regime conditions align. Exit: the spread converges (realized correlation catches up to implied), or any regime condition breaks, or 20 sessions elapse (example). **Causal timing, stated explicitly: regime conditions are evaluated on the day-t close; the earliest the straddle portfolio trades is the t+1 open.** The GEX flip is evaluated on the modeled close value — no intraday switching on live estimates.
+
+**Position sizing.** Vega-weighted: each single-name straddle sized to equal vega (volatility sensitivity, example), index leg sized to net-zero delta and the target correlation exposure. Portfolio vol target: 8% annualized (example).
+
+**Risk limits.** Max portfolio vega $50k per vol point (example); single-name concentration ≤ 25% of vega (example); the GEX-flip 50% cut is automatic, not discretionary.
+
+**Cost model — the explicit ×100 stack.** Options trade in contracts of 100 shares; every line below multiplies by 100 explicitly.
+
+| Line | Calculation | Cost |
+|---|---|---|
+| Long single-name straddles | 8 names × 5 contracts × 2 legs = 80 contracts × $0.10 half-spread × 100 | $800 |
+| Short SPX straddles | 20 contracts × 2 legs = 40 contracts × $0.10 half-spread × 100 | $400 |
+| Commissions | 120 contracts × $0.65 | $78 |
+| Delta-hedge slippage (12 sessions) | estimated | $572 |
+| **Total** | | **$1,850** |
+
+**Order/execution.** Straddles are entered as listed spreads (single transaction per straddle) to avoid legging risk; delta hedges worked as equity VWAP.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S075 (dispersion: implied vs realized correlation) | The trade itself | spread above 20-day median (example) = enter; convergence = exit |
+| S074 (modeled GEX) | Regime switch | positive = full size; flip negative = cut 50% (example); proxy, not dealer truth |
+| S068 (VIX term structure) | Regime gate | contango = trade; backwardation = flat (example) |
+
+Pseudocode (≤25 lines):
+```
+daily close t:                                              # granularity: daily options chains + VIX curve
+    disp[t] = impl_corr[t] - real_corr[t]                    # S075
+    gex[t] = model_GEX(full_chain_OI[t])                    # S074, proxy only
+    ts[t] = VIX_3m - VIX_front                               # S068
+    regime_ok = disp[t] > median(disp,20) and gex[t] > 0 and ts[t] > 0   # example
+    if regime_ok and flat: enter dispersion at next open     # fill t+1
+    if in_position:
+        if gex[t] < 0: cut 50%                              # the regime switch, example
+        if ts[t] < 0: flatten                                # backwardation, example
+        if disp[t] <= 0 or age >= 20: exit                  # convergence / time, example
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 12-session dispersion vintage, seed 195. Long 8-name straddle basket vs short 20 SPX straddles (40 option contracts; notional matched). Realized single-name vol 24.1% vs implied 27.8% (long leg bleeds); index realized 16.2% vs implied 21.5% (short leg wins).
+
+| Day | Long leg cum ($) | Short leg cum ($) | Net cum ($) | GEX proxy |
+|---|---|---|---|---|
+| 1–4 | −200 → −1,500 | +500 → +2,100 | +300 → +600 | positive |
+| 5–8 | −2,100 → −3,300 | +3,300 → +7,600 | +1,200 → +4,300 | positive |
+| 9 | −3,600 | +8,800 | +5,200 | **flips negative → cut 50%** |
+| 10–12 | −4,900 | +12,300 | +7,400 | negative |
+
+Ledger (fully costed, from the ×100 stack in T2):
+- Gross: **+$7,400**
+- Costs: **$1,850** (spread $1,200 + commissions $78 + hedge slippage $572)
+- **Net: +$5,550**
+
+**Session net: +$5,550 (synthetic; demonstrates the dispersion/regime-switch arithmetic — the day-9 GEX cut is the chapter's signature move, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The correlation spread is assumed to persist for 12 sessions without a single-name jump — one earnings surprise in the basket and the long leg's vega becomes a loss, not a bleed. The GEX flip is modeled cleanly on the close; real GEX estimates are noisy, sign-unstable across vendors, and computed under positioning assumptions that fail exactly when positioning matters most (S074's canon warning). The $572 hedge-slippage line is a plug — daily delta-hedging an 8-name basket in a falling market costs whatever the market charges that week. The short-SPX leg assumes borrow/availability and margin that a small account doesn't have. And the worked example never shows the backwardation day — the regime where the whole vintage is flattened at a loss, which is the trade's actual tail risk.
+
+![T095 worked example — synthetic 12-session dispersion: long single-name leg bleed vs short index leg harvest, with GEX regime-switch marker](images/T095_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 195; the red dashed line marks the modeled-GEX flip (day 9) and the 50% cut; the GEX panel is labeled a proxy.*
+
+### T5. Data & infra — what must run
+
+**Feed.** Full-chain options OI + quotes (OPRA-derived) for the 8 names + SPX; VIX term structure (CBOE feed or vendor). The GEX model needs *full-chain* open interest — sampled strikes give a sampled GEX, which is a different (worse) signal.
+
+**Jobs.** Nightly: fit/refresh vol surfaces, compute implied vs realized correlation, model aggregate GEX, read the VIX curve, evaluate the three regime conditions. Intraday: delta-hedge the basket (the only intraday job).
+
+**Storage.** Full-chain daily OI for ~10 underlyings: GB-scale. Intraday hedge records: small.
+
+**M5 Max feasibility.** The nightly surface + GEX job is minutes. Verdict: **feasible** — compute is trivial; the binding constraints are the full-chain OI license and margin/clearing for the short index leg. Engineering: Tier H for the dispersion pricer + GEX model per cost-model §5 (60–200 h), Tier M for the hedging harness; planning band **100–250 h ≈ $15k–$37k loaded-cost estimate** at $150/hr. What breaks first at scale: SPX margin requirements and the borrow on any hard-to-borrow single name, not the CPU.
+
+**Feed-drop failure plan.** If the OI feed is stale: the GEX value freezes — no new regime switches are evaluated (fail closed on the last *computed* state), and new vintages are blocked until fresh full-chain OI arrives.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-1: vendor Greeks + OI snapshots | Daily chains | ~$199–$500/mo, `indicative — verify before budgeting` | Cheapest dispersion input | GEX must be modeled yourself |
+| Tier-2: OPRA-derived + GEX vendor feed | Precomputed GEX | ~$500–$2,000/mo, `indicative — verify before budgeting` | Saves the GEX model | Vendor GEX methodologies differ — you can't audit the sign |
+| Tier-3: raw OPRA full-chain | Everything | institutional $$, `indicative — verify before budgeting` | Full control of the proxy | The Tier H build |
+| Prime/clearing for short SPX | Margin + stock loan | institutional, `indicative — verify before budgeting` | Actually tradeable | The real gate for small accounts |
+
+**Verdict: buy the chains (Tier-1/2), build the pricer and the regime logic.** Nobody sells *your* GEX-flip rule or *your* correlation-spread entry — and given S074's warning that GEX is a proxy under assumed signs, outsourcing the model means outsourcing the risk you understand least.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Driessen, Maenhout & Vilkov (2009), "The Price of Correlation Risk" | S&P 100 options 1996–2003 | Implied correlation exceeds realized; correlation risk is priced — the dispersion premium exists | Before cost | The premium is a *risk premium* (compensation for correlation spikes), not an arbitrage — harvesting it means wearing the crash |
+| Buraschi, Kosowski & Trojani (2014) | Index vs single options | Correlation risk premium is time-varying and predicts returns | Before cost | Time-varying = the regime matters, which supports the GEX/term-structure gating — but their regimes aren't this chapter's |
+| The GEX literature | Practitioner/vendor | Modeled gamma exposure correlates with realized intraday mean-reversion/amplification regimes | Unverified (vendor) | No peer-reviewed P&L evidence for GEX-flip *trading rules*; the honest use is regime description, which is how this chapter uses it |
+
+**Honest bottom line.** The dispersion premium is the best-documented of the three legs — a genuine, published risk premium. The GEX regime switch is practitioner craft with no peer-reviewed traded evidence. The chapter's honest claim: dispersion is a real harvest with a crash tail; the regime switch is a disciplined way to cut the tail, not a second source of alpha.
+
+### T8. Failure modes
+
+- **Correlation spike.** The event the premium compensates: correlations → 1, the short index leg explodes. Mitigation: the backwardation flatten rule — VIX backwardation *is* the correlation spike's announcement.
+- **GEX sign error.** The proxy says positive; dealers are actually short gamma. Mitigation: never size the GEX leg as alpha — it's a 50% cut rule, not a leverage rule; the damage from a wrong cut is halved size, not a blowup.
+- **Single-name jump.** One basket name gaps on news; the long straddle should pay but the delta hedge gaps too. Mitigation: 25% vega concentration cap; earnings exclusions on basket names.
+- **Short-gamma bleed on the index leg.** If realized index vol exceeds implied, the short straddles lose faster than the model. Mitigation: the 20-session time stop and the vega cap.
+- **OI staleness.** Full-chain OI updates once a day; the GEX "flip" can be a day late. Mitigation: evaluated on the close, acted on at t+1 — the lag is in the design, not a surprise.
+- **Threshold overfit.** Median spread, 50% cut, contango definition are examples. Mitigation: regime rules must survive sign-flip tests (does the *opposite* rule lose?).
+
+### T9. Visuals
+
+![T095 worked example — synthetic dispersion vintage with GEX regime-switch cut and fully costed ×100 option stack](images/T095_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 195; net +$5,550 after the $1,850 ×100-multiplied cost stack.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(full-chain options OI,<br/>VIX term structure)"] -->|"full-chain options OI<br/>+ VIX term structure"| SIGS["Signals<br/>S075 dispersion spread,<br/>S074 modeled GEX, S068 VIX regime"]
+    SIGS -->|"daily close values<br/>+ full-chain OI"| ENTRY{"Entry logic<br/>(spread > median AND GEX > 0<br/>AND contango; fill t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(vega-weighted;<br/>8% vol target)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"listed straddle spreads"| EXEC["Execution<br/>(delta-hedged daily)"]
+    EXEC -->|"fills, costs ×100/contract"| MON["Monitor + exits<br/>(GEX flip → cut 50% /<br/>backwardation → flat)"]
+    MON -->|"net of $1,850 stack"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Driessen, J., Maenhout, P. & Vilkov, G. (2009). "The Price of Correlation Risk: Evidence from Equity Options." *Journal of Finance* 64(3): 1377–1406. https://doi.org/10.1111/j.1540-6261.2009.01467.x — implied correlation exceeds realized; the correlation risk premium exists. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+2. Buraschi, A., Kosowski, R. & Trojani, F. (2014). "When There Is No Place to Hide: Correlation Risk and the Cross-Section of Hedge Fund Returns." *Review of Financial Studies* 27(2): 581–616. https://doi.org/10.1093/rfs/hht070 — correlation risk premium is time-varying. Identifier re-checked 2026-09-10 via Crossref API (title + journal match; Crossref lists publication metadata 2013, print issue 2014).
+3. CBOE. "VIX Term Structure methodology / white papers." https://www.cboe.com — the VIX curve construction behind the S068 regime gate. (Vendor methodology page; the regime *trading rule* built on it is this chapter's, unverified.)
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All regime thresholds (20-day median spread, GEX > 0, contango definition, 50% cut, 20-session vintage) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- GEX-flip trading rules have no peer-reviewed P&L evidence; vendor GEX methodologies differ and the sign is model-dependent (S074 canon).
+- The $572 hedge-slippage line is an estimate, not a measurement.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: Buraschi–Kosowski–Trojani citation corrected to the Crossref-verified DOI 10.1093/rfs/hht070 (*Review of Financial Studies* 27(2): 581–616, 2014); Driessen–Maenhout–Vilkov DOI re-checked in this batch's rework pass (resolves, title matches). T4 wording corrected to "short 20 SPX straddles (40 option contracts)" to match the ledger. Regime thresholds are the chapter's own example design values.*
+
+## Stage 196/200 — T096: Kalman + HMM Adaptive Trend
+
+*Batch TB10 · Strategy 96/100 · Signals S077, S079, S078 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday adaptive trend: a state-space fair value with a regime gate that turns the trend-follower off in chop |
+| **Edge source** | The Kalman filter (S077) separates the tradable drift from microstructure noise; the hidden Markov model (S079) labels the regime so the strategy only trends when trending pays; the AR/ARMA innovation rule (S078) times entries on fresh information |
+| **Typical holding period** | 15–120 minutes (example); the HMM kills entries in chop, the time stop kills stale trends |
+| **Capacity hint** | $2–8M per name (example) — 1-minute bars on liquid names; the filter is the edge, not the size |
+| **Build-or-buy in one line** | Build it in an afternoon — two textbook estimators, zero proprietary data |
+
+### T2. Full mechanics
+
+**The idea, plainly.** Prices are noisy observations of a hidden "fair value" that drifts. The **Kalman filter** (S077) is the optimal recursive estimator of that hidden state: each new price updates the fair-value estimate, weighted by how trustworthy the observation is (the Kalman gain — high when measurement noise is low). The **hidden Markov model** (S079) assumes the market switches between unobserved regimes (trend / chop / volatile) with learned transition probabilities, and infers the current regime from recent returns. The **AR/ARMA forecast** (S078): an autoregressive model predicts the next bar from recent bars; the *innovation* (actual − predicted) is the fresh information — entries trigger on innovations, not on raw moves.
+
+**State-space model (example).** Fair value x_t follows a random walk with drift; observed mid y_t = x_t + noise. Process noise Q and measurement noise R are calibrated per name on a rolling 5-day window (example); the signal-to-noise ratio Q/R is the only tuning that matters.
+
+**HMM (example).** 3 states (trend-up, trend-down, chop), Gaussian emissions on 1-minute returns, Baum–Welch fit on 5 days (example), Viterbi path for the live state. Trade only when P(trend state) > 0.6 (example).
+
+**Innovation entry (example).** AR(3) on 1-minute mid returns, refit daily. Enter long when: innovation > +1.5 × its rolling std (example) AND Kalman drift (x_t − x_{t−20}) > 0 (example) AND HMM says trend. **Causal timing, stated explicitly: all three quantities are computed from bars ≤ t; the earliest legal fill is the t+1 bar's open.** The filter never sees the future — the classic Kalman lookahead bug is initializing or smoothing with full-sample parameters, which this design avoids by rolling calibration.
+
+**Exit rule.** Kalman fair value flattens (|x_t − x_{t−20}| < 0.25 × its entry value, example) → exit; HMM flips to chop → no new entries, existing positions get a 15-bar time stop (example); hard stop −1.0 × σ_20bar (example); target +1.8 × σ_20bar (example).
+
+**Position sizing.** q = (0.25% × equity) / stop_distance (example) — trend systems lose often; size for the loss rate.
+
+**Risk limits.** Max 2 concurrent trends (example); if the HMM labels >70% of the session as chop (example), the strategy stands down the next session; daily sleeve stop −1.5% (example).
+
+**Cost model.** 1.5¢/share round-trip (example) — liquid names, 1-minute bars, passive entries at the touch.
+
+**Order/execution.** Limit at the t+1 open mid ±0.2σ (example); trend entries are not chased — a missed entry is a vetoed entry.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S077 (Kalman fair value + drift) | Primary: the tradable state | drift direction = trade direction; flat drift = exit |
+| S079 (HMM regime) | Gate | P(trend) > 0.6 (example) to enter; chop = stand down |
+| S078 (AR innovation) | Entry timer | \|innovation\| > 1.5σ (example) in the drift direction |
+
+Pseudocode (≤25 lines):
+```
+every 1-min bar t:                                        # granularity: 1-min mid bars
+    x[t], P[t] = kalman_update(y[t], Q, R)                # S077, Q/R rolling 5d
+    drift = x[t] - x[t-20]
+    regime = hmm_viterbi(returns[t-300:t])                # S079, 3-state
+    innov = y[t] - AR3_predict(y[t-3:t])                  # S078, refit daily
+    if P_trend(regime) > 0.6 and innov > 1.5*std(innov):  # example gates
+        if drift > 0: enter LONG at next bar open         # fill t+1, never t
+        elif drift < 0: enter SHORT at next bar open
+# exits: drift flat / HMM->chop + 15-bar stop / -1.0σ stop / +1.8σ target
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 120 1-minute bars, seed 196. HMM labels bars 0–79 as trend, 80–119 as chop. Two trades of 3,000 shares, fills at t+1. (A third candidate at bar 95 was vetoed: bar 95 sits inside the stated chop window, so the P(trend) > 0.6 gate blocks it — no fill, no ledger line.)
+
+| # | Entry (bar) | Side | Entry $ | Exit (bar) | Exit $ | Gross |
+|---|---|---|---|---|---|---|
+| 1 | 20 | long | 61.20 | 44 | 61.95 | +$2,250 |
+| 2 | 55 | short | 62.40 | 74 | 61.85 | +$1,650 |
+
+Ledger (fully costed):
+- Gross: +$2,250 + $1,650 = **+$3,900**
+- Costs: 2 trades × 3,000 × $0.015 = **$90**
+- **Net: +$3,810**
+
+**Session net: +$3,810 (synthetic; demonstrates the filter/regime/entry arithmetic — the chop-window veto at bar 95 is the HMM doing its job, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The HMM's trend/chop labels are suspiciously clean — real Viterbi paths flicker between states, and the P(trend) > 0.6 gate whipsaws. The Kalman drift is computed with Q/R "calibrated" — on synthetic data the calibration is perfect; on real data Q/R estimation is the whole game and it's unstable. The chop window (bars 80–119) correctly blocks the bar-95 candidate in this example, but in production the chop regime is where most of a session's *would-be* trades live, because the HMM is slowest to label exactly the regime where you'd already be bleeding. The AR(3) innovation assumes the microstructure noise is stationary within the day — it isn't (open/close effects).
+
+![T096 worked example — synthetic 120-bar session: Kalman fair value vs mid, HMM trend/chop shading, two t+1-filled trades](images/T096_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 196; shaded regions are the HMM states; triangles are entries (t+1 fills), squares are exits.*
+
+### T5. Data & infra — what must run
+
+**Feed.** 1-minute (or finer) mid bars — SIP-class L1 is sufficient. No depth, no options.
+
+**Jobs.** Per bar: Kalman update (microseconds), HMM Viterbi on a rolling window (milliseconds), AR innovation (microseconds). Daily: refit AR(3), recalibrate Q/R, refit HMM on 5 days.
+
+**Storage.** 1-minute bars: per cost-model §4, ~2–8 GB/symbol-day is for full L1 quotes+trades; 1-minute mids are MB/day. Trivial.
+
+**M5 Max feasibility.** The per-bar compute is sub-millisecond per name; 150 names is still sub-second. The daily HMM fit (Baum–Welch on ~2,000 bars × 150 names) is minutes. Verdict: **feasible** — this chapter is a rounding error on the M5 Max. Engineering: Tier M (20–60 h) for the filter/regime service; planning band **20–60 h ≈ $3k–$9k loaded-cost estimate** at $150/hr — the cheapest build in the batch. What breaks first at 500 symbols: the daily HMM refit wall-clock, parallelizable trivially.
+
+**Feed-drop failure plan.** If bars stop: the filter freezes — no new entries (the drift is stale), existing positions keep their stops. On resume, re-initialize the filter covariance wide (P = large) rather than trusting the gap.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: free 1-min bars (Stooq/Alpaca) | Mids | ~$0, `indicative — verify before budgeting` | $0; sufficient for research | Corporate-action adjustment is yours |
+| Tier-1: Polygon Stocks Advanced | Clean bars + WS | ~$199/mo, `indicative — verify before budgeting` | Cleaner adjustments | Nothing the filter needs beyond bars |
+| Textbook code (pykalman, hmmlearn) | The estimators | ~$0 (open source), `indicative — verify before budgeting` | Proven implementations | You wire the rolling calibration and the causality discipline |
+
+**Verdict: build on Tier-0/1.** There is nothing to buy — the Kalman filter and the HMM are 1960s/1970s mathematics in every open-source library. The proprietary layer is the rolling Q/R calibration, the regime-gating discipline, and the refusal to smooth with future data.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Kalman (1960); Harvey (1989) *Forecasting, Structural Time Series Models and the Kalman Filter* | — | The filter is the optimal linear recursive state estimator | Method, not P&L | Optimality is about *estimation error*, not trading profit — a better fair value doesn't imply a profitable trade |
+| The trend-following literature (e.g., Hurst, Ooi & Pedersen 2017, "A Century of Evidence on Trend-Following Investing") | Multi-asset, century | Time-series momentum earns a premium across assets and eras | Before cost (futures, monthly) | The evidence is for *slow* (monthly) trend across futures; this chapter's 1-minute-bar equity trend is a different animal with vastly higher costs |
+| Hamilton (1989) regime-switching | Macro/econometric | HMM/Markov-switching models describe regime-dependent dynamics | Method | Descriptive fit, not a trading rule |
+
+**Honest bottom line.** The components are the most academically respectable in the batch — optimal filtering, regime modeling, autoregression — and the least *directly* evidenced as a traded intraday strategy. The century-of-trend evidence is real but lives at monthly horizons in futures; porting it to 1-minute equity bars is an extrapolation, and the costs scale with the extrapolation. The honest claim: a disciplined adaptive-trend harness whose value is mostly the HMM's *off switch* in chop.
+
+### T8. Failure modes
+
+- **Q/R miscalibration.** Wrong signal-to-noise ratio = the filter chases noise or sleeps through drift. Mitigation: rolling 5-day calibration, reported daily; freeze trading if Q/R jumps 3× day-over-day (example).
+- **HMM state flicker.** Viterbi flips trend/chop/trend; the gate whipsaws. Mitigation: require P(trend) > 0.6 for 3 consecutive bars (example) before arming entries.
+- **Smoothing lookahead.** Calibrating Q/R or fitting the HMM on data that includes the traded bars. Mitigation: strict rolling windows; the research harness asserts max(train_end) < trade_bar.
+- **AR nonstationarity.** Open/close effects break the AR(3). Mitigation: exclude first/last 15 minutes (example) or fit separate models per intraday bucket.
+- **Chop-tax.** Most losses come from trades 3-style — entered as the regime decays. Mitigation: the 15-bar time stop in chop; the daily stand-down rule.
+- **Threshold overfit.** 0.6, 1.5σ, 20-bar drift are examples. Mitigation: the strategy must survive halving/doubling each.
+
+### T9. Visuals
+
+![T096 worked example — synthetic Kalman fair value vs mid with HMM regime shading and two trades](images/T096_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 196; net +$3,810 after $90 costs.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(1-min mid bars)"] -->|"1-min bars<br/>+ rolling 5-day calibration"| SIGS["Signals<br/>S077 Kalman fair value,<br/>S079 HMM regime, S078 AR innovation"]
+    SIGS -->|"1-min bars<br/>+ rolling 5-day calibration"| ENTRY{"Entry logic<br/>(P_trend > 0.6 AND<br/>innovation > 1.5σ AND drift;<br/>fill t+1 open)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(0.25% risk to stop)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"limit at t+1 mid"| EXEC["Execution<br/>(not chased)"]
+    EXEC -->|"fills net of 1.5¢/sh RT"| MON["Monitor + exits<br/>(drift flat / HMM chop<br/>+ 15-bar stop / ±stops)"]
+    MON -->|"net of costs"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Kalman, R. E. (1960). "A New Approach to Linear Filtering and Prediction Problems." *Journal of Basic Engineering* 82(1): 35–45. https://doi.org/10.1115/1.3662552 — the filter. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+2. Hamilton, J. D. (1989). "A New Approach to the Economic Analysis of Nonstationary Time Series and the Business Cycle." *Econometrica* 57(2): 357–384. https://doi.org/10.2307/1912559 — Markov regime-switching. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+3. Hurst, B., Ooi, Y. H. & Pedersen, L. H. (2017). "A Century of Evidence on Trend-Following Investing." *Journal of Portfolio Management* 44(1): 15–29. https://doi.org/10.3905/jpm.2017.44.1.015 — long-horizon trend premium across assets. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title (the slow-trend evidence this chapter extrapolates from; horizon mismatch noted honestly).
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All filter/gate thresholds (Q/R 5-day window, P(trend) > 0.6, 1.5σ innovation, 20-bar drift, 15-bar chop stop) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- No published study validates this exact Kalman+HMM+AR intraday rule as a traded strategy; the trend evidence cited is monthly-horizon futures.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: the three cited DOIs resolve with matching titles (rework-pass spot-check). Trade 3 (bar 95, inside the stated chop window) was removed — strategy net recomputed as $3,900 − $90 = $3,810. Filter/gate thresholds are the chapter's own example design values.*
+
+## Stage 197/200 — T097: Sub-Hour Microstructure Reversal Scalper
+
+*Batch TB10 · Strategy 97/100 · Signals S038, S047, S012 · Provenance [D]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Sub-hour mean-reversion scalper: fades sharp micro-moves on liquid names |
+| **Edge source** | Microstructure noise mean-reverts (S038): bid–ask bounce (S047) and transient order-book pressure push prints away from value and snap back; the Roll spread estimator (S012) prices the bounce so the strategy only fades moves bigger than the spread |
+| **Typical holding period** | 5–30 minutes (example); flat by the close, flat by the micro-move's half-life |
+| **Capacity hint** | $0.5–2M (example) — 1,000-share clips; the edge is thin and the spread is the tax |
+| **Build-or-buy in one line** | Build in a weekend on L1 data; the honest warning is S047's canon — the practical P&L of bounce-harvesting belongs mostly to queue-priority market makers |
+
+### T2. Full mechanics
+
+**The idea, plainly.** On short horizons, prices bounce between bid and ask even when value hasn't moved — the **bid–ask bounce** (S047). A sharp 5-minute selloff that is mostly bounce (not information) tends to retrace; the **sub-hour reversal** (S038) fades it. The **Roll (1984) spread estimator** (S012) infers the effective spread from the serial covariance of price changes (bounce creates negative autocovariance), so the strategy knows how big the bounce is *before* deciding the move is fadeable.
+
+**Fade condition (example).** On 1-minute bars: the trailing 5–15 minute return exceeds 1.75 × the Roll-implied half-spread in magnitude (example), the move happened on volume ≤ 1.2× its mean (example — informed moves are heavy), and the book pressure (level-1 OBI) is already mean-reverting (example confirmation).
+
+**The Roll estimator, concretely.** Roll (1984) observed that bid–ask bounce makes consecutive price changes negatively autocorrelated: a buy at the ask followed by a sell at the bid prints a down-tick even when value is unchanged. The effective spread is then s = 2√(−cov(Δp_t, Δp_{t−1})), computed over a 60-bar window (example); when the covariance is non-negative the estimator is undefined and the strategy stands down — no bounce, no fade. The estimator assumes the bounce is the *only* source of negative serial covariance, which fails in trending markets (momentum also creates serial dependence), so the volume gate and the OBI-reversion check exist to keep trend bars out of the fade set.
+
+**Entry/exit.** Fade the move: buy the sharp selloff, short the sharp rally. **Causal timing, stated explicitly: the reversal signal is computed on the 1-minute bar t's close; the earliest legal fill is the t+1 bar's open** — fading the *same* bar's print is the classic lookahead (you'd be filled at the extreme, which never happens). Exit: 50% retracement of the faded move (example), or 30 minutes (example), or −1.0 × the Roll spread against (example) — the bounce thesis is dead, cut it.
+
+**Position sizing.** Fixed 1,000-share clips (example) on names with spread ≤ 5 bps (example) — the strategy is a fixed-size machine, not a risk-scaled one, because the edge is per-trade, not per-unit-risk.
+
+**Risk limits.** Max 6 concurrent fades (example); daily loss stop −$2,000 on the sleeve (example); no fading in the first 15 or last 15 minutes (example — the bounce is not stationary then).
+
+**Cost model.** 1.5¢/share round-trip (example): $15 per 1,000-share fade. This is the whole game — the edge per fade is measured in tens of dollars.
+
+**Order/execution.** Passive limit at the touch on entry (you're providing liquidity to the panicker — that's the business); market out on exit (the retracement is the exit, don't get cute).
+
+**The queue-priority honesty note.** S047's canon is explicit: the *practical* P&L of spread/bounce harvesting accrues mostly to queue-priority market makers. A taker fading with market orders pays the spread both ways and the edge inverts. This strategy only works as a *maker* on entry — which means fill rates are partial and the backtest's fills are `simulated only — requires MBO/ITCH`.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S038 (sub-hour reversal) | Trigger: sharp micro-move | 5–15 min return > 1.75 × Roll half-spread (example) |
+| S047 (bid–ask bounce) | Mechanism + execution constraint | maker-only entries; the bounce is the edge and the tax |
+| S012 (Roll spread estimator) | Sizing the fade: is the move bigger than the bounce? | 2√(−cov(Δp)) per bar; gates the trigger |
+
+Pseudocode (≤25 lines):
+```
+every 1-min bar t:                                          # granularity: 1-min bars
+    roll_spread = 2*sqrt(-cov(dp[t-60:t]))                   # S012, if cov<0
+    move = return[t-5:t]                                     # 5-min micro-move
+    if abs(move) > 1.75*roll_spread/2 and vol[t] <= 1.2*mean(vol):  # example
+        if book_OBI_reverting[t]:                           # S047 confirmation
+            fade at next bar open, passive limit             # S038, fill t+1 maker-only
+# exits: 50% retracement / 30-min time stop / -1.0*roll_spread stop
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Six synthetic fades, 1,000 shares each, $15 RT cost per fade, seed 197.
+
+| # | Fade | Gross | Cost | Net |
+|---|---|---|---|---|
+| F1 | buy selloff | +$310 | $15 | +$295 |
+| F2 | short rally | +$180 | $15 | +$165 |
+| F3 | buy selloff (kept falling) | −$140 | $15 | −$155 |
+| F4 | buy selloff | +$290 | $15 | +$275 |
+| F5 | short rally | +$260 | $15 | +$245 |
+| F6 | buy selloff (flat) | +$40 | $15 | +$25 |
+
+Ledger (fully costed):
+- Gross: **+$940**
+- Costs: 6 × $15 = **$90**
+- **Net: +$850**
+
+**Session net: +$850 on six fades (synthetic; demonstrates the thin-edge arithmetic — the average net fade is $142, which is the point, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** Every fade gets a full 1,000-share passive fill at the touch — real maker fills are partial, and the unfilled half is the half that would have worked. F3's −$140 loss assumes the stop executes cleanly; real adverse moves gap through maker limits. The Roll spread is assumed known and stationary within the fade; real spreads widen exactly when you're fading. The example shows 5 of 6 fades working — a 83% hit rate on sub-hour reversal is a fantasy number chosen for illustration; the strategy's real economics need ~55–60% at these payoffs, and the variance around that is brutal. And the session conveniently contains no news-driven move — one informed selloff (the kind S008 would flag) wipes the week's fades.
+
+![T097 worked example — synthetic six-fade session: per-fade net bars and cumulative walk, $15 RT cost each](images/T097_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 197; the per-fade bars and the cumulative walk match the T4 table.*
+
+### T5. Data & infra — what must run
+
+**Feed.** 1-minute bars + L1 quotes (SIP-class). The Roll estimator needs trade prices; the OBI-reversion check needs level-1.
+
+**Jobs.** Per minute: Roll spread on a 60-bar window, 5/15-minute returns, volume ratio, level-1 OBI slope. That's it — the lightest compute in the batch.
+
+**Storage.** Negligible — 1-minute bars and a trade log.
+
+**M5 Max feasibility.** Trivially feasible. Engineering: Tier L per cost-model §5 (4–12 h; one line: 1-min-bar signals, the cheapest §5 tier); planning band **4–12 h ≈ $600–$1,800 loaded-cost estimate** at $150/hr. What breaks first: nothing computational — the strategy breaks on economics (the spread), not infrastructure.
+
+**Feed-drop failure plan.** Stale quotes → the Roll estimator freezes → no new fades (fail closed). Open fades keep their time stops, executed as market orders on resume if needed.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: free 1-min bars | Everything needed | ~$0, `indicative — verify before budgeting` | $0 | Nothing |
+| Tier-1: Polygon Stocks Advanced | Cleaner bars + WS | ~$199/mo, `indicative — verify before budgeting` | Real-time 1-min | Unnecessary for research |
+
+**Verdict: build on Tier-0.** There is nothing to buy. The honest question isn't build-vs-buy, it's *whether* — the queue-priority note in T2 is the real verdict, and no vendor feed changes it.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Roll (1984), "A Simple Implicit Measure of the Effective Bid-Ask Spread" | — | Spread = 2√(−serial covariance); bounce induces negative autocovariance | Method | The estimator *measures* the tax; it doesn't create edge — this chapter uses it as a gate, which is the honest use |
+| Lehmann (1990); Lo & MacKinlay (1990) | US equities, weekly/daily | Short-horizon reversals exist (losers bounce) | Before cost | Weekly/daily horizons, not 5-minute; the microstructure mechanism (bounce) is the same but the costs at 5 minutes are proportionally far larger |
+| The market-making literature (e.g., Hendershott et al.) | — | Spread capture accrues to liquidity providers with queue priority | Before cost (dealer P&L) | This is the caution, not the encouragement: the documented profits belong to the makers this strategy imitates without their queue position |
+
+**Honest bottom line.** The reversal *phenomenon* is documented; the reversal *scalper's P&L* as a taker is not — because the documented P&L belongs to market makers. This chapter is the batch's designated humility lesson: a real, measured, textbook phenomenon that still doesn't pay a price-taker after costs. Trade it only as a maker, size it as a hobby, or use the Roll gate inside a slower strategy.
+
+### T8. Failure modes
+
+- **Taker fills invert the edge.** Market-order entries pay the spread both ways; the +$142 average fade becomes negative. Mitigation: maker-only entries, hard-coded; any backtest assuming taker fills is rejected.
+- **Informed moves.** The selloff you're fading is someone who knows something. Mitigation: the volume gate (≤1.2× mean) and — honestly — a VPIN-style toxicity veto (T092's gate belongs here too).
+- **Partial fills.** The passive limit fills 300 of 1,000 shares; the rest never comes. Mitigation: model fill rates from queue data or assume 50% (example) in research.
+- **Spread widening.** The Roll estimate is backward-looking; the spread you're actually quoted doubles mid-fade. Mitigation: live spread guard — cancel the entry if quoted spread > 2× the Roll estimate (example).
+- **News.** Scheduled or unscheduled news breaks the bounce stationarity. Mitigation: no fades 15 minutes around scheduled events (example); news kill-switch on the wire.
+- **Overfit thresholds.** 1.75×, 1.2×, 50% retracement are examples. Mitigation: the edge must survive across the grid, and the *maker-fill assumption* must be stress-tested first — it's the binding one.
+- **Roll-window contamination.** A 60-bar window spanning a news event mixes two spread regimes; the estimator misprices the bounce for the rest of the window. Mitigation: recompute the Roll spread on the post-event subsample only, and halve fade size for one window-length after any volatility halt (example).
+
+### T9. Visuals
+
+![T097 worked example — synthetic six-fade session with per-fade net and cumulative walk](images/T097_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 197; session net +$850.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(1-min bars + L1 quotes)"] -->|"1-min bars<br/>+ 60-bar Roll window"| SIGS["Signals<br/>S038 sub-hour reversal,<br/>S047 bounce, S012 Roll spread"]
+    SIGS -->|"1-min bars<br/>+ 60-bar Roll window"| ENTRY{"Entry logic<br/>(move > 1.75× Roll half-spread<br/>AND light volume;<br/>maker fill t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(fixed 1,000-share clips)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"passive limit at touch"| EXEC["Execution<br/>(maker only;<br/>taker fills rejected)"]
+    EXEC -->|"fills net of 1.5¢/sh RT"| MON["Monitor + exits<br/>(50% retrace /<br/>30-min / −1.0 spread stop)"]
+    MON -->|"net of costs"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Roll, R. (1984). "A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient Market." *Journal of Finance* 39(4): 1127–1139. https://doi.org/10.1111/j.1540-6261.1984.tb03897.x — the spread estimator. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+2. Lehmann, B. N. (1990). "Fads, Martingales, and Market Efficiency." *Quarterly Journal of Economics* 105(1): 1–28. https://doi.org/10.2307/2937816 — short-horizon reversal. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title (weekly horizon — the horizon mismatch is noted honestly).
+3. Lo, A. W. & MacKinlay, A. C. (1990). "When Are Contrarian Profits Due to Stock Market Overreaction?" *Review of Financial Studies* 3(2): 175–205. https://doi.org/10.1093/rfs/3.2.175 — contrarian/reversal profits and their decomposition. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All fade thresholds (1.75×, 1.2× volume, 50% retracement, 30-minute stop, 1,000-share clips) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- The 55–60% required hit rate is this chapter's arithmetic, not a published figure.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: the three cited DOIs resolve with matching titles (rework-pass spot-check). Fills warning corrected to the exact string `simulated only — requires MBO/ITCH`; engineering mapped to cost-model §5 Tier L (4–12 h, $600–$1,800 loaded-cost estimate). Fade thresholds are the chapter's own example design values.*
+
+## Stage 198/200 — T098: Jump-Validated Momentum Ignition
+
+*Batch TB10 · Strategy 98/100 · Signals S064, S025, S032 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Intraday momentum ignition, minutes-to-hours: trade only the momentum that starts with a verified jump |
+| **Edge source** | Most intraday "momentum" is drift that mean-reverts; jumps (S064) mark the subset where price discovery actually happened — the Lee–Mykland test separates the two, RVOL (S032) confirms participation, and intraday momentum (S025) rides only the validated leg |
+| **Typical holding period** | 20–90 minutes (example); the ignition is fast, the ride is the easy part |
+| **Capacity hint** | $1–5M per name (example) — jump bars are liquid by definition (someone traded the move) |
+| **Build-or-buy in one line** | Build the jump detector in a day; buy nothing — 1-minute bars are enough |
+
+### T2. Full mechanics
+
+**The idea, plainly.** Prices move in two ways: small continuous wiggling and **jumps** — sudden discontinuous repricings when news or big flow arrives. The **Lee–Mykland (2008) jump test** (S064) detects jumps statistically: it scales each return by local volatility (bipower variation, robust to jumps themselves) and flags returns too large to be wiggling. **Intraday momentum** (S025) is the tendency of strong moves to continue over minutes-to-hours. **RVOL** (relative volume, S032) — current volume vs its trailing mean — confirms the move has participation rather than being a thin-print artifact. The strategy: momentum *only* after a validated jump; everything else is vetoed.
+
+**The gate, honestly.** S064's canon is explicit: the jump test is a *measurement/gate*, not directional alpha. It tells you *that* price discovery happened, not *where* price goes next. The direction comes from the post-jump drift (S025): enter in the jump's direction only if the 5 bars after the jump continue the move (example confirmation).
+
+**Jump test (example).** On 1-minute bars: Lee–Mykland statistic with a 60-bar bipower-variation window (example); flag when the statistic exceeds 4.5 (example threshold — the asymptotic theory suggests √ thresholds, but finite-sample practice uses fixed cutoffs, hence `example`).
+
+**Bipower variation, concretely.** Realized volatility (sum of squared returns) is contaminated by jumps — the very thing being tested. Bipower variation instead sums *products of adjacent absolute returns*, Σ|r_t|·|r_{t−1}| (scaled by a constant), which stays consistent for the continuous volatility component even when jumps are present. The Lee–Mykland statistic is then L_t = r_t / √(BV_t): the bar's return divided by jump-robust local volatility. A value of 5.8 means the bar moved 5.8 local-volatility units — implausible as wiggling, plausible as repricing. The 60-bar window (example) trades off adaptivity (shorter follows intraday vol patterns) against estimation noise (longer is stabler); the window must exclude the tested bar itself or the jump inflates its own denominator.
+
+**Entry rule.** Enter in the jump direction when: (i) jump flagged at bar t (statistic 5.8 in the worked example); (ii) RVOL ≥ 2.0× (example) over the jump bar and next 3 bars; (iii) the 5-bar post-jump drift continues the jump direction. **Causal timing, stated explicitly: the jump is flagged using bars ≤ t (the test needs the bar's close and the trailing window); the entry fills at the t+6 bar's open — the first lawful bar, because the 5-bar drift window (t+1…t+5) must close before the rule is complete.** Entering *on* the jump bar is the lookahead — you'd be filled at the pre-jump price, which is fiction.
+
+**Exit rule.** Target +1.5 × the jump bar's range (example); stop at the jump bar's midpoint (example) — if price retraces past half the jump, the discovery thesis is dead; time stop 90 minutes (example).
+
+**Position sizing.** q = (0.35% × equity) / stop_distance (example), capped at 10% of the jump bar's volume (example) — the jump printed liquidity; don't demand more than it showed.
+
+**Risk limits.** Max 3 concurrent ignitions (example); two consecutive jump-failures (stopped at the midpoint) = stand down for the session (example) — failed jumps cluster; daily sleeve stop −1.5% (example).
+
+**Cost model.** 2.0¢/share round-trip (example): $100 per 5,000-share ignition. Jump bars are liquid, but the t+6 fill still pays the post-jump spread.
+
+**Order/execution.** Marketable limit at the t+6 open ±0.5% (example) — ignition entries are momentum entries; passivity misses the move. If unfilled in 5 minutes, cancel.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S064 (Lee–Mykland jump test) | Gate: was this a real repricing? | statistic > 4.5 (example); gate, not a weight |
+| S025 (intraday momentum) | Direction + ride | 5-bar post-jump drift must continue the jump direction (example) |
+| S032 (RVOL) | Participation confirmation | RVOL ≥ 2.0× (example) over jump + 3 bars; gate, not standalone direction |
+
+Pseudocode (≤25 lines):
+```
+every 1-min bar t:                                          # granularity: 1-min bars
+    LM[t] = lee_mykland_stat(ret[t], bipower_var[t-60:t])    # S064
+    if LM[t] > 4.5:                                         # example threshold
+        rvol = vol[t-3:t+1] / mean(vol, 20d)                 # S032, example window
+        drift5 = sum(ret[t+1:t+6])                           # S025 confirmation
+        if rvol >= 2.0 and sign(drift5) == sign(ret[t]):    # example
+            enter at bar t+6 open in jump direction          # fill t+6, never earlier
+# exits: target +1.5*jump_range / stop at jump midpoint / 90-min time stop
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 78-bar session on fictional **INNO**, seed 198. Jump flagged at bar 30 (LM statistic 5.8, example); RVOL 3.2×; 5-bar drift continues up; entry at the t+6 open (bar 36).
+
+| Setup | Jump? | RVOL | Decision | Illustrative outcome |
+|---|---|---|---|---|
+| A (bar 30) | LM 5.8 ✓ | 3.2× ✓ | **TAKE long** | — |
+| B (bar 50) | LM 2.1 ✗ | 2.4× | VETO (no jump) | −$1,300 (drift faded) |
+| C (bar 66) | LM 5.1 ✓ | 0.8× ✗ | VETO (thin) | avoided |
+
+**Setup A ledger (fully costed):**
+- BUY 5,000 @ $75.16 (t+6 fill, bar 36 open) = $375,800
+- SELL 5,000 @ $76.05 (target) = $380,250
+- Gross: **+$4,450**
+- Costs: 5,000 × $0.02 RT = **$100**
+- **Net: +$4,350**
+
+**Session net: +$4,350 on the one validated ignition (synthetic; setup B's −$1,300 fade is the veto's tuition receipt — demonstrates the gate arithmetic, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The jump is a clean +1.4% with RVOL 3.2× and a textbook post-jump drift — real jumps are often ±0.5% with ambiguous drift, and the 5-bar confirmation rule eats half the move waiting for proof. Setup B's "would have lost $1,300" is illustrative counterfactual, not measured. The t+6 fill at 75.16 assumes the post-jump open is orderly; real ignitions gap and the fill slips. The 4.5 LM threshold is an example — the test's size/power tradeoff at 1-minute bars with real microstructure noise is the actual research question, and the answer varies by name. Most importantly: the example shows one jump per session; real sessions have clusters, and clustered jumps are where the two-consecutive-failure stand-down earns its keep.
+
+![T098 worked example — synthetic jump ignition: price with Lee–Mykland flag, t+6 entry, target exit; vetoed setups marked; RVOL panel](images/T098_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 198; the shaded band is the RVOL-funded window; setup B's veto mark sits where the unvalidated momentum faded.*
+
+### T5. Data & infra — what must run
+
+**Feed.** 1-minute bars (SIP-class). The bipower variation needs intraday returns; daily bars don't resolve jumps.
+
+**Jobs.** Per bar: Lee–Mykland statistic on a 60-bar window, RVOL, 5-bar drift check. Trivial compute.
+
+**Storage.** Negligible.
+
+**M5 Max feasibility.** Trivially feasible. Engineering: Tier L per cost-model §5 (4–12 h; one line: 1-min-bar signals, the cheapest §5 tier); planning band **4–12 h ≈ $600–$1,800 loaded-cost estimate** at $150/hr. What breaks first: nothing — the research question (threshold calibration per name) is statistical, not computational.
+
+**Feed-drop failure plan.** Stale bars → the jump test freezes → no new ignitions (fail closed). Open positions keep the midpoint stop as a market-on-resume order.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: free 1-min bars | Everything needed | ~$0, `indicative — verify before budgeting` | $0 | Nothing |
+
+**Verdict: build on Tier-0.** The Lee–Mykland test is 30 lines. There is nothing to buy and no vendor sells "validated jump signals" worth trusting — the threshold calibration is name-specific and therefore inherently yours.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Lee & Mykland (2008), "Jumps in Financial Markets: A New Nonparametric Test and Jump Dynamics" | US equities, intraday | Nonparametric jump test via bipower variation; jumps are frequent and often news-related | Method (detection) | The paper detects jumps; it does not show that post-jump drift is tradable — the momentum leg is this chapter's, not theirs |
+| The intraday momentum literature (e.g., Gao, Han, Li & Zhou) | US equities | First-half-hour returns predict last-half-hour returns (intraday momentum) | Before cost | The documented effect is a specific intraday pattern (open→close), not post-jump continuation generally |
+| Barndorff-Nielsen & Shephard (2004), bipower variation | — | Jump-robust volatility measurement | Method | The volatility input the test needs; not a trading result |
+
+**Honest bottom line.** The jump *detection* is rigorous and published; the jump *continuation trade* is this chapter's construction with thin direct evidence. The credible claim is narrower than the chapter title: validated jumps are a better *universe* for momentum than raw momentum screens — fewer, cleaner setups — not a standalone alpha.
+
+### T8. Failure modes
+
+- **Jump misclassification.** A data error or a single bad print flags a "jump." Mitigation: require the jump bar's volume ≥ 2× mean (example) in addition to RVOL — bad prints are thin.
+- **Threshold sensitivity.** 4.5 is an example; the strategy's trade count swings wildly with it. Mitigation: calibrate per name on the false-discovery rate, not the P&L.
+- **Post-jump reversal.** News jumps often over-shoot and revert — the drift confirmation helps, but the first 5 bars can lie. Mitigation: the midpoint stop is the thesis stop; honor it mechanically.
+- **Clustered jumps.** News days print jump after jump; each new signal re-enters into the same discovery. Mitigation: one ignition per name per session (example); the two-failure stand-down.
+- **Lookahead.** Filling on the jump bar at the pre-jump price. Mitigation: t+6 fills only — stated in T2, unit-tested.
+- **RVOL gaming.** A single block print inflates RVOL without real participation. Mitigation: median-based RVOL (example) instead of mean.
+- **Window contamination.** The 60-bar bipower window spanning an earlier jump overstates local vol and blinds the test to the next jump. Mitigation: jump-robust windowing — exclude previously flagged jump bars from the BV computation (the standard Lee–Mykland implementation detail).
+
+### T9. Visuals
+
+![T098 worked example — synthetic jump-validated momentum ignition with vetoed setups and RVOL gate panel](images/T098_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 198; net +$4,350 after $100 costs; entry at the t+6 open (bar 36).*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(1-min bars)"] -->|"1-min bars"| SIGS["Signals<br/>S064 Lee–Mykland jump,<br/>S025 intraday momentum, S032 RVOL"]
+    SIGS -->|"1-min bars<br/>+ 60-bar bipower window"| ENTRY{"Entry logic<br/>(LM > 4.5 AND RVOL ≥ 2×<br/>AND 5-bar drift confirms;<br/>fill t+6 open)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(0.35% risk to stop;<br/>10% of jump-bar volume cap)"]
+    ENTRY -->|no trigger| WAIT["Wait (vetoed)"]
+    SIZE -->|"marketable limit"| EXEC["Execution<br/>(5-min cancel)"]
+    EXEC -->|"fills net of 2¢/sh RT"| MON["Monitor + exits<br/>(+1.5 jump-range target /<br/>midpoint stop / 90-min)"]
+    MON -->|"net of costs"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Lee, S. S. & Mykland, P. A. (2008). "Jumps in Financial Markets: A New Nonparametric Test and Jump Dynamics." *Review of Financial Studies* 21(6): 2535–2563. https://doi.org/10.1093/rfs/hhm056 — the jump test. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+2. Barndorff-Nielsen, O. E. & Shephard, N. (2004). "Power and Bipower Variation with Stochastic Volatility and Jumps." *Journal of Financial Econometrics* 2(1): 1–37. https://doi.org/10.1093/jjfinec/nbh001 — jump-robust volatility (bipower variation) the test builds on. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+3. Gao, L., Han, Y., Li, S. Z. & Zhou, G. (2018). "Market intraday momentum." *Journal of Financial Economics* 129(2): 394–414. https://doi.org/10.1016/j.jfineco.2018.05.009 — documented intraday momentum pattern (the specific open→close pattern; the post-jump generalization is this chapter's). Identifier re-checked 2026-09-10 via Crossref API (title + journal + year match). Citation note: the prior draft cited an unrelated *Management Science* DOI; the review pass suggested *Review of Financial Studies* 31(7): 2507–2544 for this paper, but that metadata could not be verified — the Crossref-verified record for "Market intraday momentum" is the JFE 129(2) paper above.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All detection/entry thresholds (LM 4.5, RVOL 2.0×, 5-bar drift, 60-bar window) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- No published study validates post-jump continuation as a traded rule at 1-minute horizons; the momentum evidence cited is the specific intraday open→close pattern.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: entry moved to the t+6 open (the 5-bar drift window t+1…t+5 must close first) — Setup A ledger recomputed as $4,450 − $100 = $4,350; Gao–Han–Li–Zhou citation corrected to the Crossref-verified JFE 129(2) paper (DOI 10.1016/j.jfineco.2018.05.009; the suggested RFS 31(7) metadata could not be verified); Lee–Mykland and Barndorff-Nielsen–Shephard DOIs re-checked (resolve, titles match). Engineering mapped to cost-model §5 Tier L (4–12 h, $600–$1,800 loaded-cost estimate). Thresholds are the chapter's own example design values.*
+
+## Stage 199/200 — T099: ADR + Borrow Corporate Arb
+
+*Batch TB10 · Strategy 99/100 · Signals S061, S098, S014 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Cross-listing relative value: long the cheap listing, short the rich one, hedged for FX |
+| **Edge source** | ADR–ordinary parity violations (S061) beyond borrow and FX costs: the ADR trades rich to its FX-adjusted home-market value, so short the ADR / long the ordinary; borrow/short-interest data (S098) prices the short leg's carry, and the spread/cost diagnostic (S014) keeps the trade honest about friction |
+| **Typical holding period** | 3–15 sessions (example); parity gaps close on corporate-action calendars or not at all |
+| **Capacity hint** | $0.5–3M per pair (example) — the borrow desk is the capacity |
+| **Build-or-buy in one line** | Build the parity monitor; rent the borrow — the stock-loan desk is the strategy's counterparty and its cost center |
+
+### T2. Full mechanics
+
+**The idea, plainly.** An **ADR** (American Depositary Receipt) is a US-listed security representing shares of a foreign company, convertible at a fixed ratio. In frictionless markets, ADR price = ordinary price × FX rate × ratio. In practice, the two listings diverge — different investor bases, different hours, different borrow conditions. **FX-adjusted parity** (S061) measures the divergence after converting currencies; **borrow/short-interest data** (S098) tells you what shorting the rich leg costs and whether the borrow can be pulled; the **spread/cost diagnostic** (S014) totals the friction so you only trade gaps bigger than the toll.
+
+**Parity math.** premium_t = (ADR_t − ordinary_t × FX_t × ratio) / (ordinary_t × FX_t × ratio). All inputs timestamp-aligned: the ordinary's close converted at the contemporaneous FX spot — never the ADR price against yesterday's FX.
+
+**Entry rule.** Enter when |premium| ≥ +1.5% (example) in the direction that sells the rich leg: premium positive → short ADR / long ordinary. **Causal timing, stated explicitly: the premium is computed on the day-t close (both listings closed, FX spot at the close); the earliest legal fill is the t+1 open.** The ADR and the ordinary never trade simultaneously in this design — the fill is two t+1 opens, and the overnight FX gap between them is unhedged basis risk.
+
+**Exit rule.** premium ≤ +0.75% (example) → unwind at the next open. Stop: premium widens to +3.0% (example) — the divergence is structural, not noise. Time stop: 15 sessions (example). Corporate-action freeze: no entries 5 sessions around known ADR ratio changes, dividends, or tax events (example).
+
+**Position sizing.** 3,000-share pairs (example), capped by borrow availability: size = min(target, 50% of available borrow, example).
+
+**Borrow economics (S098).** The short ADR leg pays the stock-loan fee daily: borrow_cost = shares × price × rate × days/360. Rates are tiered — general collateral ~0.3% (example), specials 2–50%+ (example). The strategy requires the borrow rate < 2% (example) at entry and re-checks daily; a rate spike above 5% (example) triggers an unwind review.
+
+**Risk limits.** Max 5 pairs (example); single-pair loss stop −2% of sleeve (example); FX basis risk acknowledged, not hedged (the hedge costs more than the gap for sub-2-week holds — stated honestly).
+
+**Cost model.** Per 3,000-share pair: borrow (10 days illustrated), trading 2.0¢/share RT per leg, FX conversion $25 flat (example).
+
+**Order/execution.** Both legs as t+1 open orders; if either leg's open gaps >1% against (example), the pair is skipped — half-filled parity trades are the failure mode.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S061 (FX-adjusted ADR parity) | Trigger | \|premium\| ≥ 1.5% (example); timestamp-aligned FX |
+| S098 (borrow/short-interest) | Cost + feasibility | borrow rate < 2% to enter (example); daily re-check; availability caps size |
+| S014 (spread/cost diagnostic) | Honesty gate | total friction must be < 50% of the premium (example), else skip |
+
+Pseudocode (≤25 lines):
+```
+daily close t:                                              # granularity: daily closes + FX spot
+    prem[t] = (ADR[t] - ORD[t]*FX[t]*ratio) / (ORD[t]*FX[t]*ratio)   # S061
+    fee[t] = borrow_rate(ADR) ; avail[t] = borrow_availability      # S098
+    friction = est_cost(prem)                               # S014
+    if prem[t] >= 1.5% and fee[t] < 2% and friction < 0.5*prem[t]:   # example
+        short ADR / long ORD at next open                   # fill t+1, both legs
+# exits: prem <= 0.75% / prem >= 3.0% stop / 15-session time /
+#        fee > 5% -> unwind review / corp-action freeze
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic pair **EURO** (ADR) vs its home-market ordinary, ratio 1:1, seed 199. Premium computed FX-adjusted.
+
+| Day | Premium | Action |
+|---|---|---|
+| 1–2 | +2.4% → +2.1% | watch (borrow check passes: 1.8%) |
+| 3 | +1.9% | **signal at close** (≥ +1.5%, example) |
+| 4 | +1.7% | **fill at open: SHORT 3,000 ADR @ $52.40 / LONG 3,000 ordinary @ $51.40** |
+| 5–11 | +1.5% → +0.9% | hold; borrow steady at 1.8% |
+| 12 | +0.6% | **signal at close** (≤ +0.75%, example) |
+| 13 | — | **unwind at open: cover ADR @ $50.90 / sell ordinary @ $50.60** |
+
+Ledger (fully costed):
+- Short ADR: sold $52.40, covered $50.90 → +$1.50 × 3,000 = +$4,500
+- Long ordinary: bought $51.40, sold $50.60 → −$0.80 × 3,000 = −$2,400
+- Gross: **+$2,100**
+- Borrow: 10 days × 3,000 × $52.40 × 1.8% / 360 = **$78.60**
+- Trading: 2 legs × 3,000 × $0.02 = $120; FX conversion $25
+- Total costs: **$223.60**
+- **Net: +$1,876**
+
+**Session net: +$1,876 (synthetic; demonstrates the parity/borrow/cost arithmetic — the ordinary leg *loses* money and the trade still works, which is the point of relative value, not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** The premium glides from +1.9% to +0.6% without a single spike — real parity gaps jump on FX moves, and the FX basis between the t close and the t+1 opens is unhedged. The borrow stays at 1.8% for 10 days; real specials spike when everyone finds the same gap, and the unwind-review trigger exists because of exactly that. The ordinary leg's −$0.80 drift is assumed benign; if the home market falls for fundamental reasons, both legs can lose (the ADR falls *less*, but "less" isn't a profit). Corporate actions are assumed away by the freeze rule — in production the freeze list is the research. And the $25 FX flat fee is a retail number; institutional FX costs are spread-based and scale with size.
+
+![T099 worked example — synthetic FX-adjusted ADR premium convergence with t+1 pair entry/exit and borrow-cost accounting](images/T099_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 199; the shaded band is the position window; entry/exit lines are the example thresholds.*
+
+### T5. Data & infra — what must run
+
+**Feed.** ADR prices (US), ordinary prices (home market), FX spot (contemporaneous timestamps), borrow rates + availability (stock-loan desk feed or vendor), corporate-action calendars for both listings.
+
+**Jobs.** Daily: timestamp-aligned parity computation, borrow re-check, friction diagnostic, freeze-list check. The timestamp alignment is the entire engineering problem — the ordinary's close and the FX spot must be contemporaneous, or the "premium" is a clock artifact.
+
+**Storage.** Daily closes + FX + borrow: MB-scale. Trivial.
+
+**M5 Max feasibility.** Trivially feasible. Engineering: Tier M per cost-model §5 (20–60 h; one line: pairs screens + borrow-desk integration); planning band **20–60 h ≈ $3,000–$9,000 loaded-cost estimate** at $150/hr. What breaks first: the borrow feed's timeliness and the corporate-action calendar coverage, not compute.
+
+**Feed-drop failure plan.** If FX or either listing's close is missing: no parity computed, no new pairs (fail closed). Existing pairs keep their stops; borrow re-checks use the last confirmed rate conservatively (assume the higher of last rate and 5%, example).
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Tier-0: free closes + FX | Parity inputs | ~$0, `indicative — verify before budgeting` | $0 | Borrow data is not free; timestamp QA is yours |
+| Borrow data vendor (e.g., S&P, FIS) | Rates + availability | institutional $$, `indicative — verify before budgeting` | Actually tradeable shorts | The real cost of this strategy |
+| Prime broker stock-loan desk | Borrow + execution | relationship-priced, `indicative — verify before budgeting` | One throat to choke | Minimums exclude small accounts |
+
+**Verdict: build the monitor, buy (rent) the borrow.** The parity math is 10 lines; the borrow feed and the desk relationship are the strategy. No borrow data = no strategy — this is the one chapter where the buy decision is existential, not marginal.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Gagnon & Karolyi (2010), "Multi-Market Trading and Arbitrage" | 46 markets, ADRs | ADR–ordinary price deviations exist but are small and short-lived for most pairs; arbitrage is limited by costs | Before cost | The paper's message is cautionary: the gaps this chapter trades are mostly *within* the friction band — the 1.5% example threshold is wide precisely because of this |
+| The ADR parity literature generally | — | Law-of-one-price violations are documented but rarely exceed round-trip costs for liquid pairs | Before cost | The edge, if any, is in less-liquid pairs — where the borrow is also worst. The strategy's opportunity set and its cost set are the same names |
+| D'Avolio (2002), "The Market for Borrowing Stock" | US | Stock-loan fees, specials, and recall risk are quantified | Before cost (market description) | The borrow can be recalled — the unwind-review rule exists because D'Avolio's recalls are real |
+
+**Honest bottom line.** The literature's verdict on ADR arbitrage is closer to "mostly efficient" than "rich with alpha" — the gaps are real but usually sub-friction. This chapter's honest claim: a disciplined parity monitor that trades only wide, borrowable gaps will trade *rarely* — and rarity is the strategy, not a bug. Anyone showing you daily ADR-arb P&L is showing you FX-timing luck or unpaid borrow.
+
+### T8. Failure modes
+
+- **Borrow recall.** The lender recalls the ADR shares mid-trade; you're bought in at the worst print. Mitigation: availability buffer (50% cap), the >5% fee unwind review, and never sizing the short leg beyond what two lenders can cover (example).
+- **FX basis.** The t-close FX ≠ the t+1 fill FX; the "premium" was a clock artifact. Mitigation: contemporaneous timestamps, asserted in code; skip the pair if either timestamp is stale.
+- **Corporate actions.** Ratio changes, special dividends, tax withholdings break parity math silently. Mitigation: the 5-session freeze list; the strategy is *off* more than it's on around events.
+- **Structural premium.** Some ADRs trade persistently rich (index inclusion, retail demand) — the +3.0% stop exists for this. Mitigation: the widening stop; pair-level P&L attribution that flags structural vs noisy pairs.
+- **Half-filled pairs.** One leg fills, the other gaps. Mitigation: the 1% gap-skip rule; both legs as open orders with cancel-replace discipline.
+- **Threshold overfit.** 1.5%/0.75%/3.0% are examples. Mitigation: the friction gate (S014) is the real threshold — the premium must exceed *measured* costs by 2×, whatever the nominal levels.
+
+### T9. Visuals
+
+![T099 worked example — synthetic ADR premium convergence with borrow-costed pair ledger](images/T099_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 199; net +$1,876 after $223.60 fully costed.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(ADR + ordinary closes,<br/>FX spot, borrow feed)"] -->|"daily closes, aligned timestamps<br/>+ daily borrow re-check"| SIGS["Signals<br/>S061 FX-adjusted parity,<br/>S098 borrow, S014 cost diagnostic"]
+    SIGS -->|"daily closes, aligned timestamps<br/>+ daily borrow re-check"| ENTRY{"Entry logic<br/>(premium ≥ 1.5% AND fee < 2%<br/>AND friction < 50% of gap;<br/>fill t+1 both legs)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>(3,000-share pairs;<br/>50% of borrow availability)"]
+    ENTRY -->|no trigger| WAIT["Wait"]
+    SIZE -->|"t+1 open orders"| EXEC["Execution<br/>(1% gap-skip rule)"]
+    EXEC -->|"fills + borrow accrual"| MON["Monitor + exits<br/>(premium ≤ 0.75% /<br/>≥ 3.0% stop / fee spike review)"]
+    MON -->|"net of borrow + costs"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Gagnon, L. & Karolyi, G. A. (2010). "Multi-Market Trading and Arbitrage." *Journal of Financial Economics* 97(1): 53–80. https://doi.org/10.1016/j.jfineco.2010.03.005 — ADR–ordinary deviations are mostly small and short-lived; arbitrage bounded by costs. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+2. D'Avolio, G. (2002). "The Market for Borrowing Stock." *Journal of Financial Economics* 66(2–3): 271–306. https://doi.org/10.1016/S0304-405X(02)00206-4 — stock-loan fees, specials, recall risk. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+3. Rosenthal, L. & Young, C. (1990). "The Seemingly Anomalous Price Behavior of Royal Dutch/Shell and Unilever N.V./PLC." *Journal of Financial Economics* 26(1): 123–141. https://doi.org/10.1016/0304-405X(90)90015-R — the classic Siamese-twin relative-value study; parity gaps can persist (the cautionary tale for the +3.0% stop). Identifier re-checked 2026-09-10 via Crossref API (title + journal + year match); the prior draft's DOI (…90012-3) returns 404 and was replaced.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All parity/borrow thresholds (1.5%, 0.75%, 3.0%, 2%/5% fees, 15-session time stop) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- The $25 FX fee and 1.8% borrow rate are illustrative; institutional FX is spread-based and specials spike.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: Rosenthal–Young DOI corrected to the Crossref-verified 10.1016/0304-405X(90)90015-R (the prior DOI returned 404); Gagnon–Karolyi and D'Avolio DOIs re-checked (resolve, titles match). Engineering corrected to the cost-model §5 Tier M band exactly (20–60 h, $3,000–$9,000 loaded-cost estimate). Thresholds are the chapter's own example design values.*
+
+## Stage 200/200 — T100: Grand Ensemble — 100 Signals, One Book
+
+*Batch TB10 · Strategy 100/100 · Signals S082, S086, S088 · Provenance [D/SR]*
+
+### T1. One-line verdict
+
+| | |
+|---|---|
+| **Style** | Meta-strategy: a stacking ensemble over the batch's own signals, gated by meta-labels, validated by purged/embargoed cross-validation |
+| **Edge source** | No new alpha — the ensemble's edge is *selection*: DeepLOB-style microstructure predictions (S082) feed a stacker whose trades are vetoed/sized by meta-labels (S086), and every performance claim survives purged/embargoed CV (S088) before it counts |
+| **Typical holding period** | Whatever the stacked signals dictate (minutes to sessions); the ensemble is a portfolio, not a clock |
+| **Capacity hint** | $5–20M (example) — diversified across the batch's strategies; the meta-gate's fill-rate haircut is the binding constraint |
+| **Build-or-buy in one line** | Build the stacker and the validation harness; the components are the previous 99 chapters — this chapter is the roof, not another room |
+
+### T2. Full mechanics
+
+**The idea, plainly.** This chapter assembles the batch into one machine. **DeepLOB** (S082) is a deep-learning model that predicts short-horizon price moves from limit-order-book images — its *prediction accuracy is not executable P&L* (the canon warning, honored here: accuracy ≠ profit after costs, latency, and queue position). **Stacking** trains a meta-model on the *outputs* of base strategies (their signals, not their P&L) to produce one combined position. **Meta-labeling** (S086) gives the second opinion that vetoes or sizes each stacked trade. **Purged/embargoed CV** (S088) is the validation discipline: purge training samples whose labels overlap test samples in time, and embargo a gap after each test block — without it, every backtest in this batch is optimistic.
+
+**What this chapter is not.** It is a **synthetic worked example, not a production book**. The weights below are illustrative. No live capital allocation is described or implied. The chapter's purpose is to demonstrate the *assembly and validation mechanics* — how the pieces combine and how the honesty checks work — on synthetic data.
+
+**Architecture (illustrative weights).** Base layer: five signal-strategies from this batch (T091 book-pressure, T093 options-lead, T094 squeeze-breakout, T096 Kalman-trend, T098 jump-momentum), each emitting a standardized score per bar. Stacking layer: logistic regression (example) on the five scores, trained on triple-barrier labels (S086's companion method): each training event is labeled +1 if the upper barrier (+1.25 × daily σ, example) is touched first within τ = 2 days (example), −1 if the lower barrier (0.90×, example) first, 0 on timeout. Meta layer: gradient-boosted p̂ per stacked trade; trade only if p̂ ≥ 0.58 (example); size multiplier 0.4×/1.0×/1.4× for p̂ in [0.55, 0.58)/[0.58, 0.78)/[0.78, 1] (example bands).
+
+**Causal timing, stated explicitly.** Base scores computed on bar t; the stacker combines them at t; the meta-label scores at t; the earliest legal fill is t+1. The triple-barrier labels are computed with a τ-day forward window *in training only* — in live trading there is no label, only the model. The embargo gap in validation is 5 sessions (example).
+
+**Sizing.** Unit risk $2,500 per stacked trade (example); the meta multiplier scales it. Max 3 concurrent stacked positions (example).
+
+**Risk limits.** The meta-gate *is* the risk system, plus: daily sleeve stop −2% (example); if the stacker's live p̂ calibration drifts (predicted vs realized win rate diverges by >10pp over 50 trades, example), the ensemble stands down for refit.
+
+**Cost model.** $80 per unit round-trip all-in (example: spread + fees + estimated impact on the blended book).
+
+**Order/execution.** The ensemble emits one net position per name per bar; execution is the base strategies' logic netted — no double-trading.
+
+### T3. Signals it consumes
+
+| Signal | Role | Weight / logic |
+|---|---|---|
+| S082 (DeepLOB microstructure prediction) | One base-model input to the stacker | illustrative weight in the stacking regression; accuracy ≠ P&L |
+| S086 (meta-labeling + triple-barrier labels) | Trade gate + sizer; label method for training | p̂ ≥ 0.58 to trade (example); 0.4×/1.0×/1.4× bands (example) |
+| S088 (purged/embargoed CV) | Validation discipline | purge overlapping labels; 5-session embargo (example); no claim without it |
+
+Plus the base strategies' own signals (S005, S071, S030, S077, S064 families) as stacking inputs.
+
+Pseudocode (≤25 lines):
+```
+# TRAINING (research only):
+labels = triple_barrier(returns, u=1.25, d=0.90, tau=2d)   # S086 method, example
+stacker = fit_logreg(base_scores, labels, purged_embargoed_cv)  # S088, 5d embargo
+meta = fit_gbm(trade_features, trade_outcomes, purged_cv)  # S086
+# LIVE, every bar t:                                        # granularity: 1-min bars
+scores[t] = [T091[t], T093[t], T094[t], T096[t], T098[t]]   # base signals, bar t
+stack[t] = stacker.predict(scores[t])                       # combined score
+p = meta.predict_proba(features[t])                         # second opinion
+if p >= 0.58:                                               # example gate
+    size = unit_risk * band_multiplier(p)                   # 0.4/1.0/1.4x, example
+    trade stack[t] direction at next bar open               # fill t+1, never t
+```
+
+### T4. Worked example — numbers + P&L (SYNTHETIC)
+
+Synthetic 5-event stacking walk, seed 200. Unit risk $2,500; $80 cost per unit round-trip. **This is a synthetic worked example of the assembly mechanics, not a production book; all weights illustrative.**
+
+| Event | Meta p̂ | Size | Gross (illustrative) | Cost | Net |
+|---|---|---|---|---|---|
+| 1 | 0.71 | 1.0× | +$3,100 | $80 | **+$3,020** |
+| 2 | 0.52 | 0 (vetoed) | — | $0 | $0 |
+| 3 | 0.81 | 1.4× | +$1,960 | $112 | **+$1,848** |
+| 4 | 0.66 | 1.0× | −$2,250 | $80 | **−$2,330** |
+| 5 | 0.61 | 0.4× | +$1,120 | $32 | **+$1,088** |
+
+**Gross ledger:** +$3,100 + $1,960 − $2,250 + $1,120 = **+$5,930**
+**Cost ledger:** $80 + $112 + $80 + $32 = **$304**
+**Net (gated): +$5,930 − $304 = +$3,626**
+
+**Counterfactual (ungated):** event 2 taken short at 1.0× (illustrative −$2,980 net) and event 5 at full 1.0× (illustrative +$2,720 net): +$3,020 − $2,980 + $1,848 − $2,330 + $2,720 = **+$2,278**.
+
+**Session net: +$3,626 gated vs +$2,278 ungated (synthetic; the meta-gate's value is the vetoed event-2 loss and the under-sized event-5 win — selection, not prediction; not forward alpha or after-cost profitability).**
+
+**Where the example is optimistic.** Five events is a demonstration, not a sample — the meta-model's p̂ values are *assigned*, not estimated, so the gate's "skill" is assumed, not measured. Real meta-labels need hundreds of labeled trades to calibrate (T092's warning), and the 0.58/0.78 bands are example values. The stacking weights are illustrative — real stacking on five correlated base strategies mostly learns to average them, and the averaging dilutes the best one. The purged/embargoed CV is *described* but the example doesn't show it failing — in practice it's where most ensemble dreams end. Event 4's −$2,330 loss passes the gate (p̂ = 0.66) because meta-labels are probabilistic, not oracular — the example is honest about that, at least.
+
+![T100 worked example — synthetic 5-event stacking walk: gated vs ungated cumulative net, with meta p̂ and size bands](images/T100_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 200; the gated walk ends at +$3,626, the ungated at +$2,278; the lower panel shows p̂ with the example gate bands.*
+
+### T5. Data & infra — what must run
+
+**Feed.** Everything the base strategies need (L1/L2, options, daily bars) — the ensemble adds no new data, only new compute.
+
+**Jobs.** Per bar: five base scores, one stacking inference, one meta inference. Daily/weekly: refit the stacker and meta-model on the purged/embargoed scheme; monitor p̂ calibration.
+
+**Storage.** The base strategies' storage plus the trade-outcome database for meta-label training (GB-scale over a year).
+
+**M5 Max feasibility.** Inference per bar is microseconds × 7 models; the weekly refit with purged CV is the only real job — minutes to low hours depending on history length. Verdict: **feasible**. Engineering: Tier M+ (40–100 h) for the stacking/validation harness *given the base strategies exist*; planning band **40–100 h ≈ $6k–$15k loaded-cost estimate** at $150/hr. What breaks first: the validation discipline — purged/embargoed CV on an expanding history is an organizational commitment, not a compute problem.
+
+**Feed-drop failure plan.** If any base strategy's feed drops: its score freezes at the last computed value and is *excluded* from the stacker input (fail closed — a stale score is worse than a missing one); the stacker runs on the remaining scores with a logged warning.
+
+### T6. Buy vs build
+
+| Option | What you get | Indicative price | Gains | Loses |
+|---|---|---|---|---|
+| Build on the batch's components | The ensemble | engineering hours, `indicative — verify before budgeting` | Everything is auditable | You maintain 7 models' causality discipline |
+| Buy an "AI ensemble" platform | Prebuilt stacking | institutional $$, `indicative — verify before budgeting` | Saves the harness | Black-box p̂ you can't validate with S088 |
+
+**Verdict: build.** The ensemble's entire value proposition is *auditability* — purged/embargoed validation of every claim. A bought black box defeats the chapter's purpose. The components are the previous 99 chapters; this chapter is integration labor.
+
+### T7. Success-ratio evidence
+
+Published, checkable sources only; figures before-cost unless stated.
+
+| Study | Market & period | Finding | Before/after cost | Caveat |
+|---|---|---|---|---|
+| Zhang, Zohren & Roberts (2019), "DeepLOB: Deep Convolutional Neural Networks for Limit Order Books" | LOB data (LSE) | CNNs predict short-horizon mid-price moves with accuracy well above chance | Before cost (accuracy) | The canon warning, stated plainly: prediction accuracy is not executable P&L — latency, queue position, and costs are unmodeled |
+| López de Prado (2018), *Advances in Financial Machine Learning* | — | Meta-labeling improves the primary's precision; Ch. 7 details purged/embargoed CV | Method | The validation method is the point: without S088, the ensemble's backtest is fiction |
+| Gu, Kelly & Xiu (2020), "Empirical Asset Pricing via Machine Learning" | US equities | ML (trees, nets) improves return prediction vs linear baselines; DOI 10.1093/rfs/hhaa009 | Before cost | Monthly cross-sectional prediction, not intraday stacking — the method transfers, the numbers don't |
+| McLean & Pontiff (2016) | 97 anomalies | Predictability decays 26% out-of-sample, 58% post-publication; DOI 10.1111/jofi.12365 | After cost (returns) | The graveyard this ensemble is trying not to join: any stacked edge decays, and the meta-gate must be re-estimated continuously |
+
+**Honest bottom line.** The components have real published support; the *assembly* — stacking five batch strategies under a meta-gate with honest validation — has no published P&L evidence and isn't claimed to. This chapter's deliverable is the harness and the discipline: the ensemble that survives S088 with its Sharpe intact is the only one allowed to trade, and most won't survive.
+
+### T8. Failure modes
+
+- **Correlated base strategies.** The five inputs all lose on the same day; the stacker diversifies nothing. Mitigation: the stacker is trained on *joint* outcomes, and the sleeve stop is on the ensemble, not the parts.
+- **Meta-label overfitting.** p̂ memorizes the training period's luck. Mitigation: S088 on the meta-model too — purged/embargoed CV applies recursively, all the way down.
+- **Calibration drift.** Live p̂ diverges from realized win rates. Mitigation: the 10pp/50-trade stand-down rule; scheduled refits.
+- **DeepLOB accuracy ≠ P&L.** The base model's accuracy is measured on mid-price moves; the trade pays spread and latency. Mitigation: the base strategy's own cost model (T091's) already haircuts it; the stacker never sees raw accuracy.
+- **Validation theater.** Purged CV with a too-short embargo, or labels leaking through corporate actions. Mitigation: the harness asserts embargo > max label horizon; audit the purge, don't assume it.
+- **Complexity collapse.** Seven models, seven failure modes, one incident at 3 a.m. Mitigation: the ensemble must beat the *best single base strategy* net of all costs in purged CV, or it doesn't ship — simplicity is the default.
+
+### T9. Visuals
+
+![T100 worked example — synthetic stacking walk: gated vs ungated net with meta p̂ size bands](images/T100_example.png)
+
+*Chart caption: synthetic data — not market data. Watermark reads "SYNTHETIC EXAMPLE" exactly. Seed 200; gross +$5,930, costs $304, gated net +$3,626.*
+
+```mermaid
+flowchart TD
+    DATA["Market data<br/>(all batch feeds:<br/>L1/L2, options, dailies)"] -->|"all batch feeds<br/>(L1/L2, options, dailies)"| SIGS["Signals<br/>S082 DeepLOB + base strategies'<br/>scores; S086 meta p̂; S088 validation"]
+    SIGS -->|"bar-t scores<br/>+ purged/embargoed training"| ENTRY{"Ensemble logic<br/>(stacker combines 5 scores;<br/>meta p̂ ≥ 0.58 gates;<br/>fill t+1)"}
+    ENTRY -->|trigger| SIZE["Sizing + risk<br/>($2,500 unit risk ×<br/>0.4/1.0/1.4 bands)"]
+    ENTRY -->|veto| WAIT["Wait"]
+    SIZE -->|"netted orders"| EXEC["Execution<br/>(base strategies'<br/>logic, netted)"]
+    EXEC -->|"fills net of $80/unit"| MON["Monitor + exits<br/>(calibration drift<br/>stand-down rule)"]
+    MON -->|"gross and costed ledgers"| PNL["P&L (net of costs)"]
+    style ENTRY fill:#f9e79f,stroke:#7d6608
+    style PNL fill:#a9dfbf,stroke:#1e8449
+```
+
+### T10. Sources
+
+1. Zhang, Z., Zohren, S. & Roberts, S. (2019). "DeepLOB: Deep Convolutional Neural Networks for Limit Order Books." *IEEE Transactions on Neural Networks and Learning Systems* 30(11). https://arxiv.org/abs/1808.03668 — LOB-based short-horizon prediction; accuracy ≠ P&L (the canon warning). arXiv API re-checked 2026-09-10 — title matches.
+2. López de Prado, M. M. (2018). *Advances in Financial Machine Learning.* Wiley. https://www.wiley.com/en-us/9781119482086 — meta-labeling (Ch. 3), triple-barrier labels (Ch. 3), purged/embargoed CV (Ch. 7). Wiley page returned HTTP 403 on re-check 2026-09-10 — identifier not re-verified this pass; citation inherited from S086/S088's S12.
+3. Gu, S., Kelly, B. & Xiu, D. (2020). "Empirical Asset Pricing via Machine Learning." *Review of Financial Studies* 33(5): 2223–2273. https://doi.org/10.1093/rfs/hhaa009 — ML return prediction vs linear baselines. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+4. McLean, R. D. & Pontiff, J. (2016). "Does Academic Research Destroy Stock Return Predictability?" *Journal of Finance* 71(1): 137–188. https://doi.org/10.1111/jofi.12365 — 26% lower out-of-sample, 58% lower post-publication. DOI re-checked 2026-09-10 in this batch's rework pass — resolves with matching title.
+
+**Unverified leads** (not confirmed facts — verify before use):
+- All ensemble parameters (unit risk $2,500, p̂ bands 0.55/0.58/0.78, multipliers 0.4×/1.0×/1.4×, triple-barrier u=1.25/d=0.90/τ=2d, 5-session embargo, $80/unit costs) are the chapter's own `example` design values (2026-09-10), not published recommendations.
+- No published study validates this stacked ensemble as a traded strategy; the chapter is a synthetic assembly example.
+
+*Source log (2026-09-10 rework pass): batch research Q-labels removed from this chapter. Re-checked 2026-09-10: heading corrected to plan.md's exact strategy name; DeepLOB arXiv identifier re-checked via arXiv API (title matches); Gu–Kelly–Xiu and McLean–Pontiff DOIs re-checked (resolve, titles match); the Wiley publisher page returned HTTP 403 and was not re-verified. Ensemble parameters are the chapter's own example design values.*
