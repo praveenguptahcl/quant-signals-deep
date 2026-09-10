@@ -117,3 +117,4 @@
 - 2026-09-10 ~19:45 UTC: pushed acd5c55 "Stage 50/200: merged SB5 (10/10 approved)" -> origin/main OK (fetch clean). Verified: 10/10 plots exit 0, 50/50 in-doc anchors resolve, header Stage 50/200.
 - 2026-09-10 ~19:52 UTC: pushed bf1bab4 "Stage 60/200: merged SB6 (10/10 approved)" -> origin/main OK (fetch clean). Verified: 10/10 plots exit 0, 60/60 in-doc anchors resolve, header Stage 60/200.
 - 2026-09-10 ~20:00 UTC: pushed 895b90e "Stage 70/200: merged SB7 (10/10 approved)" -> origin/main OK (fetch clean). Verified: 10/10 plots exit 0, 70/70 in-doc anchors resolve, header Stage 70/200.
+- 2026-09-10 ~20:08 UTC: pushed 0c350dd "Stage 80/200: merged SB8 (10/10 approved)" -> origin/main OK (fetch clean). Verified: 10/10 plots exit 0, 80/80 in-doc anchors resolve, header Stage 80/200.
