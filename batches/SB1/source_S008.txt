@@ -1,0 +1,8 @@
+**8. VPIN (flow toxicity)** [D]
+- Intuition: Informed one-sided flow shows up as buy/sell imbalance inside equal-volume buckets; toxicity warns of adverse selection.
+- Formula: Partition the tape into equal-volume buckets of size V = ADV/50 (50 buckets/day default); classify via BVC or tick rule; per-bucket imbalance OI_τ = |V^B_τ − V^S_τ|; VPIN = Σ_{τ=1..n} OI_τ/(n·V) over a rolling *n* buckets.
+- Data: Trade tape with price and size (volume bars, 1-min typical).
+- Sources: Databento, Polygon, Alpaca, TAQ.
+- Horizon: minutes to hours as a toxicity/regime gate.
+- Citations: Easley, López de Prado & O'Hara (2011/2012). **Caveat:** use as a regime filter (widen quotes, cut size), not a directional trigger; post-2011 predictive value is debated.
+- Coverage: R1, G, M, S.

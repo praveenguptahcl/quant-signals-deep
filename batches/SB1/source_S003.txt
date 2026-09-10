@@ -1,0 +1,8 @@
+**3. Queue (depth) imbalance** [D]
+- Intuition: Relative displayed size at best bid vs best ask forecasts the direction of the next mid tick (queue-depletion dynamics).
+- Formula: I_t = (Q^b_t − Q^a_t)/(Q^b_t + Q^a_t) ∈ [−1, 1]. Trade in the direction of *I* when |I| exceeds a fee-covering threshold. N-level extension: Σ_{i=1..N}(Q^b_i − Q^a_i)/Σ_{i=1..N}(Q^b_i + Q^a_i).
+- Data: L1 best-bid/best-ask sizes (quote-event).
+- Sources: Any L1 feed, Databento MBP-1, Polygon L2.
+- Horizon: next 1–20 ticks / 100 ms to seconds.
+- Citations: Gould & Bonart (2016), arXiv:1512.03492; Cao, Hansch & Wang (2009).
+- Coverage: R1, G, M, C.

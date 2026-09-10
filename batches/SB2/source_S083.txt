@@ -1,0 +1,8 @@
+**83. Imbalance/tick/volume/dollar bars** [D]
+- Intuition: Clock bars mix busy and empty minutes; sampling in event/volume/dollar time makes bars informationally uniform; imbalance bars close when signed flow hits a threshold, concentrating information arrival.
+- Formula: Tick bars: every N trades; volume bars: every V shares; dollar bars: every $D traded. Imbalance bars: track θ_T = Σ b_t (b_t = ±1 tick sign); close the bar when |θ_T| ≥ E[θ_T] threshold (rolling expected imbalance).
+- Data: Tick trades.
+- Sources: Any trade feed.
+- Horizon: endogenous bar length (seconds at the open, minutes at lunch); a feature-engineering step.
+- Citations: Easley, López de Prado & O'Hara volume clocks; López de Prado, *Advances in Financial ML* (2018), ch. 2.
+- Coverage: G.

@@ -1,0 +1,8 @@
+**40. VWAP-deviation mean reversion** [SR]
+- Intuition: Institutional flow is benchmarked to VWAP; large deviations tend to snap back as benchmarked algorithms trade back toward their target.
+- Formula: Session VWAP as in entry 24. Deviation d_t = (C_t − VWAP_t)/VWAP_t; standardized z_t = d_t/rolling_std(d). **Example thresholds (not universal):** enter long below −1.5σ, short above +1.5σ; exit inside ±0.25σ, on a time stop, or before late-session benchmark flow. VWAP ± k·σ bands are the same engine drawn as bands. The mirror (entry 24) trades continuation on trend days — estimate the regime rather than assuming it.
+- Data: Minute bars with volume from the session open.
+- Sources: Consolidated tape, Databento, Polygon, Alpaca.
+- Horizon: minutes to a few hours; flat before close.
+- Citations: Practitioner standard (vwap-probability-band-engine; quant-zero knowledge base); mechanism supported by Haendler et al. (2025) — VWAP-like trading drives open-periodicity patterns.
+- Coverage: R1, T, C.

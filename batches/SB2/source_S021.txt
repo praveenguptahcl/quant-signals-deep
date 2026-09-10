@@ -1,0 +1,8 @@
+**21. Opening-range breakout — Crabel (1990)** [D]
+- Intuition: The first minutes auction overnight information; breaking that range signals acceptance of a new value area with directional commitment.
+- Formula: OR_H/OR_L = high/low of the first N minutes (15/30/60 standard). Long if price trades/closes above OR_H (+ stretch filter: break > k × 10-day average opening-bar range, an example); short symmetrically. Optional NR4/NR7 setup filter; target = measured OR multiple. Market-Profile "initial balance" is the 60-minute cousin (entry 22). **Implementation warning:** OHLC bars do not reveal intrabar event ordering — never assume a stop/target was hit after a same-bar limit fill without finer data or conservative ordering assumptions.
+- Data: 1-min OHLC from the session open.
+- Sources: Polygon, Alpaca, Databento OHLCV, CME feeds.
+- Horizon: minutes to cash close; flattened EOD.
+- Citations: Toby Crabel, *Day Trading with Short Term Price Patterns and Opening Range Breakout* (1990); Holmberg, Lönnbark & Lundström on ORB profitability.
+- Coverage: R1, G, T, C.

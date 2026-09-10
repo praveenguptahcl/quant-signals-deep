@@ -1,0 +1,8 @@
+**35. Short-term reversal — Jegadeesh / Lehmann** [D]
+- Intuition: Recent losers bounce and recent winners fade over short horizons — compensation for liquidity provision / overreaction.
+- Formula: Formation weights w_i = −(r_{i,t−1} − r_{m,t−1}) (Lehmann weekly) or prior-month return rank (Jegadeesh); long losers / short winners, equal- or return-weighted. Residual version uses Fama–French residual ε_i instead of raw r (Blitz et al. 2013). Intraday port: rank by the prior 15–60 min return. **Note:** Lehmann's exact weekly portfolio weights were not recoverable from accessible sources — use rank-based long/short deciles and state that.
+- Data: Daily (or weekly) total returns for a broad universe; intraday bars for the port.
+- Sources: CRSP, Polygon, Stooq.
+- Horizon: 1 week–1 month classic; 15 min–1 day intraday port. **Academic horizons ≠ day-trading horizons** — label intraday uses as adaptations.
+- Citations: Jegadeesh (1990); Lehmann (1990); Lo & MacKinlay (1990) document the weekly long-losers/short-winners book and cross-autocorrelation (large stocks lead small).
+- Coverage: G, T, R1.

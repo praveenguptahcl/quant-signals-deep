@@ -1,0 +1,8 @@
+**66. HAR realized-volatility forecast** [D]
+- Intuition: Volatility has daily/weekly/monthly cascade components; a restricted AR on the three beats high-order ARMA — the workhorse for forecasting RV used in execution scheduling and vol targeting.
+- Formula: RV_t = √(Σ_j r²_{t,j}); RV_{t+1} = β_0 + β_d·RV_t + β_w·mean(RV_{t−4..t}) + β_m·mean(RV_{t−21..t}) + ε. Log-HAR variant also documented. Intraday adaptation [SR]: build RV over intraday bins and replace daily/weekly/monthly lags with intraday/session/week lags.
+- Data: Intraday returns to build daily RV (5-min standard).
+- Sources: TAQ, Databento, Polygon minutes.
+- Horizon: next-day to few-days vol forecast.
+- Citations: Corsi (2009); intraday HAR-D/SARIMA (arXiv 2202.08962).
+- Coverage: G, S.

@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*.tmp
+MASTER.lock
+.DS_Store
+.venv/

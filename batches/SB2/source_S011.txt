@@ -1,0 +1,8 @@
+**11. Amihud illiquidity ratio** [D]
+- Intuition: Average absolute return per dollar of trading volume — low-frequency cousin of Kyle's lambda; high-ILLIQ names mean-revert more and cost more to trade.
+- Formula: ILLIQ = (1/D)·Σ_d |r_d|/DVOL_d (often ×10^6). Intraday analog: |r_bar|/DVOL_bar per bar, averaged.
+- Data: Daily OHLCV (classic); minute bars (intraday analog).
+- Sources: CRSP, Polygon, Alpaca, Stooq.
+- Horizon: days–weeks cross-sectional liquidity feature; intraday analog as a slow regime input.
+- Citations: Amihud (2002).
+- Coverage: R1, G, M, C.

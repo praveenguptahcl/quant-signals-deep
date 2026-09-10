@@ -1,0 +1,8 @@
+**63. Range-based realized-volatility estimators** [D]
+- Intuition: High/low/open carry more vol information than close-to-close (5–7× more efficient), with different drift/overnight biases.
+- Formula (per-bar variance, averaged over window): Parkinson: σ² = (ln(H/L))²/(4 ln 2). Garman–Klass: σ² = 0.5·(ln(H/L))² − (2 ln 2 − 1)·(ln(C/O))². Rogers–Satchell (drift-robust): σ² = ln(H/C)·ln(H/O) + ln(L/C)·ln(L/O). Yang–Zhang (handles overnight gaps): σ² = σ²_overnight + k·σ²_open-close + (1−k)·σ²_RS, k ≈ 0.34/(1.34 + (N+1)/(N−1)). Annualize × √(bars/year).
+- Data: OHLC bars (daily or 5-min).
+- Sources: Any OHLCV vendor.
+- Horizon: estimator window 5–30 days (or 30–78 intraday bars); a *state* (sizing input), not a trigger.
+- Citations: Parkinson (1980); Garman & Klass (1980); Rogers & Satchell (1991); Yang & Zhang (2000).
+- Coverage: G, C, S.

@@ -1,0 +1,8 @@
+**1. Order-flow imbalance — Cont–Kukanov–Stoikov (2014)** [D]
+- Intuition: Mid-price changes are driven by net order flow at the touch (adds, cancels, executions), not by trade volume alone; impact is linear in OFI.
+- Formula: Per best-quote event *n*: e_n = ΔW_n − ΔV_n, with bid contribution ΔW_n = q^b_n if P^b_n > P^b_{n−1}; q^b_n − q^b_{n−1} if equal; −q^b_{n−1} if lower; ask contribution ΔV_n = −q^a_{n−1} if P^a_n > P^a_{n−1}; q^a_n − q^a_{n−1} if equal; q^a_n if lower. OFI(T) = Σ_{n∈T} e_n. Price relation: ΔP_k ≈ (1/2D_k)·OFI_k with D_k = average depth. **Caveat:** the original result is a contemporaneous price-impact regression, not by itself a forward trading rule; forward use needs a lead-lag/AR extension.
+- Data: Event-level L1 quotes (best prices + displayed sizes), exchange timestamps.
+- Sources: TAQ, Databento MBP-1, LOBSTER.
+- Horizon: seconds to minutes.
+- Citations: Cont, Kukanov & Stoikov (2014), arXiv:1011.6402.
+- Coverage: R1, G, M, S.

@@ -1,0 +1,8 @@
+**24. VWAP cross & anchored-VWAP continuation** [SR]
+- Intuition: Institutions benchmark to VWAP; a sustained cross on rising volume = regime shift (new accepted value); price extended from VWAP on fading volume mean-reverts.
+- Formula: VWAP_t = Σ_i TP_i·V_i / Σ_i V_i, TP_i = (H_i + L_i + C_i)/3, from the session open (anchored-from-event variants reset the anchor). Cross: price crosses VWAP and holds N bars → continuation; reversion variant: |P − VWAP|/VWAP > threshold → fade toward VWAP (see entry 40 for the reversal leg). Exact participation-vs-fade logic in bank algos is proprietary.
+- Data: 1-min OHLCV with volume.
+- Sources: Databento, Polygon, Alpaca, any consolidated-tape vendor.
+- Horizon: minutes to close (session-path-dependent).
+- Citations: Berkowitz, Logue & Noser (1988); Madhavan; Kissell (VWAP benchmark literature).
+- Coverage: R1, G, T, C.

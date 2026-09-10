@@ -1,0 +1,8 @@
+**43. Internal Bar Strength (IBS) mean reversion** [SR]
+- Intuition: Where a bar closes within its range reveals intraday buying/selling exhaustion; extreme closes revert next period.
+- Formula: IBS = (Close − Low)/(High − Low) ∈ [0,1]. **Example rule:** buy when IBS < 0.2; exit when IBS ≥ 0.5. **Caveat:** the entry requires the bar's close — execution is on the next bar.
+- Data: Daily or minute OHLC bars.
+- Sources: Any OHLCV vendor.
+- Horizon: 1 day (daily); sub-session on minute bars.
+- Citations: Practitioner-documented (spx-0dte-rl mean-reversion factors doc — flag: file path unverified at research time).
+- Coverage: T.

@@ -1,0 +1,8 @@
+**6. Signed trade imbalance (volume delta)** [SR]
+- Intuition: Net aggressive buy-minus-sell volume is the realized demand shock market makers must absorb; it pushes price.
+- Formula: TI_t = Σ_{i∈window} ε_i·V_i (ε_i = ±1 aggressor side), or normalized (V_buy − V_sell)/(V_buy + V_sell); often z-scored against a trailing window. Predictive regression form: r_{t+1} = a + b·OIB_t + controls.
+- Data: Tick trades + classification (entry 7); best with exchange aggressor flags.
+- Sources: TAQ, Databento trades, Polygon, Nasdaq ITCH/CME MDP.
+- Horizon: seconds to minutes; continuous state variable.
+- Citations: Kyle (1985) origin; Chordia, Roll & Subrahmanyam (2002) for OIB return predictability.
+- Coverage: R1, G, M, C.

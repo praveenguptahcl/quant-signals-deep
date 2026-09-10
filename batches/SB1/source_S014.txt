@@ -1,0 +1,8 @@
+**14. Quoted / effective / realized spread & price-impact decomposition** [D]
+- Intuition: Quoted spread is advertised cost; effective spread is what the aggressor actually paid vs mid; realized spread (vs delayed mid) separates realized profit from adverse selection.
+- Formula: Quoted = P_a − P_b (half quoted = 100·(P_a − P_b)/(2·mid)). Effective = 2·D·(P − M), D = ±1 trade direction, M = prevailing mid. Realized = 2·D·(M_{t+Δ} − M) (Δ ≈ 5 min). Price impact = effective − realized.
+- Data: Trades + contemporaneous NBBO.
+- Sources: TAQ, Databento MBP-1, L1 feeds.
+- Horizon: per-trade measurement; aggregated over minutes–days as cost/adverse-selection diagnostics.
+- Citations: Huang & Stoll (1996); Goyenko, Holden & Trzcinka (2009); SEC MIDAS conventions.
+- Coverage: R1, G, M.

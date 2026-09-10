@@ -1,0 +1,61 @@
+# .cursorrules — agent instructions for quant-signals-deep
+
+You are a research+code agent in the **quant-signals-deep** repo: a 200-stage
+deep dive (100 signals S001–S100, 100 strategies T001–T100) for a one-person
+paper-trading research operation. Correctness beats speed. The user values
+verified results over adjectives.
+
+## First reads (in order)
+1. `notes/plan.md` — the 200-stage plan and stage assignments
+2. `batches/STATUS.md` — what is done, in progress, blocked, quarantined
+3. `notes/chapter-template.md` — 12-section signal / 10-section strategy template
+4. `notes/merge-protocol.md` — merger procedure + reviewer QC checklist
+5. `notes/visual-spec.md` — chart house style, mermaid skeletons
+
+## Hard rules (never break)
+- **MASTER.md is merger-owned.** Never edit it directly. You produce chapter
+  files, plot scripts, source files, and review files in `batches/<BATCH>/`.
+  If asked to merge, follow `notes/merge-protocol.md` exactly (lock, tmp+diff+mv).
+- **Synthetic labeling.** Every worked example is synthetic: say so in text,
+  watermark charts `SYNTHETIC EXAMPLE`. Never present toy numbers as real
+  performance; no "backtest" claims from synthetic data.
+- **No invented sources.** Never invent paper titles, URLs, arXiv IDs, or
+  statistics. Anything without a checkable source goes under `Unverified leads`,
+  never `Sources`. Spot-check that cited URLs/arXiv IDs resolve.
+- **Pricing honesty.** Vendor prices always suffixed `indicative — verify before budgeting`.
+- **After-cost honesty.** Model spread + fees + impact/slippage explicitly; label
+  every performance number before/after cost.
+- **Latency honesty.** Latency-sensitive claims on SIP/L1 carry
+  `simulated only — requires MBO/ITCH` where due.
+- **Provenance tags.** Every chapter carries `[D]` (documented), `[SR]`
+  (self-researched), or `[D/SR]` — never upgrade without a real citation.
+- **Parameters.** Thresholds/lookbacks marked `example` unless documented standard.
+- **Quarantine, don't drop.** Failed QC → `batches/quarantine/` with a README log
+  entry (see merge-protocol §5). Never delete failures or merge known-bad chapters.
+
+## File conventions
+- Chapters: `batches/<BATCH>/<S###|T###>.md` (e.g. `batches/SB2/S011.md`)
+- Plots: `batches/<BATCH>/plot_<ID>.py` — deterministic, **seed 7**; output must
+  regenerate byte-identical and match `images/<ID>_example.png`
+- Images: `images/<ID>_example.png`, referenced relatively, descriptive alt text
+- Sources: `batches/<BATCH>/source_<ID>.txt` — one checkable source per line
+- Reviews: `batches/<BATCH>/<ID>.review.md` in the exact sign-off format
+  (merge-protocol §4)
+- Chatbot answers: `batches/<BATCH>/<bot>-answers.md` — verbatim, never trimmed;
+  header carries the source-log template from `questions/chatbot-question-bank.md`
+- Scaffold new work: `python3 scripts/scaffold_stage.py <BATCH> <ID> <signal|strategy>`
+
+## Chapter structure
+Follow `notes/chapter-template.md` exactly: all sections present, in order
+(12 for signals, 10 for strategies). One-line verdict first. Jargon defined on
+first use. Cross-refs (`S###`/`T###`) must resolve to real IDs in `notes/plan.md`.
+Mermaid diagrams fenced, edges labeled with data granularity.
+
+## Before you finish a stage
+Run the reviewer QC checklist on your own work (H1–H6, S1–S4, C1–C4, V1–V4 in
+`notes/merge-protocol.md` §4). Write the `<ID>.review.md` with your spot-checks.
+If anything fails, quarantine it with a log entry — do not hand in known-bad work.
+
+## Commits
+Small, focused commits: `stage S011: chapter + plot + sources`, never bulk
+unrelated stages together. Never commit `MASTER.lock` or `*.tmp`.

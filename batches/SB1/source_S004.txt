@@ -1,0 +1,8 @@
+**4. Microprice (Stoikov)** [D]
+- Intuition: The size-weighted (cross-weighted) mid is an unbiased short-horizon estimator of the "true" price — better than the plain mid.
+- Formula: P_μ = (Q^a·P^b + Q^b·P^a)/(Q^b + Q^a) (bid price weighted by ask size and vice versa). Signal = P_μ − mid; fade deviations. N-level version uses cumulative sizes over *N* levels.
+- Data: L1 quotes with sizes (L2 for the N-level version).
+- Sources: Any L1 feed, Databento.
+- Horizon: seconds.
+- Citations: Stoikov (2018), "The Micro-Price"; Cartea, Jaimungal & Penalva (2015) §10. **Note:** the closed-form weighted mid is the common implementation; Stoikov's full state-transition microprice derives the adjustment from imbalance-state dynamics — do not double-count with entry 3.
+- Coverage: R1, G, M, S.

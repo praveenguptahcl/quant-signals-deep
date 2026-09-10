@@ -1,0 +1,8 @@
+**32. Relative-volume (RVOL) filtered breakout** [SR]
+- Intuition: Breakouts on genuine participation (vs the time-of-day norm) are acceptance; low-volume breaks are head-fakes.
+- Formula (standard reconstruction): RVOL = Volume_window / mean(Volume at the same time-of-day over trailing N days) — time-of-day matching removes the U-shape (entry 71); valid breakout requires the price break + RVOL > 1.5–2 (example).
+- Data: 1-min OHLCV with an RTH calendar.
+- Sources: Polygon, Alpaca, Databento.
+- Horizon: minutes–hours.
+- Citations: Practitioner standard; options-flow variant documented in the Stanford CS229 project (unusual options volume rule: volume > 2× daily average AND ≥ 500 contracts).
+- Coverage: G, S.

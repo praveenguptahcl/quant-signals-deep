@@ -1,0 +1,8 @@
+**25. Intraday time-series momentum** [D]
+- Intuition: Recent signed returns continue over the next minutes/hours in some futures/liquid names.
+- Formula: Signal = sign(Σ_{i=1..L} r_{t−i}) over lookback L (10 min to a few hours), flat/exponential weighting, volatility-scaled sizing; skip the opening minutes, flatten before close.
+- Data: 1-min or tick mid returns; futures preferred (less noise).
+- Sources: Any intraday feed; CME/Databento for futures.
+- Horizon: 15 min–several hours; closed EOD.
+- Citations: Moskowitz, Ooi & Pedersen (2012) (daily/monthly origin); intraday adaptations in Gao et al. lineage and working papers.
+- Coverage: G, T, C.

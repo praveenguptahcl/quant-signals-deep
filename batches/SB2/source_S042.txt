@@ -1,0 +1,8 @@
+**42. RSI / RSI-2 mean reversion (Connors-style)** [D/SR]
+- Intuition: Extreme relative strength is a stretched oscillator; in an intact uptrend a violent 2-period washout is dominated by short-term liquidation and snaps back.
+- Formula: RS = SMMA(gains,n)/SMMA(losses,n) (Wilder smoothing); RSI = 100 − 100/(1+RS). Generic fade (example): short on cross down through 70, cover toward 50 (inverse at 30). Connors rule (documented practitioner): buy when the daily close is above the 200-day SMA **and** 2-period RSI < 10; exit when the close is above the 5-day SMA; stop ≈ 5% adverse (example). Intraday adaptation applies the same construction to minute bars with shorter trend filters [SR].
+- Data: OHLC bars (1–15 min or daily); daily + 200-day SMA for the Connors form.
+- Sources: Any OHLCV vendor.
+- Horizon: 15–90 min on 5-min RSI; 1–5 days on the daily Connors form.
+- Citations: Wilder (1978); Connors practitioner rule.
+- Coverage: G, T, C.

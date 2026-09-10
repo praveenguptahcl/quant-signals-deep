@@ -1,0 +1,8 @@
+**13. Corwin–Schultz high-low spread estimator** [D]
+- Intuition: Two consecutive single-period high-low ranges contain volatility; the two-period range adds the spread — comparing them isolates the bid-ask spread from OHLC data alone.
+- Formula: β = ln²(H_t/L_t) + ln²(H_{t+1}/L_{t+1}); γ = ln²(max(H_t,H_{t+1})/min(L_t,L_{t+1})); α = [√(2β) − √β]/(3 − 2√2) − √[γ/(3 − 2√2)]; S = 2(e^α − 1)/(1 + e^α), floored at 0. Original includes an overnight-gap adjustment.
+- Data: Consecutive OHLC highs/lows.
+- Sources: Any OHLCV feed.
+- Horizon: daily native; intraday session blocks only with validation; a cost input, not a trigger.
+- Citations: Corwin & Schultz (2012).
+- Coverage: M, C.

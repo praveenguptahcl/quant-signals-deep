@@ -1,0 +1,8 @@
+**27. End-of-day momentum / last-hour drift** [D]
+- Intuition: The last 30–60 min concentrate MOC flows, hedge rebalances, and continuation of the day's trend.
+- Formula: Signal = sign(return open→15:30) held to close; or sign(first-half return) → last-half position (entry 26). Microstructure sibling: trade with published NYSE/NASDAQ MOC imbalance near the freeze.
+- Data: Intraday OHLC + optional official close-imbalance feed (NYSE, NASDAQ).
+- Sources: Polygon, Databento, exchange imbalance feeds.
+- Horizon: 15–90 min; always off by the print.
+- Citations: Intraday-momentum literature (Gao et al.); NYSE imbalance literature.
+- Coverage: G, R1 (2.10/2.11 adjacent), T.
