@@ -1,0 +1,4 @@
+# TYPE: expected-output
+ticket_id,symbol,side,qty,limit,tif,parent_signal,intent_ts,signal_ts,fill_ts,leg,edge_bps,cost_bps,cost_usd,gate,action,reason
+T-T061-2-0,ES,BUY,5,,DAY,S022@1788874320000000000,1788874320000000000,1788874320000000000,1788874380000000000,,8.4,0.8,2.400549,PASS,enter,
+T-T061-6-X,ES,SELL,5,,DAY,S022@1788874560000000000,1788874560000000000,1788874560000000000,1788874620000000000,,0.0,0.8,2.399874,N/A,exit,exit_signal

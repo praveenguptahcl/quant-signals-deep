@@ -1,0 +1,3 @@
+# TYPE: validation-run
+ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
+T076-2,2,BTC-PERP:VENUE,BUY,50,,IOC,1700000600000001000,S096@1700000600000000000,1700000900000000000,35.0000

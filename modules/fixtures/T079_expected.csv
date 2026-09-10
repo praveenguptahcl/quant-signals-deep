@@ -1,0 +1,3 @@
+# TYPE: validation-run
+ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
+T079-0,0,VOL:OPRA,SELL,100,,IOC,1700000000000001000,S070@1700000000000000000,1700000300000000000,72.0000

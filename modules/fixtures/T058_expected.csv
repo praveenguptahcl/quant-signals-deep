@@ -1,0 +1,3 @@
+# TYPE: expected-output
+ticket_id,symbol,side,qty,limit,tif,parent_signal,intent_ts,signal_ts,fill_ts,leg,edge_bps,cost_bps,cost_usd,gate,action,reason
+T-T058-2-0,SPX-DISP,BUY,40,99.9979,DAY,S075@1789047000000000000,1789047000000000000,1789047000000000000,1789133400000000000,,22.5,10.0,4.000916,PASS,enter,
