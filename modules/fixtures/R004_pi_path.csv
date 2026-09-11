@@ -1,0 +1,17 @@
+# TYPE: validation-run
+# R004: injected-pi series pinning the §R2.1 hysteresis state machine
+# (transitions, boundary values, unstable hold/recovery). prev threaded from 'normal'.
+step,inj_pi,exp_state,note
+1,0.9,normal,enter band middle -> normal
+2,0.95,extreme,enter extreme at boundary
+3,0.93,extreme,hold extreme (0.93 > exit 0.92)
+4,0.921,extreme,hold extreme
+5,0.92,normal,exit extreme at boundary
+6,0.9,normal,normal
+7,0.85,low,enter low at boundary
+8,0.87,low,hold low (0.87 < exit 0.88)
+9,0.879,low,hold low
+10,0.88,normal,exit low at boundary
+11,0.96,extreme,re-enter extreme
+12,nan,unstable,non-finite -> unstable (prev valid held)
+13,0.9,normal,"recovery: prev held 'extreme', 0.90 <= 0.92 -> normal"

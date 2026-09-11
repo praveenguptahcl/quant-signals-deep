@@ -1,7 +1,7 @@
 # TYPE: validation-run
-# R011: expected indicator values/states, computed causally from the tape
+# R011 original tape (regenerated): expected indicator values/states, computed causally
 bar,event_ts,exp_value,exp_state,exp_computed_at,exp_module_state
-1,1788220800000000000,0.0000000000,deep,1788220800000000000,OK
+1,1788220800000000000,nan,warming,1788220800000000000,DEGRADED
 2,1788220800000000300,0.0002234679,normal,1788220800000000300,OK
 3,1788220800000000600,0.0001977673,normal,1788220800000000600,OK
 4,1788220800000000900,0.0001930454,normal,1788220800000000900,OK

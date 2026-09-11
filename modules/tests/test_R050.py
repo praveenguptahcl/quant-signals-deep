@@ -1,21 +1,31 @@
-"""R050 — SIP-vs-direct divergence (capability-gated): acceptance tests (concrete sketch).
+"""R050 — SIP-vs-direct divergence (capability-gated): acceptance tests.
 
-Real imports, fixture load, real assertions. Not a production harness.
+The module is capability-gated: on a SIP-only stack it permanently emits
+UNKNOWN. Every test pins that behavior. Any test that would require a
+measured divergence value must FAIL on this stack rather than fabricate one.
 Definition of done: `python3 -m pytest modules/tests/test_R050.py -q` exits 0.
 """
 import csv
 import math
 import os
-import statistics
 
 RID = "R050"
 TOL = 1e-9
 DUAL_TOL = 1e-12
-ESTIMATOR_VERSION = "1.0.0"
+ESTIMATOR_VERSION = "1.1.0"
 CADENCE_NS = 86400000000000
 DATA_VINTAGE = "2026-09-09"
 
-CFG = {"min_lag_bars": 1}
+# The capability gate, pinned in code: SIP-only stack -> no direct feeds.
+CFG = {"min_lag_bars": 1, "direct_feeds_available": False}
+
+# Cost interface (mirrors §R5 COST_ADJUSTMENT_R050 v1.1.0).
+COST_ADJUSTMENT_R050 = {
+    "regime_id": RID, "version": "1.1.0",
+    "UNKNOWN":   {"spread_mult": 1.0, "impact_mult": 1.0, "borrow_mult": 1.0, "fee_add_bps": 0.0},
+    "DIVERGENT": {"spread_mult": 1.5, "impact_mult": 1.3, "borrow_mult": 1.0, "fee_add_bps": 0.0},
+    "CALM":      {"spread_mult": 1.0, "impact_mult": 1.0, "borrow_mult": 1.0, "fee_add_bps": 0.0},
+}
 
 
 def _parse_float(x):
@@ -39,7 +49,9 @@ def _mk(state, value, ts_ns, module_state):
 
 
 def _row_value(e, cfg):
-    return float('nan')  # capability gate: no direct feeds on this stack (F1)
+    # Capability gate (F1): no direct feeds on this stack, so no row can ever
+    # produce a divergence value. SIP-only columns are ignored, not used.
+    return float('nan')
 
 
 def _aggregate(events, vals, cfg):
@@ -61,9 +73,9 @@ def _bounds_ok(value, cfg):
 def detect(state, events, cfg):
     """detect(state, events, cfg) -> list[RegimeState].
 
-    Causal: the label at position t uses only events[:t+1]. Empty input or an
-    unparseable row yields module_state UNKNOWN (F1); out-of-bounds indicator
-    values yield UNKNOWN (F2). Never interpolates.
+    Causal: the label at position t uses only events[:t+1]. The F1 capability
+    gate fires before any arithmetic: without direct feeds every input yields
+    module_state UNKNOWN (never interpolates, never fabricates).
     """
     if not events:
         return [_mk("UNKNOWN", float("nan"), 0, "UNKNOWN")]  # F1
@@ -92,6 +104,19 @@ def apply_freshness(rs, now_ns):
         rs["module_state"] = "UNKNOWN"
         rs["state"] = "UNKNOWN"
     return rs
+
+
+def apply_cost_adjustment(rs, cfg):
+    """§R5: the gate forbids measurable-state adjustments on a SIP-only stack.
+
+    UNKNOWN -> identity record. DIVERGENT/CALM may only be applied when the
+    module actually measured them (module_state OK with direct feeds present);
+    on this stack that path must raise rather than fabricate an adjustment.
+    """
+    if rs["state"] != "UNKNOWN" and not cfg.get("direct_feeds_available", False):
+        raise AssertionError("gate: measurable regime states must never be "
+                             "applied on a SIP-only stack")
+    return COST_ADJUSTMENT_R050.get(rs["state"], COST_ADJUSTMENT_R050["UNKNOWN"])
 
 
 def _load(name):
@@ -134,6 +159,44 @@ def test_no_lookahead():
             assert a["state"] == b["state"], (k, a, b)
             assert a["module_state"] == b["module_state"]
             assert _close(a["value"], b["value"], TOL), (k, a["value"], b["value"])
+
+
+def test_sip_only_input_unknown():
+    """SIP-only events (no direct-feed columns at all) must yield UNKNOWN.
+
+    This is the module's core contract: divergence is unmeasurable on a
+    SIP-only stack, so the honest output is UNKNOWN, never a number.
+    """
+    events = [
+        {"ts_ns": "1789070400000000000", "sip_bid": "100.01", "sip_ask": "100.02"},
+        {"ts_ns": "1789156800000000000", "sip_bid": "100.03", "sip_ask": "100.05"},
+    ]
+    got = detect(None, events, CFG)
+    assert len(got) == 2
+    for rs in got:
+        assert rs["state"] == "UNKNOWN", rs
+        assert rs["module_state"] == "UNKNOWN", rs
+        assert math.isnan(rs["value"]), rs
+
+
+def test_fabrication_guard_rejects_sip_proxy():
+    """A SIP-derived 'divergence' value offered by the Adversary must not be
+    echoed or measured: fixture row 2 carries div_bps=3.4 and must still yield
+    UNKNOWN/NaN."""
+    tape = _load("R050_tape.csv")
+    got = detect(None, [tape[1]], CFG)
+    assert got[0]["state"] == "UNKNOWN", got[0]
+    assert got[0]["module_state"] == "UNKNOWN", got[0]
+    assert math.isnan(got[0]["value"]), got[0]
+
+
+def test_halt_freezes_to_unknown():
+    """A HALT row freezes the module and emits UNKNOWN."""
+    tape = _load("R050_tape.csv")
+    got = detect(None, [tape[2]], CFG)
+    assert got[0]["state"] == "UNKNOWN", got[0]
+    assert got[0]["module_state"] == "UNKNOWN", got[0]
+    assert math.isnan(got[0]["value"])
 
 
 def test_f1_missing_input_unknown():
@@ -180,11 +243,35 @@ def test_f5_no_expost_selection():
         assert rs["computed_at"] >= 0
 
 
+def test_cost_interface_identity_on_unknown():
+    """On this stack every emitted state is UNKNOWN -> identity adjustment.
+
+    If the detector ever drifted into emitting a measurable state, applying it
+    must raise (fabrication), not silently adjust costs.
+    """
+    tape = _load("R050_tape.csv")
+    for rs in detect(None, tape, CFG):
+        adj = apply_cost_adjustment(rs, CFG)
+        assert adj["spread_mult"] == 1.0, adj
+        assert adj["impact_mult"] == 1.0, adj
+        assert adj["borrow_mult"] == 1.0, adj
+        assert adj["fee_add_bps"] == 0.0, adj
+    drifted = _mk("DIVERGENT", 5.0, 1789070400000000000, "OK")
+    try:
+        apply_cost_adjustment(drifted, CFG)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("gate failed: measurable-state adjustment must "
+                             "raise on a SIP-only stack")
+
+
 def test_spot_handcheck():
     """Independently hand-verified arithmetic (see module section R3)."""
     tape = _load('R050_tape.csv')
     got = detect(None, tape, CFG)
-    assert got[0]['state'] == 'UNKNOWN', got[0]
-    assert got[0]['module_state'] == 'UNKNOWN'
-    assert math.isnan(got[0]['value'])
-
+    assert len(got) == 3
+    for rs in got:
+        assert rs['state'] == 'UNKNOWN', rs
+        assert rs['module_state'] == 'UNKNOWN'
+        assert math.isnan(rs['value'])

@@ -1,0 +1,23 @@
+# TYPE: validation-run
+# R012: [example] synthetic trailing ILLIQ history used for the percentile rank (20 values)
+illiq
+0.15
+0.18
+0.2
+0.22
+0.25
+0.28
+0.3
+0.33
+0.35
+0.38
+0.4
+0.45
+0.5
+0.55
+0.6
+0.7
+0.8
+0.9
+1.0
+1.2

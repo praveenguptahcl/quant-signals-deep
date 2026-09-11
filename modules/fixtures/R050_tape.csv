@@ -1,3 +1,5 @@
 # TYPE: validation-run
-ts_ns,div_bps,reason
-1789070400000000000,,no direct feeds on this stack
+ts_ns,div_bps,reason,event_type
+1789070400000000000,,no direct feeds on this stack — SIP-only,CONTINUOUS_TRADING
+1789156800000000000,3.4,SIP-derived proxy offered by Adversary — must be rejected as fabrication,CONTINUOUS_TRADING
+1789243200000000000,,market halt — freeze and UNKNOWN,HALT
