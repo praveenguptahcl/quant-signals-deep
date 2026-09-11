@@ -1,0 +1,12 @@
+# TYPE: validation-run
+# WINDOW_BARS: 60 [default]
+# SCENARIO: row3 missing r_on (F1); row4 non-finite r_on (F1/F2); row5 HALTED -> UNKNOWN + frozen;
+#           row6 SPLIT_UNADJUSTED -> UNKNOWN + Gate-excluded (no fake gap); row7 recovery: value over valid rows {1,2,7} only
+ts_ns,r_on,r_id,event_type
+1788465600000000000,0.004,0.003,BAR
+1788552000000000000,0.001,0.002,BAR
+1788638400000000000,,,BAR
+1788724800000000000,nan,0.001,BAR
+1788811200000000000,0.003,0.002,HALTED
+1788897600000000000,-0.75,0.001,SPLIT_UNADJUSTED
+1788984000000000000,0.005,0.004,BAR
