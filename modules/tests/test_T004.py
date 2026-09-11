@@ -3,6 +3,7 @@
 Run: python3 -m pytest modules/tests/test_T004.py -q
 """
 import csv
+import datetime
 import math
 import os
 
@@ -12,14 +13,22 @@ EXPECTED = os.path.join("modules", "fixtures", "T004_expected.csv")
 TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
+ONE_BAR_NS = 60_000_000_000   # 1-min bar in int64 ns
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T004 COST block (single source of truth)."""
     spread_bps = 8.0    # [example] $0.02 assumed spread @ $50: half/aggressive leg x 2
     fee_bps = 2.0       # [example] $0.005/share each way @ $50 = 1 bps/leg
-    borrow_bps = 0.0    # [default] long-only reference; shorts add C7 locate + borrow
+    borrow_bps = 0.0    # [example] intraday-flat reference (C9); shorts add C7 locate + borrow
     impact_bps = 0.0    # [example] flagged; gap-through in conservative variant only
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+def shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Fenced position-sizing function - T004 §T2 (normative)."""
+    n = risk_budget_R / max(stop_distance, 1e-9)   # [default] floor below
+    n = min(n, ADV_cap * 0.005)                   # 0.5% ADV [default]
+    n = min(n * 50.0, 600000.0) / 50.0           # $600k gross cap [default]
+    return int(n)
 
 def load_csv(path):
     with open(path) as f:
@@ -67,6 +76,33 @@ def test_no_signal_bar_fills():
         fill_event = int(t["fill_ts"])
         signal_event = int(t["signal_ts"])
         assert fill_event > signal_event, "fill_event > signal_event (t->t+1 causality)"
+
+
+def test_timing_box():
+    # signal@t (1-min, America/New_York) -> earliest fill @open(t+1):
+    # every fixture fill is exactly one bar after its signal, and every
+    # signal sits inside the 10:00-15:30 ET trade window (first 30 min excluded)
+    _, tape = load_csv(TAPE)
+    for t in tape:
+        signal_event = int(t["signal_ts"])
+        fill_event = int(t["fill_ts"])
+        assert fill_event - signal_event == ONE_BAR_NS, "fill must be @open(t+1)"
+        utc = datetime.datetime.fromtimestamp(signal_event // 10**9,
+                                              datetime.timezone.utc)
+        et = utc - datetime.timedelta(hours=4)  # EDT in September
+        et_hour = et.hour + et.minute / 60.0 + et.second / 3600.0
+        assert 10.0 <= et_hour < 15.5, f"signal outside trade window: {et}"
+
+
+def test_sizing_function():
+    # §T2 fenced sizing: $300 R / $0.20 stop -> 1500 shares (fixture qty)
+    assert shares(300.0, 0.20, 0.0, 10_000_000, 0.0) == 1500
+    # ADV cap binds: 0.5% of 100k ADV = 500
+    assert shares(300.0, 0.20, 0.0, 100_000, 0.0) == 500
+    # $600k gross cap binds on large R (priced at the $50 reference [example])
+    assert shares(300_000.0, 0.20, 0.0, 10_000_000, 0.0) == 12_000
+    # floor on degenerate stop distance: finite, non-negative
+    assert shares(300.0, 0.0, 0.0, 10_000_000, 0.0) >= 0
 
 
 def test_cost_gate_predicate():

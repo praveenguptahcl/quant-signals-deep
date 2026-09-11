@@ -1,4 +1,4 @@
-# TYPE: validation-run
+# TYPE: validation-run; DATA: synthetic (hand-written tape, seed 102) — accounting demo, not market data
 trade_id,side,qty,entry_px,exit_px,signal_ts,fill_ts,notional,adv_pct,venue,order_side,urgency,spread_bps,fee_bps,borrow_bps,impact_bps,exit_reason
 1,BUY,5000,50.01,50.02,1788960600000000000,1788960601000000000,250050.0,0.05,XNAS,taker,normal,2.0,2.0,0.0,0.0,fair-value convergence
 2,SELL,5000,50.02,50.01,1788960601000000000,1788960602000000000,250100.0,0.05,XNAS,taker,normal,2.0,2.0,0.0,0.0,fair-value convergence

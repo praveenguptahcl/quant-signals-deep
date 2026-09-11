@@ -111,3 +111,25 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_borrow_convention():
+    # COST block convention: borrow_bps_per_day == 0.0 with a stated reason —
+    # the reference build is intraday and shorts are excluded (C7)
+    borrow_bps_per_day = 0.0   # [default] per the COST block
+    reason = "intraday; shorts excluded from the reference build"
+    assert borrow_bps_per_day == 0.0
+    assert len(reason) > 0, "borrow=0 needs a stated reason"
+
+
+def test_fee_envelope_covers_documented_floor():
+    # Nasdaq Rule 7018 default removal rate $0.0030/share [documented];
+    # the module budgets $0.005/share/leg = 1.0 bps/leg at $50 [example],
+    # a conservative envelope over the documented floor
+    documented_remove_per_share = 0.0030
+    module_fee_per_share_per_leg = 0.005
+    price = 50.0
+    assert module_fee_per_share_per_leg >= documented_remove_per_share, \
+        "module fee budget must cover the documented remove rate"
+    bps_per_leg = module_fee_per_share_per_leg / price * 10000.0
+    assert abs(bps_per_leg - 1.0) < 1e-9

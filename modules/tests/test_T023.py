@@ -5,10 +5,12 @@ Run: python3 -m pytest modules/tests/test_T023.py -q
 import csv
 import math
 import os
+import re
 
 SID = "T023"
 TAPE = os.path.join("modules", "fixtures", "T023_tape.csv")
 EXPECTED = os.path.join("modules", "fixtures", "T023_expected.csv")
+SPEC = os.path.join("modules", "strategies", "T023.md")
 TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
@@ -111,3 +113,30 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_spec_cost_block_single_source():
+    # the §T2 COST stack in the spec must match this test's callable exactly
+    with open(SPEC) as f:
+        spec = f.read()
+    for comp in ("spread_bps = 8.0", "fee_bps = 2.0", "borrow_bps = 0.0", "impact_bps = 4.0"):
+        assert comp in spec, f"COST component missing from spec: {comp}"
+    assert "expected_cost_bps(...) <= k * edge_bps" in spec, "cost-gate predicate missing"
+    assert "borrow_bps_per_day" in spec, "borrow_bps_per_day missing"
+    # the test callable and the spec stack must agree numerically
+    m = re.search(r"spread_bps = ([\d.]+).*?fee_bps = ([\d.]+).*?borrow_bps = ([\d.]+).*?impact_bps = ([\d.]+)",
+                  spec, re.S)
+    stack = sum(float(m.group(i)) for i in range(1, 5))
+    assert abs(stack - expected_cost_bps(1.0, 0.1, "XNAS", "taker", "normal")) <= TOL
+
+
+def test_module_version_bump():
+    # deep review v1.0.1: semver bump + changelog entry present
+    with open(SPEC) as f:
+        spec = f.read()
+    assert 'version: "1.0.1"' in spec, "§0 semver bump missing"
+    assert "template_version: 1.0.0" in spec, "template_version missing"
+    assert "Deep review v1.0.1" in spec, "deep-review changelog entry missing"
+    assert "GROK-NEEDED" in spec, "GROK-NEEDED block missing"
+    # timing box is mandatory in §T2
+    assert "signal@t" in spec and "earliest fill @open(t+1)" in spec
