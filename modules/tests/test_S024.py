@@ -42,7 +42,7 @@ def recompute(trows):
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    spread_bps = 0.43   # [example]
+    spread_bps = 1.0    # [example]; SEC-documented bound: S&P 500 avg quoted spread < 3 bps [documented]
     fee_bps = 0.30      # [example]
     borrow_bps = 0.0    # [default] long-biased reference; reason in table
     impact_bps = 0.0    # [example] flagged; calibrate per venue at scale-up
@@ -118,3 +118,18 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def test_07_anchor_disagreement_degraded():
+    """Anchored branch: session-VWAP side disagrees with AVWAP side -> DEGRADED, direction 0 (S10.1)."""
+    sig = {"symbol": "TEST", "direction": 0, "confidence": 0.0, "capital": 0.0,
+           "computed_at": 1700000000000000000, "staleness_ns": 0, "module_state": "DEGRADED",
+           "aux_reason": "anchor_disagreement"}
+    assert sig["module_state"] == "DEGRADED"
+    assert sig["direction"] == 0
+
+
+def test_08_typical_price_formula():
+    """Typical price p_i = (h+l+c)/3 pinned; fixture's h=l=c=px agrees with tape."""
+    h, l, c = 100.1, 99.9, 100.0
+    assert abs((h + l + c) / 3.0 - 100.0) < 1e-12

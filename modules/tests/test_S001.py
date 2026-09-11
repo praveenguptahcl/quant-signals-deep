@@ -75,16 +75,41 @@ def cks_contributions(pb, qb, pa, qa, pb_l, qb_l, pa_l, qa_l):
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    """Reference cost model: L2 constant stack (impact=0 flagged [example])."""
-    spread_bps = 0.43   # half-spread, liquid large-cap [example]
-    fee_bps = 0.30      # taker fee incl. Section 31 [example]
-    borrow_bps = 0.0     # long-only signal; 0 with reason: no borrow [default]
-    impact_bps = 0.0     # flagged [example]; calibrated per venue at scale-up
+    """Reference cost model: decomposed fee stack (impact=0 flagged [example]).
+
+    Mirrors the S001.md COST block. Tags per the module's tag law.
+    """
+    spread_bps = 0.43    # half-spread of 1 tick at $231.40 reference px [example]
+    take_fee_bps = 0.13  # exchange take fee $0.0030/share / $231.40 [example]
+    sec31_bps = 0.00     # SEC Section 31 $0.00/million eff. 2025-05-14 [documented]
+    taf_bps = 0.01       # FINRA TAF $0.000195/share eff. 2026-01-01 / $231.40 [documented]
+    fee_bps = take_fee_bps + sec31_bps + taf_bps  # ~= 0.14 [example composite]
+    borrow_bps = 0.0      # long-only signal; 0 with reason: no borrow [default]
+    impact_bps = 0.0      # flagged [example]; calibrated per venue at scale-up
+    if side == "maker":
+        fee_bps = -0.20   # rebate [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def ofi_z(hist, d_bar):
+    """Normative z_ofi (S001.md §S3): population-std z of the depth-normalized
+    window cumulative OFI against the per-event distribution."""
+    n = len(hist)
+    cum = sum(hist)
+    mu = sum(hist) / n / d_bar
+    var = sum((h / d_bar - mu) ** 2 for h in hist) / n  # POPULATION (normative)
+    sd = var ** 0.5
+    return (cum / d_bar - mu) / sd if sd >= 1e-12 else 0.0
+
+
 def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S001 reference stub)."""
+    """signal(state, events, cfg) -> SignalVector (S001 reference stub).
+
+    Mirrors the normative pseudocode in S001.md §S3, including the F1 locked/
+    crossed-quote skip, the n<5 insufficient-sample veto, the cost-gate
+    predicate, and t->t+1 causality. regime_gates() is stubbed to ALLOW;
+    a live harness must wire the §S2 machine records (R001/R010).
+    """
     evs = list(events)
     if not evs:
         return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
@@ -100,6 +125,10 @@ def signal(state, events, cfg):
         state.setdefault("depth_hist", [])
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], 0, "OK")
+    # F1: event_ts must be strictly increasing; no reordering
+    if e["event_ts"] <= prev["event_ts"]:
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], e["asof_ts"] - e["event_ts"], "UNKNOWN")
     eb, ea = cks_contributions(e["bid_px"], e["bid_sz"], e["ask_px"], e["ask_sz"],
                                prev["bid_px"], prev["bid_sz"],
                                prev["ask_px"], prev["ask_sz"])
@@ -109,24 +138,21 @@ def signal(state, events, cfg):
     state["depth_hist"].append(depth)
     state["prev"] = e
     hist = state["ofi_hist"][-cfg.window_events:]
-    cum = sum(hist)
     d_hist = state["depth_hist"][-cfg.depth_window:]
     d_bar = sum(d_hist) / len(d_hist)
-    ofi_norm = cum / d_bar if d_bar > 0 else 0.0
-    # z-score of depth-normalized OFI over the window
-    n = len(hist)
-    mu = sum(hist) / n / d_bar
-    var = sum((h / d_bar - mu) ** 2 for h in hist) / n
-    sd = var ** 0.5
-    z = (ofi_norm - mu) / sd if sd > 1e-12 else 0.0
-    direction = 1 if z >= cfg.z_entry else (-1 if z <= -cfg.z_entry else 0)
-    confidence = min(1.0, abs(z) / (2.0 * cfg.z_entry)) if direction else 0.0
-    capital = 0.5 * confidence
-    # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
-    edge_bps = abs(z) * 0.35  # modeled per-trade edge [example]
-    gate = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
-    if not gate:
+    z = ofi_z(hist, d_bar)
+    # insufficient-sample veto [default]: n < 5 -> direction 0
+    if len(hist) < 5:
         direction, confidence, capital = 0, 0.0, 0.0
+    else:
+        direction = 1 if z >= cfg.z_entry else (-1 if z <= -cfg.z_entry else 0)
+        confidence = min(1.0, abs(z) / (2.0 * cfg.z_entry)) if direction else 0.0
+        capital = 0.5 * confidence
+        # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
+        edge_bps = abs(z) * 0.35  # modeled per-trade edge [example]
+        gate = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
+        if not gate:
+            direction, confidence, capital = 0, 0.0, 0.0
     return SignalVector("TEST:XNAS", direction, confidence, capital,
                         e["event_ts"], e["asof_ts"] - e["event_ts"], "OK")
 
@@ -194,3 +220,85 @@ def test_invalid_input_yields_unknown():
     s = signal({}, [bad], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_z_ofi_pinned():
+    """Normative z definition pinned: independent recomputation of the fixture
+    tape (locked ev3 skipped, F1) must reproduce the §S3 anchor exactly.
+
+    Guards the population-vs-sample-std convention: sample std would yield
+    5.4025380815780, not the pinned 5.7302569696536.
+    """
+    evs = tape()
+    hist, depth_hist, prev = [], [], None
+    for e in evs:
+        if prev is None:
+            prev = e
+            continue
+        if e["bid_px"] <= 0 or e["ask_px"] <= 0 or e["bid_px"] >= e["ask_px"]:
+            continue  # locked/crossed -> skip, never interpolate (F1)
+        if e["event_ts"] <= prev["event_ts"]:
+            raise AssertionError("tape out of order")
+        eb, ea = cks_contributions(e["bid_px"], e["bid_sz"], e["ask_px"], e["ask_sz"],
+                                   prev["bid_px"], prev["bid_sz"],
+                                   prev["ask_px"], prev["ask_sz"])
+        hist.append(eb + ea)
+        depth_hist.append((e["bid_sz"] + e["ask_sz"]) / 2.0)
+        prev = e
+    cfg = Config()
+    d_bar = sum(depth_hist[-cfg.depth_window:]) / cfg.depth_window
+    z = ofi_z(hist[-cfg.window_events:], d_bar)
+    assert abs(z - 5.7302569696536) < 1e-9  # §S3 normative anchor [measured]
+    # and the live stub agrees on the same tape
+    state = {}
+    for i in range(len(evs)):
+        s = signal(state, evs[: i + 1], cfg)
+    assert s.direction == 1  # z=5.73 >= z_entry=2.0, gate passes
+
+
+def test_event_ts_monotonic():
+    """F1: canonical events arrive in non-decreasing event_ts order; a
+    reordered event must yield UNKNOWN rather than corrupt the windows."""
+    evs = tape()
+    ts = [e["event_ts"] for e in evs]
+    assert all(b > a for a, b in zip(ts, ts[1:]))
+    cfg, state = Config(), {}
+    for i in range(len(evs) - 1):
+        signal(state, evs[: i + 1], cfg)
+    swapped = evs[-2].copy()  # replay an older event -> out of order
+    s = signal(state, evs + [swapped], cfg)
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0
+
+
+def test_locked_quote_skipped_not_interpolated():
+    """ev3 is a locked quote (bid == ask): F1 says skip without advancing
+    prev_book and without interpolating; ev4's contribution then spans
+    ev2 -> ev4 and the cumulative sum is unchanged (1,820)."""
+    evs = tape()
+    cfg, state = Config(), {}
+    sigs = [signal(state, evs[: i + 1], cfg) for i in range(len(evs))]
+    assert sigs[3].module_state == "UNKNOWN"  # ev3 locked
+    assert state["prev"]["ev"] == 10  # prev advanced to ev10; locked ev3 never became prev
+    assert len(state["ofi_hist"]) == 9  # 10 events, one locked skip
+    assert sum(state["ofi_hist"]) == 1820
+
+
+def test_insufficient_sample_veto():
+    """n < 5 -> direction 0 regardless of z magnitude (normative veto)."""
+    evs = tape()
+    cfg, state = Config(), {}
+    for i in range(5):  # ev0..ev4 -> contributions at ev1, ev2, ev4 (ev3 locked)
+        s = signal(state, evs[: i + 1], cfg)
+    assert len(state["ofi_hist"]) == 3
+    assert s.direction == 0
+    assert s.module_state == "OK"
+
+
+def test_maker_rebate_branch():
+    """expected_cost_bps honors the maker rebate branch."""
+    taker = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    maker = expected_cost_bps(1.0, 0.001, "XNAS", "maker", "normal")
+    assert abs(taker - 0.57) < 1e-9   # 0.43 + 0.13 + 0.00 + 0.01 [example composite]
+    assert abs(maker - 0.23) < 1e-9   # 0.43 - 0.20 rebate [example]
+    assert maker < taker

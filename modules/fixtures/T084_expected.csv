@@ -1,0 +1,3 @@
+# TYPE: validation-run
+ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
+T084-0,0,BLK:XNAS,BUY,5000,,IOC,1700000000000001000,S048@1700000000000000000,1700000300000000000,4.0000

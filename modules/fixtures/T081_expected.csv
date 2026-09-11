@@ -1,0 +1,2 @@
+# TYPE: validation-run
+ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps

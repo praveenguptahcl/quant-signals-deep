@@ -1,0 +1,3 @@
+# TYPE: validation-run
+ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
+T099-0,0,ADR:XNYS,SHORT,3000,,IOC,1700000000000001000,S061@1700000000000000000,1700000300000000000,8.0000

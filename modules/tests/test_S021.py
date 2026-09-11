@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Acceptance tests for S021 — Opening-range breakout (sketch-level, concrete)."""
+"""Acceptance tests for S021 — Opening-range breakout (fixture-backed, normative)."""
 import csv
 import math
 import pathlib
@@ -7,7 +7,13 @@ import pathlib
 FIX = pathlib.Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "S021_tape.csv"
 EXP = FIX / "S021_expected.csv"
-TOL = 1e-4
+TOL = 1e-4  # [default]
+
+N_OR = 30        # or_minutes [default]
+W = 20           # vol_z_window [default] (trailing bars, trigger bar excluded)
+MIN_N = 10       # vol_z_min_n [default]
+VOL_Z_MIN = 1.5  # [default]
+BUF_BPS = 2.0    # [default]
 
 
 def load(path):
@@ -27,26 +33,46 @@ def asnum(x):
         return x
 
 
-def recompute(trows):
-    """ORB fixture: OR=[100.00,100.50] from bars 1-3; buffer 0.02; vol_z>=1.5."""
-    orh, orl, buf = 100.50, 100.00, 0.02
-    out = []
-    for r in trows:
-        bar, c, vz = int(r[0]), float(r[1]), float(r[2])
-        in_or = 1 if bar <= 3 else 0
-        trig = 0
-        if bar > 3 and vz >= 1.5:
-            if c > orh + buf:
-                trig = 1
-            elif c < orl - buf:
-                trig = -1
-        out.append([bar, in_or, trig])
+def vol_z(v_t, window):
+    """Normative volume z-score: (v - mu) / max(sd, 0.1*mu), window excludes trigger bar."""
+    mu = sum(window) / len(window)
+    var = sum((x - mu) ** 2 for x in window) / (len(window) - 1)
+    sd = max(math.sqrt(var), 0.1 * mu)
+    return (v_t - mu) / sd
+
+
+def recompute(data):
+    """Normative ORB logic: OR from highs/lows of first N_OR bars; first-touch
+    trigger with re-arm when close re-enters the range."""
+    bars = [[int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]), int(r[5])]
+            for r in data]
+    or_high = max(b[2] for b in bars[:N_OR])
+    or_low = min(b[3] for b in bars[:N_OR])
+    vols = [b[5] for b in bars]
+    out, armed = [], True
+    for b in bars:
+        bar, in_or, vzv, trig = b[0], 1 if b[0] <= N_OR else 0, "", 0
+        if b[0] > N_OR:
+            window = vols[max(0, b[0] - 1 - W):b[0] - 1]
+            if len(window) >= MIN_N:
+                vzv = vol_z(vols[b[0] - 1], window)
+                long_ok = b[4] > or_high * (1 + BUF_BPS / 1e4) and vzv >= VOL_Z_MIN
+                short_ok = b[4] < or_low * (1 - BUF_BPS / 1e4) and vzv >= VOL_Z_MIN
+                inside = or_low * (1 - BUF_BPS / 1e4) < b[4] < or_high * (1 + BUF_BPS / 1e4)
+                if inside:
+                    armed = True
+                if armed and (long_ok or short_ok):
+                    trig = 1 if long_ok else -1
+                    armed = False
+        out.append({"bar": bar, "in_or": in_or, "or_high": or_high if b[0] >= N_OR else "",
+                    "or_low": or_low if b[0] >= N_OR else "", "close": b[4],
+                    "vol_z": vzv, "trig": trig})
     return out
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     spread_bps = 0.43   # [example]
-    fee_bps = 0.30      # [example]
+    fee_bps = 0.30      # [documented] Nasdaq $0.0030/share remove fee at $100 ref price
     borrow_bps = 0.0    # [default] long-biased reference; reason in table
     impact_bps = 0.0    # [example] flagged; calibrate per venue at scale-up
     if side == "maker":
@@ -71,7 +97,7 @@ def signal_stub_invalid():
 
 def close_enough(got, exp):
     g, e = asnum(got), asnum(exp)
-    if isinstance(g, float) and isinstance(e, float):
+    if isinstance(g, float) and isinstance(e, float) and got != "" and exp != "":
         return abs(g - e) <= TOL * max(1.0, abs(e))
     return g == e
 
@@ -79,22 +105,31 @@ def close_enough(got, exp):
 def test_01_fixture_recomputes():
     theader, trows = load(TAPE)
     eheader, erows = load(EXP)
+    assert theader == ["bar", "open", "high", "low", "close", "volume"], theader
+    assert eheader == ["bar", "in_or", "or_high", "or_low", "close", "vol_z", "trig"], eheader
     got = recompute(trows)
-    assert len(got) == len(erows), f"row count {len(got)} != {len(erows)}"
+    assert len(got) == len(erows) == 33, f"row count {len(got)} != 33"
+    keys = ["bar", "in_or", "or_high", "or_low", "close", "vol_z", "trig"]
     for i, (g, e) in enumerate(zip(got, erows)):
-        assert len(g) == len(e), f"row {i}: col count {len(g)} != {len(e)}"
-        for j, (gv, ev) in enumerate(zip(g, e)):
-            assert close_enough(gv, ev), f"row {i} col {eheader[j]}: {gv!r} != {ev!r}"
+        for j, k in enumerate(keys):
+            gv = "" if g[k] == "" else g[k]
+            assert close_enough(gv, e[j]), f"row {i} col {k}: {gv!r} != {e[j]!r}"
 
 
-def test_06_triggers():
-    # Bar 4 LONG, bar 6 SHORT, bar 5 no trigger (inside range).
+def test_02_triggers_pinned():
     eheader, erows = load(EXP)
-    got = {e[0]: int(e[2]) for e in erows}
-    assert got["4"] == 1 and got["6"] == -1 and got["5"] == 0
+    got = {e[0]: (int(e[1]), e[6]) for e in erows}
+    assert got["31"] == (0, "1"), "bar 31 must be LONG"
+    assert got["32"] == (0, "0"), "bar 32 must be flat (inside range, re-arms)"
+    assert got["33"] == (0, "-1"), "bar 33 must be SHORT"
+    or_high = float(erows[29][2])
+    or_low = float(erows[29][3])
+    assert abs(or_high - 100.50) <= TOL and abs(or_low - 100.00) <= TOL, "OR must be [100.00, 100.50]"
+    vz31, vz32, vz33 = float(erows[30][5]), float(erows[31][5]), float(erows[32][5])
+    assert vz31 >= VOL_Z_MIN and vz33 >= VOL_Z_MIN and vz32 < VOL_Z_MIN
 
 
-def test_02_signal_vector_shape():
+def test_03_signal_vector_shape():
     sig = signal_stub(1, 1.5, computed_at=1700000000000000000)
     assert sig["direction"] in (+1, -1, 0)
     assert 0.0 <= sig["confidence"] <= 1.0
@@ -102,7 +137,7 @@ def test_02_signal_vector_shape():
     assert sig["module_state"] in ("OK", "DEGRADED", "UNKNOWN", "OFF")
 
 
-def test_03_no_signal_bar_fills():
+def test_04_no_signal_bar_fills():
     computed_at = 1700000000000000000
     sig = signal_stub(1, 1.5, computed_at=computed_at)
     fill_event_ts = computed_at + 1  # earliest legal fill: strictly after the signal bar
@@ -111,13 +146,17 @@ def test_03_no_signal_bar_fills():
     assert not (same_bar_fill_ts > sig["computed_at"]), "same-bar fill must be rejected"
 
 
-def test_04_cost_gate():
+def test_05_cost_gate():
     k = 0.5  # [default]
     assert expected_cost_bps(1e6, 0.01, "XNAS", "taker", "normal") <= k * 10.0  # large edge passes
     assert not (expected_cost_bps(1e6, 0.01, "XNAS", "taker", "normal") <= k * 0.01)  # tiny edge blocked
 
 
-def test_05_invalid_input_unknown():
+def test_06_invalid_input_unknown_and_deterministic():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+    _, trows = load(TAPE)
+    first = recompute(trows)
+    second = recompute(trows)
+    assert first == second, "stub must be deterministic across calls"

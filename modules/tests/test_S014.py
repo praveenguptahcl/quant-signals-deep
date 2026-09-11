@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Acceptance tests for S014 — Quoted, effective, and realized spread decomposition (sketch-level, concrete)."""
+"""Acceptance tests for S014 — Quoted, effective, and realized spread decomposition (sketch-level, concrete). 7 tests."""
 import csv
 import math
 import pathlib
@@ -116,3 +116,14 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def test_07_causality_timestamps():
+    # The tape pins the causality contract: quote precedes the fill,
+    # and the post-trade midpoint is exactly the 5-min horizon after the fill.
+    _, trows = load(TAPE)
+    for r in trows:
+        quote_ts, fill_ts, mid5_ts = int(r[6]), int(r[7]), int(r[8])
+        assert quote_ts <= fill_ts, f"{r[0]}: quote must precede fill (no lookahead)"
+        assert mid5_ts - fill_ts == 300 * 10**9, f"{r[0]}: mid5_ts must be 5 min after fill"
+        assert fill_ts - quote_ts <= 1 * 10**9, f"{r[0]}: quote age exceeds 1-s TTL"

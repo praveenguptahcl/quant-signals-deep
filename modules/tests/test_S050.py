@@ -2,7 +2,9 @@
 
 Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
 reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+causality, the cost gate, and hand-checked fixture arithmetic. Tests 6–9 use
+synthetic inline episodes (the fixture tape covers only one long-spread entry
+and hold; see §S4 coverage limits).
 
 Run: python3 -m pytest modules/tests/test_S050.py -q   (from repo root)
 """
@@ -149,6 +151,14 @@ class Config:
     exit_z: float = 0.5          # exit trigger [example]
     cost_gate_k: float = 0.5     # cost-gate multiplier [default]
     cooldown_s: float = 86_400.0  # one position per episode [default]
+    beta_stip: float = 2.0       # pinned stipulated ratio [calibrate]
+    formation_window_days: int = 12       # [example]; production calibrate 60-252
+    adf_significance: float = 0.05        # [calibrate]
+    coint_lag_max: int = 10               # [default]
+    formation_fresh_days: int = 63        # [default]
+    ols_window_days: int = 252            # [default]
+    drift_tolerance: float = 0.10         # [default]
+    confidence_denom: float = 3.0         # [default] normative §S3
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
@@ -177,10 +187,11 @@ def signal(state, events, cfg):
     mu, sd = formation_stats(days)
     pos = _positions(days, mu, sd, cfg)[-1][5]
     direction = pos
-    confidence = 0.6 if direction else 0.0  # coint-spread conviction [example]
+    # normative confidence: min(1, |z|/confidence_denom) (§S3)
+    z = _positions(days, mu, sd, cfg)[-1][4]
+    confidence = min(1.0, abs(z) / cfg.confidence_denom) if direction and z == z else 0.0
     capital = 0.5 * confidence
     # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
-    z = _positions(days, mu, sd, cfg)[-1][4]
     edge_bps = abs(z) * 20.0 if z == z else 0.0  # 20bps per unit z [example]
     ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
     if not ok:
@@ -259,3 +270,54 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+# -------------------------------- synthetic inline episodes (fixture has no
+# exit/short/veto episodes; see §S4 coverage limits)
+def synthetic_rows(spreads, baseB=100.0, day0=1, ts0=1757000000000000000):
+    """Synthetic pair rows with spread = A - BETA_STIP * B (B pinned at baseB)."""
+    rows = []
+    for i, sp in enumerate(spreads):
+        d = day0 + i
+        ts = ts0 + i * 86_400_000_000_000
+        rows.append({"id": "d%dA" % d, "event_ts": ts, "sym": "A",
+                     "close": BETA_STIP * baseB + sp})
+        rows.append({"id": "d%dB" % d, "event_ts": ts + 1_000_000_000,
+                     "sym": "B", "close": baseB})
+    return rows
+
+
+def alternating_formation(n=12):
+    """mu=0, sd=sqrt(3/11) formation spreads."""
+    return [0.5, -0.5] * (n // 2)
+
+
+def test_exit_crossing_exits():
+    # day13 spread -1.0 -> z≈-1.915 <= -1.5 (long); day14 spread -0.2 -> |z|≈0.383 -> exit
+    rows = synthetic_rows(alternating_formation() + [-1.0, -0.2])
+    feats = compute_features(rows)
+    by_id = {f["id"]: f for f in feats}
+    assert by_id["d13"]["dir"] == 1
+    assert abs(by_id["d13"]["z"] - (-1.0 / (3.0 / 11) ** 0.5)) < 1e-9
+    assert by_id["d14"]["dir"] == 0  # exit at |z| <= 0.5
+
+
+def test_short_side_entry():
+    rows = synthetic_rows(alternating_formation() + [1.0])
+    feats = compute_features(rows)
+    assert feats[-1]["dir"] == -1   # z≈+1.915 >= +1.5 -> short the spread
+
+
+def test_cost_gate_veto_at_signal_level():
+    rows = synthetic_rows(alternating_formation() + [-1.0])
+    veto_cfg = Config(cost_gate_k=0.05)  # 0.05 * ~38.3bps = ~1.9bps < 3.8bps cost
+    s_veto = signal(dict(), rows, veto_cfg)
+    assert s_veto.module_state == "OK" and s_veto.direction == 0
+    s_pass = signal(dict(), rows, Config())
+    assert s_pass.direction == 1  # defaults: 0.5 * ~38.3bps = ~19.2bps >= 3.8bps
+
+
+def test_insufficient_formation_data_no_entry():
+    rows = synthetic_rows(alternating_formation(n=6))  # 6 days < 12 required
+    s = signal(dict(), rows, Config())
+    assert s.module_state == "OK" and s.direction == 0

@@ -114,3 +114,51 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def z_of(delta, ref, z_ref_window, sigma_floor=1e-6):
+    """Normative z from §S3: prior-L reference, sigma floor, F2 sanity bound."""
+    if len(ref) < max(5, z_ref_window // 2):
+        return None  # UNKNOWN: insufficient reference history (F1)
+    mu = sum(ref) / len(ref)
+    var = sum((x - mu) ** 2 for x in ref) / len(ref)
+    sigma = max(math.sqrt(var), sigma_floor)
+    z = (delta - mu) / sigma
+    if not math.isfinite(z) or abs(z) > 10:
+        return None  # UNKNOWN: degenerate or explosive z (F2)
+    return z
+
+
+def fixture_deltas():
+    """Normalized deltas from the tape fixture (test_01 already pins these)."""
+    theader, trows = load(TAPE)
+    return sorted(recompute(trows))
+
+
+def test_07_zscore_exact_and_deterministic():
+    # §S3 normative z port: exact against hand-computed values (arithmetic verified
+    # independently; the 6-window fixture is an arithmetic toy, not a real reference
+    # history, so these pin the math, not the entry decision).
+    # Case A: ref=[-0.5,0.8,0.0,0.0,0.4545], mu=0.1509, sigma=0.443325 -> z(0.4)=0.5619
+    z = z_of(0.4, [-0.5, 0.8, 0.0, 0.0, 0.4545], 10)
+    assert z is not None
+    assert abs(z - 0.5619) < 1e-4, f"z(0.4)={z}"
+    # Case B: ref=[0.4,0.8,0.0,0.0,0.4545], mu=0.3309, sigma=0.303014 -> z(-0.5)=-2.7421
+    z2 = z_of(-0.5, [0.4, 0.8, 0.0, 0.0, 0.4545], 10)
+    assert z2 is not None
+    assert abs(z2 - (-2.7421)) < 1e-4, f"z(-0.5)={z2}"
+    # Deterministic: identical inputs -> identical z across calls.
+    assert z_of(0.4, [-0.5, 0.8, 0.0, 0.0, 0.4545], 10) == \
+           z_of(0.4, [-0.5, 0.8, 0.0, 0.0, 0.4545], 10)
+
+
+def test_08_sigma_degeneracy_unknown():
+    # Constant reference -> sigma ~ 0 -> floored to 1e-6 -> |z| explodes -> UNKNOWN (failure mode 10).
+    z = z_of(0.5, [0.0] * 10, 20, 1e-6)
+    assert z is None, f"degenerate sigma must yield UNKNOWN, got z={z}"
+    # Short reference history -> UNKNOWN (F1), not a fabricated z.
+    z = z_of(0.5, [0.0, 0.0, 0.0], 20, 1e-6)
+    assert z is None, f"insufficient history must yield UNKNOWN, got z={z}"
+    # Healthy reference -> finite z, not UNKNOWN.
+    z = z_of(0.5, [0.0, 0.1, -0.1, 0.05, -0.05, 0.0, 0.1, -0.1, 0.0, 0.0], 20, 1e-6)
+    assert z is not None and math.isfinite(z)

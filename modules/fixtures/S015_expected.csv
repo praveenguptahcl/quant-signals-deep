@@ -1,3 +1,5 @@
 # TYPE: validation-run
-name,order_proc,inventory,adv_sel
-ex1,0.008,0.005,0.007
+# estimation_trade recovery: S=2*c1; alpha=-c3/(c1*(1-2*PI)); lambda=1+c2/c1; beta=lambda-alpha; order_proc=1-lambda
+case_type,name,S,alpha,beta,order_proc,pi,order_proc_dollars,inventory_dollars,adv_sel_dollars
+arithmetic,ex1,,,,,,0.008,0.005,0.007
+estimation_trade,hs3,0.02,0.35,0.25,0.4,0.6,,,

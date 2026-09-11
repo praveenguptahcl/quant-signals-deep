@@ -1,0 +1,12 @@
+# TYPE: validation-run
+# Expected outputs for S069_tape.csv. Hand-checked per the S069 chapter S4.
+# All numbers synthetic.
+month,vrp_vol,vrp_var,z,direction
+0,4,160,0.0000000000,0
+1,6,264,1.0000000000,0
+2,-1,-41,-1.3587324410,0
+3,6,324,0.7863336510,0
+4,8,384,0.9506541514,0
+5,1,35,-0.6868028197,0
+6,-2,-100,-1.3255082465,0
+7,2,80,-0.0688428391,0

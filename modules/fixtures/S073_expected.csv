@@ -1,0 +1,10 @@
+# TYPE: validation-run
+# Expected outputs for S073_tape.csv. Hand-checked per the S073 chapter S4.
+# All numbers synthetic.
+contract,u_score,vol_oi,flag
+0,2.7777777778,3.1250000000,1
+1,1.2000000000,0.5000000000,0
+2,3.7500000000,2.0000000000,1
+3,0.6666666667,0.2000000000,0
+4,2.5714285714,2.0000000000,1
+5,4.1666666667,2.0000000000,1

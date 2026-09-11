@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Acceptance tests for S018 — Order-sign autocorrelation (sketch-level, concrete)."""
+"""Acceptance tests for S018 — Order-sign autocorrelation (v1.0.1, 8 tests)."""
 import csv
 import math
 import pathlib
@@ -7,7 +7,9 @@ import pathlib
 FIX = pathlib.Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "S018_tape.csv"
 EXP = FIX / "S018_expected.csv"
-TOL = 1e-4
+TOL = 1e-9  # [default] per S018.md S4
+MIN_SIGNS = 500  # [default] cfg.min_signs
+PERSIST_Z = 2.0  # [default] cfg.persist_z
 
 
 def load(path):
@@ -28,13 +30,27 @@ def asnum(x):
 
 
 def recompute(trows):
-    """Sign-autocorrelation fixture: C(lag) for lags 1..2 from the sign tape."""
+    """Sign-autocorrelation fixture: C(lag) for lags 1..2 from the sign tape (exact)."""
     signs = [float(r[1]) for r in trows]
     out = []
     for lag in (1, 2):
         prods = [signs[i] * signs[i + lag] for i in range(len(signs) - lag)]
-        out.append([lag, round(sum(prods) / len(prods), 4)])
+        out.append([lag, sum(prods) / len(prods)])
     return out
+
+
+def persistence_flag(signs, min_signs=MIN_SIGNS, persist_z=PERSIST_Z):
+    """Normative S3 logic mirror: z = acf_1/se; persistent iff z > persist_z;
+    sub-min_signs -> direction 0 + DEGRADED (never interpolate)."""
+    if len(signs) < min_signs:
+        return {"module_state": "DEGRADED", "direction": 0, "persistent": None,
+                "z": None, "acf_1": None}
+    n = len(signs)
+    acf1 = sum(signs[i] * signs[i + 1] for i in range(n - 1)) / (n - 1)
+    se = 1.0 / math.sqrt(n)  # [documented] Bartlett (1946) white-noise ACF s.e.
+    z = acf1 / se
+    return {"module_state": "OK", "direction": 0, "persistent": z > persist_z,
+            "z": z, "acf_1": acf1}
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
@@ -80,12 +96,15 @@ def test_01_fixture_recomputes():
             assert close_enough(gv, ev), f"row {i} col {eheader[j]}: {gv!r} != {ev!r}"
 
 
-def test_06_acf_bounds():
+def test_06_acf_bounds_and_determinism():
     # Autocorrelations lie in [-1, 1]; fixture C(1) is negative (no persistence here).
     eheader, erows = load(EXP)
     for e in erows:
         assert -1.0 <= float(e[1]) <= 1.0
     assert float(erows[0][1]) < 0
+    # Deterministic across calls: recompute twice on the tape -> identical.
+    theader, trows = load(TAPE)
+    assert recompute(trows) == recompute(trows)
 
 
 def test_02_signal_vector_shape():
@@ -115,3 +134,26 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def test_07_persistence_z_wired():
+    # Synthetic persistent tape: runs of 4 same signs (order-splitting pattern).
+    signs = ([1] * 4 + [-1] * 4) * 75  # 600 signs >= min_signs
+    res = persistence_flag(signs)
+    assert res["module_state"] == "OK"
+    assert res["acf_1"] > 0, "run-of-4 tape must show positive lag-1 ACF"
+    assert res["z"] > PERSIST_Z, f"z={res['z']} must clear the persist_z gate"
+    assert res["persistent"] is True
+    # Anti-persistent alternating tape must not flag.
+    alt = [1 if i % 2 == 0 else -1 for i in range(600)]
+    res2 = persistence_flag(alt)
+    assert res2["acf_1"] < 0 and res2["persistent"] is False
+
+
+def test_08_sub_min_signs_degraded():
+    theader, trows = load(TAPE)
+    signs = [int(float(r[1])) for r in trows]  # 8 signs < 500
+    res = persistence_flag(signs)
+    assert res["module_state"] == "DEGRADED"
+    assert res["direction"] == 0
+    assert res["persistent"] is None  # no estimate emitted below min_signs

@@ -1,0 +1,5 @@
+# TYPE: validation-run
+"# expected IS from reference VECM estimator (ecm_lags=5, known beta=[1,-1]); [measured]"
+venue,IS_mid,IS_lo,IS_hi,leader
+A,0.997079900513,0.996377232168,0.997782568858,1
+B,0.002920099487,0.002217431142,0.003622767832,0

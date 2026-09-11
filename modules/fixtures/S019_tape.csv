@@ -1,4 +1,11 @@
 # TYPE: validation-run
+# WARMUP: med_mu/med_sigma estimated from 78 prior 5-minute windows [example]
+# MED_MU: 0.0
+# MED_SIGMA: 300.0
+# WARMUP_WINDOWS: 78
+# MIN_WARMUP_WINDOWS: 20
+# STEALTH_Z: 2.0
+# SIGMA_FLOOR_SHARES: 125.0
 trade,signed_vol
 1,300
 2,-100

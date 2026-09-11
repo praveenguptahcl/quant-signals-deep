@@ -7,7 +7,7 @@ import pathlib
 FIX = pathlib.Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "S017_tape.csv"
 EXP = FIX / "S017_expected.csv"
-TOL = 1e-4
+TOL = 1e-9  # [default] per §S4 — the fixture ships full-precision values, so this is exercised
 
 
 def load(path):
@@ -27,19 +27,48 @@ def asnum(x):
         return x
 
 
-import math as _m
-
 def recompute(trows):
     """Hawkes fixture: mu=0.5, alpha=0.4, beta=1.0; lambda(t_i) from prior events."""
     mu, alpha, beta = 0.5, 0.4, 1.0
     out, times = [], []
     for r in trows:
         t = float(r[1])
-        ks = round(sum(_m.exp(-beta * (t - s)) for s in times), 4)
-        lam = round(mu + alpha * sum(_m.exp(-beta * (t - s)) for s in times), 4)
+        ks = sum(math.exp(-beta * (t - s)) for s in times)
+        lam = mu + alpha * ks
         out.append([r[0], t, ks, lam])
         times.append(t)
     return out
+
+
+def hawkes_loglik_recursive(times, mu, alpha, beta, T):
+    """Normative §S3.1 objective: Ozaki (1979) recursive exponential-kernel log-likelihood.
+
+    Guards mirror the module-level contract: non-monotonic times -> ValueError
+    (module emits UNKNOWN, F1); non-positive params or alpha/beta >= 1 -> -inf
+    (stationarity box, module emits DEGRADED/HALT).
+    """
+    if any(b <= a for a, b in zip(times, times[1:])):
+        raise ValueError("event times must be strictly increasing")
+    if not (mu > 0 and alpha > 0 and beta > 0):
+        return float("-inf")
+    if alpha / beta >= 1.0:
+        return float("-inf")
+    A = 0.0
+    ll = -mu * T
+    prev = None
+    for i, t in enumerate(times):
+        A = 0.0 if i == 0 else math.exp(-beta * (t - prev)) * (1.0 + A)
+        ll += math.log(mu + alpha * A)
+        ll -= (alpha / beta) * (1.0 - math.exp(-beta * (T - t)))
+        prev = t
+    return ll
+
+
+def hawkes_loglik_direct(times, mu, alpha, beta, T):
+    """Direct-sum form of the same objective (no recursion) — must agree."""
+    lam = lambda t: mu + alpha * sum(math.exp(-beta * (t - s)) for s in times if s < t)
+    compensator = mu * T + (alpha / beta) * sum(1.0 - math.exp(-beta * (T - s)) for s in times)
+    return -compensator + sum(math.log(lam(t)) for t in times)
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
@@ -86,11 +115,26 @@ def test_01_fixture_recomputes():
 
 
 def test_06_lambda_at_3():
-    # lambda(3) = 0.5 + 0.4*(e^-3 + e^-2 + e^-1) = 0.7212; branching ratio 0.4 < 1.
-    import math
+    # lambda(3) = 0.5 + 0.4*(e^-3 + e^-2 + e^-1) = 0.7212007171103676; branching ratio 0.4 < 1.
     lam3 = 0.5 + 0.4 * (math.exp(-3) + math.exp(-2) + math.exp(-1))
-    assert abs(lam3 - 0.7212) < 1e-4
+    assert abs(lam3 - 0.7212007171103676) < 1e-9
     assert 0.4 / 1.0 < 1.0
+
+
+def test_07_mle_objective_pinned():
+    # §S3.1 normative objective on the fixture: hand value LL = -3.961960534239271.
+    times = [0.0, 1.0, 2.0]
+    rec = hawkes_loglik_recursive(times, 0.5, 0.4, 1.0, 3.0)
+    direct = hawkes_loglik_direct(times, 0.5, 0.4, 1.0, 3.0)
+    assert abs(rec - direct) < 1e-12, f"recursive vs direct MLE objective disagree: {rec} vs {direct}"
+    assert abs(rec - (-3.961960534239271)) < 1e-9, f"LL {rec} != hand value"
+    # Guards: non-monotonic times rejected (F1); non-stationary box returns -inf.
+    try:
+        hawkes_loglik_recursive([0.0, 1.0, 1.0], 0.5, 0.4, 1.0, 3.0)
+        raise AssertionError("duplicate timestamps must be rejected")
+    except ValueError:
+        pass
+    assert hawkes_loglik_recursive(times, 0.5, 1.5, 1.0, 3.0) == float("-inf")  # alpha/beta >= 1
 
 
 def test_02_signal_vector_shape():

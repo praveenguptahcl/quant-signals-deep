@@ -40,12 +40,26 @@ def recompute(trows):
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     spread_bps = 0.50   # [example] bar-close crossing assumption
-    fee_bps = 0.30      # [example]
+    # fees: $0.0030/share take fee (NYSE Arca Tier 1) [documented] on the $100 [example] reference price
+    fee_bps = 0.30      # 0.0030/100*10000 — rescale for your price tier
     borrow_bps = 0.0    # [default] long-biased reference; reason in table
     impact_bps = 0.0    # [example] flagged; calibrate per venue at scale-up
     if side == "maker":
-        fee_bps = -0.20  # rebate [example]
+        fee_bps = -0.30  # NYSE Arca Tier 1 provide credit $0.0030/share [documented], $100 [example] reference
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def roll_spread_bps(dps, last_close):
+    """Reference Roll estimator per normative pseudocode: None when unidentified."""
+    if len(dps) < 2:
+        return None
+    n = len(dps)
+    mean = sum(dps) / n
+    g1 = sum((dps[i] - mean) * (dps[i - 1] - mean) for i in range(1, n)) / n
+    if g1 >= 0:
+        return None  # unidentified, never zero [documented]
+    s = 2 * (abs(g1) ** 0.5)
+    return s / last_close * 10000
 
 
 def signal_stub(value, threshold, computed_at):
@@ -122,3 +136,25 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def roll_spread_bps_from(bps, threshold):
+    """Cost-screen gate: roll_bps <= spread_high_bps."""
+    return bps <= threshold
+
+
+def test_07_positive_gamma_unidentified():
+    # Trending series -> positive lag-1 autocovariance -> spread unidentified (None, never 0)
+    trending_dps = [0.10, 0.11, 0.12, 0.13, 0.14, 0.15]
+    assert roll_spread_bps(trending_dps, 100.0) is None
+    # Fixture series stays identified and lands in the documented band
+    eheader, erows = load(EXP)
+    dps = [float(e[2]) for e in erows[1:]]
+    bps = roll_spread_bps(dps, 100.0)
+    assert bps is not None and abs(bps - 5.6) < 0.5
+
+
+def test_08_screen_gate_on_bps():
+    threshold = 50.0  # spread_high_bps [default]
+    assert roll_spread_bps_from(5.6, threshold) is True    # fixture band passes
+    assert roll_spread_bps_from(250.0, threshold) is False  # excess bps vetoes

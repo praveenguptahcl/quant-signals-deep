@@ -1,7 +1,13 @@
 # TYPE: validation-run
-print,signed_vol,cum_net,cum_tot
-1,80,80,80
-2,120,200,200
-3,-50,150,250
-4,90,240,340
-5,-30,210,370
+# Expected outputs for S020_tape.csv. Columns identical to tape; this file is the
+# reference recompute target. cum_retail_net/cum_retail_tot accumulate over
+# is_retail_proxy=1 rows only (prints 1,2,3,6). All numbers synthetic [example].
+print,price,size,off_exch,bid,ask,is_subpenny,spread_frac,is_retail_proxy,is_odd_lot,signed_vol,cum_retail_net,cum_retail_tot
+1,100.0199,80,1,100.00,100.02,1,0.995,1,1,80,80,80
+2,100.0198,120,1,100.00,100.02,1,0.99,1,0,120,200,200
+3,100.0001,50,1,100.00,100.02,1,0.005,1,1,-50,150,250
+4,100.0099,90,1,100.00,100.02,1,0.495,0,1,90,150,250
+5,100.0100,200,1,100.00,100.02,0,0.5,0,0,200,150,250
+6,100.0197,40,1,100.00,100.02,1,0.985,1,1,40,190,290
+7,100.0200,300,0,100.00,100.02,0,1.0,0,0,300,190,290
+8,100.0000,150,0,100.00,100.02,0,0.0,0,0,-150,190,290

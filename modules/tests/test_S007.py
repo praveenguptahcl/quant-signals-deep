@@ -7,7 +7,7 @@ import pathlib
 FIX = pathlib.Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "S007_tape.csv"
 EXP = FIX / "S007_expected.csv"
-TOL = 1e-4
+TOL = 1e-9  # matches §S4 tolerance on floats; integer contributions exact
 
 
 def load(path):
@@ -143,3 +143,49 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def bvc_allocate(volume, open_px, close_px, sigma, z_cap=3.0):
+    """Mirror of the §S3 normative bvc_allocate: sigma window, z-clip, zero-variance guard."""
+    if sigma <= 0:
+        return None  # UNKNOWN component — never 0/0
+    z = (close_px - open_px) / sigma
+    zc = max(-z_cap, min(z_cap, z))
+    vb = volume * _phi(zc)
+    vs = volume - vb
+    return vb, vs, vb - vs
+
+
+def module_state_for(share, min_share=0.8):
+    """Mirror of the §S3 normative state rule."""
+    if share >= min_share:
+        return "OK"
+    if share >= 0.5:
+        return "DEGRADED"
+    return "UNKNOWN"
+
+
+def test_07_state_rule_share_gates():
+    assert module_state_for(0.85) == "OK"
+    assert module_state_for(0.80) == "OK"          # boundary inclusive
+    assert module_state_for(0.79) == "DEGRADED"
+    assert module_state_for(0.50) == "DEGRADED"    # boundary inclusive
+    assert module_state_for(0.49) == "UNKNOWN"
+
+
+def test_08_zero_variance_unknown():
+    # sigma == 0 (e.g. one-tick day / halt reopen): BVC component UNKNOWN, never 0/0
+    assert bvc_allocate(1000, 100.00, 100.00, 0.0) is None
+    got = bvc_allocate(1000, 100.00, 100.02, 0.02)
+    assert got is not None and abs(got[0] - 841.3) < 0.05
+
+
+def test_09_z_clip_blocks_single_bar_dominance():
+    # Extreme price change must be clipped at +-z_cap before Phi:
+    # z = 1.0/0.02 = 50 -> clipped to 3 -> Phi(3)=0.99865 -> Vb=998.7, not 1000.0
+    vb, vs, net = bvc_allocate(1000, 100.00, 101.00, 0.02, z_cap=3.0)
+    assert abs(vb - 998.7) < 0.05, f"z-clip not applied: vb={vb}"
+    assert vs > 0.0, "clipped bar must leave residual sell volume"
+    # no-clip variant (huge z_cap) allocates essentially all volume
+    vb_nc, _, _ = bvc_allocate(1000, 100.00, 101.00, 0.02, z_cap=1e9)
+    assert vb_nc > vb, "clip must bind on extreme z"

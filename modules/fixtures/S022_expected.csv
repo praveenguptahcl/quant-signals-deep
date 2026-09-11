@@ -1,7 +1,9 @@
 # TYPE: validation-run
-bar,in_ib,expand
-1,1,0
-2,1,0
-3,0,0
-4,0,1
-5,0,-1
+# SEED: 20260922
+# SYNTHETIC: expected outputs hand-computed from the tape; dev_ratio = R_t / R_IB
+bar,in_ib,dev_ratio,expand
+1,1,0.000,0
+2,1,0.000,0
+3,0,1.375,0
+4,0,1.750,1
+5,0,1.750,-1

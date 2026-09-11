@@ -1,7 +1,10 @@
 # TYPE: validation-run
-bar,high,low,close
-1,100.3,100.0,100.2
-2,100.4,100.1,100.35
-3,100.55,100.05,100.5
-4,100.7,100.2,100.7
-5,100.65,100.1,100.2
+# SEED: 20260922
+# SYNTHETIC: all prices fabricated for rule validation; timestamps are synthetic
+# IB compressed into bars 1-2 for illustration (a real 60-min IB = 60 1-min bars)
+bar,ts_open_ns,high,low,close
+1,1788874200000000000,100.3,100.0,100.2
+2,1788874260000000000,100.4,100.1,100.35
+3,1788874320000000000,100.55,100.05,100.5
+4,1788874380000000000,100.7,100.2,100.7
+5,1788874440000000000,100.65,100.1,100.2

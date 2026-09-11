@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Expected outputs for S075_tape.csv. Hand-checked per the S075 chapter S4.
+# All numbers synthetic.
+day,rho_impl,spread,direction
+0,0.3919912830,0.0919912830,0
+1,0.3430741504,-0.0069258496,0
+2,0.3904969962,0.1104969962,1
+3,0.3926530612,-0.0273469388,0
+4,0.3389896373,0.0889896373,0

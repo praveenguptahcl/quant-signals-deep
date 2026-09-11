@@ -47,11 +47,11 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
 
 
 def signal_stub(value, threshold, computed_at):
-    """Minimal stub: direction from threshold crossing; confidence scaled."""
+    """Minimal stub: direction from threshold crossing; confidence = min(1, |I|)."""
     direction = 1 if value >= threshold else (-1 if value <= -threshold else 0)
-    confidence = min(1.0, abs(value) / (2 * threshold)) if direction else 0.0
+    confidence = min(1.0, abs(value)) if direction else 0.0  # matches S003.md S3
     return {"symbol": "TEST", "direction": direction, "confidence": confidence,
-            "capital": 0.5 * confidence, "computed_at": computed_at,
+            "capital": 0.5 * confidence, "computed_at": computed_at,  # S003.md S3 [default]
             "staleness_ns": 0, "module_state": "OK"}
 
 
@@ -113,3 +113,11 @@ def test_05_invalid_input_unknown():
     sig = signal_stub_invalid()
     assert sig["module_state"] == "UNKNOWN"
     assert sig["direction"] == 0
+
+
+def test_07_stub_deterministic():
+    """Extra: identical inputs produce identical outputs across calls."""
+    a = signal_stub(0.7, 0.5, computed_at=1700000000000000000)
+    b = signal_stub(0.7, 0.5, computed_at=1700000000000000000)
+    assert a == b
+    assert a["confidence"] == 0.7  # min(1, |0.7|) per S003.md S3

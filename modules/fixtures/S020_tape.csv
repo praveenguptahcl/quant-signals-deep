@@ -1,7 +1,14 @@
 # TYPE: validation-run
-print,signed_vol
-1,80
-2,120
-3,-50
-4,90
-5,-30
+# Fixture: sub-penny/TRF retail identification (Boehmer et al. 2021) + odd-lot
+# separation (O'Hara, Yao & Ye 2014). All numbers synthetic, seed 20260920 [example].
+# REF: ri_mean_ref=0.10 [example], ri_std_ref=0.25 [example], imb_z=2.0 [default],
+# min_retail_share=0.05 [default]. Pinned: RI=190/290=0.6552; z=2.2207 -> retail_bullish.
+print,price,size,off_exch,bid,ask,is_subpenny,spread_frac,is_retail_proxy,is_odd_lot,signed_vol,cum_retail_net,cum_retail_tot
+1,100.0199,80,1,100.00,100.02,1,0.995,1,1,80,80,80
+2,100.0198,120,1,100.00,100.02,1,0.99,1,0,120,200,200
+3,100.0001,50,1,100.00,100.02,1,0.005,1,1,-50,150,250
+4,100.0099,90,1,100.00,100.02,1,0.495,0,1,90,150,250
+5,100.0100,200,1,100.00,100.02,0,0.5,0,0,200,150,250
+6,100.0197,40,1,100.00,100.02,1,0.985,1,1,40,190,290
+7,100.0200,300,0,100.00,100.02,0,1.0,0,0,300,190,290
+8,100.0000,150,0,100.00,100.02,0,0.0,0,0,-150,190,290

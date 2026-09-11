@@ -1,6 +1,10 @@
 # TYPE: validation-run
-trade,signed_vol,cum_sum
-1,300,300
-2,-100,200
-3,500,700
-4,200,900
+# WARMUP: med_mu/med_sigma estimated from 78 prior 5-minute windows [example]
+# MED_MU: 0.0
+# MED_SIGMA: 300.0
+# STEALTH_Z: 2.0
+trade,signed_vol,cum_sum,z
+1,300,300,1.0
+2,-100,200,0.6666666666666666
+3,500,700,2.3333333333333335
+4,200,900,3.0

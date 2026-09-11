@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Expected outputs for S074_tape.csv. Hand-checked per the S074 chapter S4.
+# All numbers synthetic.
+strike,gex,total_gex,regime
+90,-900000.0000000000,-3589999.9999999991,amplify
+95,-5039999.9999999991,-3589999.9999999991,amplify
+100,5200000.0000000000,-3589999.9999999991,amplify
+105,-2400000.0000000000,-3589999.9999999991,amplify
+110,-450000.0000000000,-3589999.9999999991,amplify
