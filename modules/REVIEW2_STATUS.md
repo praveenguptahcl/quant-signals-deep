@@ -29,6 +29,7 @@ Commits: every ~25 modules done, `git status` + fetch first, stage ONLY modules/
 | `e475558` | R002–R043, 28 regime modules | Deep-review wave 4a: 28 regime modules → 1.1.0 with changelogs; normative pseudocode, calibration recipes, web-verified vendor prices, concrete cost interfaces, failure tables, regenerated/pinned fixtures (449/449 tests pass, independently verified) |
 | `ba41aab` | R004–R050, 14 regime modules | Deep-review wave 4b: 14 more regime modules → 1.1.0 (42/50 total); real bugs fixed (R030 calendar-vs-trading-day τ, citation corrections, R021/R009 vacuous verifier, R012 percentile float fragility, R049 roll-corruption guard); R050 SIP-only UNKNOWN honesty preserved (213/213 tests pass, independently verified) |
 | `c3f9ed9` | R001/R034/R044/R047 (4 modules) | Deep-review wave 4c: 4 regime modules → 1.1.0 (46/50 total); R001 structural F3 gap fixed, R034 back-adjustment bug fixed, R044 corrected 13F claims, R047 raw-input fixtures (67/67 tests pass, independently verified) |
+| `0331293` | R033/R041/R042 (3 modules) | Deep-review wave 4d: 3 regime modules → 1.1.0 (49/50 total); R033 streak-promotion rule implemented, R041 hysteresis, R042 dispersion hysteresis + AFTER-COST evidence; cross-module inconsistency flagged (S069 gates on R033 ACTIVE state, which does not exist) (49/49 tests pass, independently verified) |
 
 ## Wave 2 results (committed in e70eae5)
 
