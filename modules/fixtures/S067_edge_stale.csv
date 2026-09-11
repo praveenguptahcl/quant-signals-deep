@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Boundary case: stale input. asof_ts - event_ts = 10 s, which exceeds the
+# module staleness TTL of 3 s [default] (§S0.4). Every call on this tape must
+# emit UNKNOWN via the staleness guard. All numbers synthetic.
+day,bin,event_ts,asof_ts,absr
+0,0,1788960600000000000,1788960610000000000,0.0012000000
+0,1,1788966420000000000,1788966430000000000,0.0006000000
+0,2,1788972240000000000,1788972250000000000,0.0005000000
+0,3,1788978060000000000,1788978070000000000,0.0015000000

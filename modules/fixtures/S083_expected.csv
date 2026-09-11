@@ -1,5 +1,6 @@
 # TYPE: validation-run
 # Expected outputs for S083; tolerance 1e-9 [default]; all numbers synthetic, seed 83 [example].
+# Rows 16-17: validation rows — corrupt input and HALTED freeze both emit UNKNOWN (F1 / market-state table).
 ev,computed_at,direction,confidence,capital,module_state,edge_bps,cost_bps,tick_id,tick_done,tick_o,tick_h,tick_l,tick_c,vol_id,vol_done,vol_o,vol_h,vol_l,vol_c,imb_id,imb_done,imb_o,imb_h,imb_l,imb_c,theta
 1,1788946200000000000,0,0.0,0.0,OK,0.0,0.0,0,0,99.49,99.49,99.49,99.49,0,0,99.49,99.49,99.49,99.49,0,0,99.49,99.49,99.49,99.49,1000.0
 2,1788946201000000000,0,0.0,0.0,OK,0.0,0.0,0,0,99.49,99.49,99.34,99.34,0,0,99.49,99.49,99.34,99.34,0,0,99.49,99.49,99.34,99.34,700.0
@@ -16,3 +17,5 @@ ev,computed_at,direction,confidence,capital,module_state,edge_bps,cost_bps,tick_
 13,1788946212000000000,0,0.0,0.0,OK,0.0,0.0,2,0,98.88,99.38,98.88,99.38,3,0,99.38,99.38,99.38,99.38,2,0,99.38,99.38,99.38,99.38,500.0
 14,1788946213000000000,0,0.0,0.0,OK,0.0,0.0,2,0,98.88,99.38,98.88,99.2,3,0,99.38,99.38,99.2,99.2,2,0,99.38,99.38,99.2,99.2,300.0
 15,1788946214000000000,0,0.0,0.0,OK,0.0,0.0,2,1,98.88,99.47,98.88,99.47,3,0,99.38,99.47,99.2,99.47,2,0,99.38,99.47,99.2,99.47,1100.0
+16,1788946215000000000,0,0.0,0.0,UNKNOWN,0.0,0.0,0,0,nan,nan,nan,nan,0,0,nan,nan,nan,nan,0,0,nan,nan,nan,nan,nan
+17,1788946216000000000,0,0.0,0.0,UNKNOWN,0.0,0.0,0,0,nan,nan,nan,nan,0,0,nan,nan,nan,nan,0,0,nan,nan,nan,nan,nan

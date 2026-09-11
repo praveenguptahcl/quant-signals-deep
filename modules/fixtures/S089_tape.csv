@@ -1,10 +1,22 @@
 # TYPE: validation-run
-# Synthetic A-S quote updates (chapter S4, seed 89): inventory sweep q in {-20,-10,0,+10,+20}; s=100.00, sigma=0.3/session, T-t=1 session; rows 6-7 are invalid inputs
-ev,event_ts,s,q,sigma,Tt
-1,1788946200000000000,100.00,-20,0.3,1.0
-2,1788946260000000000,100.00,-10,0.3,1.0
-3,1788946320000000000,100.00,0,0.3,1.0
-4,1788946380000000000,100.00,10,0.3,1.0
-5,1788946440000000000,100.00,20,0.3,1.0
-6,1788946500000000000,100.00,nan,0.3,1.0
-7,1788946560000000000,nan,5,0.3,1.0
+# Synthetic A-S quote updates (chapter S4, seed 89): rows 1-5 inventory sweep q in {-20,-10,0,+10,+20}; s=100.00, sigma=0.3/session, T-t=1 session
+# rows 6-7 invalid inputs -> UNKNOWN; row 8 cost-gate veto (k_gate=1e-4) -> DEGRADED pull; row 9 q=21 > max_abs_q -> DEGRADED pull
+# row 10 (+30s) inside 60s cooldown -> DEGRADED; row 11 (+90s) cooldown expired -> OK; row 12 HALTED -> UNKNOWN; row 13 resume -> OK
+# row 14 stale (asof_ts = event_ts + 5s > 3s TTL) -> UNKNOWN; row 15 locate_ok=0 with direction -1 -> DEGRADED pull
+# optional per-row overrides (empty = cfg default): gamma, k_gate, market_state, asof_ts, locate_ok
+ev,event_ts,s,q,sigma,Tt,gamma,k_gate,market_state,asof_ts,locate_ok
+1,1788946200000000000,100.00,-20,0.3,1.0,,,,,
+2,1788946260000000000,100.00,-10,0.3,1.0,,,,,
+3,1788946320000000000,100.00,0,0.3,1.0,,,,,
+4,1788946380000000000,100.00,10,0.3,1.0,,,,,
+5,1788946440000000000,100.00,20,0.3,1.0,,,,,
+6,1788946500000000000,100.00,nan,0.3,1.0,,,,,
+7,1788946560000000000,nan,5,0.3,1.0,,,,,
+8,1788946620000000000,100.00,10,0.3,1.0,,0.0001,,,1
+9,1788946680000000000,100.00,21,0.3,1.0,,,,,
+10,1788946710000000000,100.00,5,0.3,1.0,,,,,
+11,1788946770000000000,100.00,5,0.3,1.0,,,,,
+12,1788946830000000000,100.00,0,0.3,1.0,,,HALTED,,
+13,1788946890000000000,100.00,0,0.3,1.0,,,,,
+14,1788946950000000000,100.00,0,0.3,1.0,,,,1788946955000000000,
+15,1788947010000000000,100.00,10,0.3,1.0,,,,,0

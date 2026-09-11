@@ -1,8 +1,15 @@
 # TYPE: validation-run
-# Synthetic news-story events (chapter S4, seed 91091): ESS x relevance x novelty; story 1 = tradable, stories 2/3/5 = gated out, story 4 = invalid input
-ev,event_ts,ess,rel,nov,trail_mean,trail_sd
-1,1788946203000000000,0.85,90,80,0.05,0.30
-2,1788949803000000000,-0.40,95,85,-0.02,0.25
-3,1788953403000000000,0.90,40,90,0.05,0.30
-4,1788957003000000000,nan,90,80,0.05,0.30
-5,1788960603000000000,0.60,85,60,0.05,0.30
+# Synthetic news-story events (chapter S4, seed 91 [example]):
+# story 1 = tradable; stories 2/3/5 = gated out; story 4 = invalid (NaN ESS);
+# story 6 = cost-gate veto; story 7 = |z| == z_entry boundary (no trade);
+# story 8 = out-of-bounds ESS (F2 -> UNKNOWN); story 9 = HALTED freeze (-> UNKNOWN)
+ev,event_ts,ess,rel,nov,trail_mean,trail_sd,market_state,illust_edge_bps,story_id
+1,1788946203000000000,0.85,90,80,0.05,0.30,CONTINUOUS_TRADING,42.7,NOVA-1
+2,1788949803000000000,-0.40,95,85,-0.02,0.25,CONTINUOUS_TRADING,0.0,NOVA-2
+3,1788953403000000000,0.90,40,90,0.05,0.30,CONTINUOUS_TRADING,0.0,NOVA-3
+4,1788957003000000000,nan,90,80,0.05,0.30,CONTINUOUS_TRADING,0.0,NOVA-4
+5,1788960603000000000,0.60,85,60,0.05,0.30,CONTINUOUS_TRADING,0.0,NOVA-5
+6,1788964203000000000,0.95,95,90,0.05,0.30,CONTINUOUS_TRADING,4.0,NOVA-6
+7,1788967803000000000,1.00,85,85,0.00,0.50,CONTINUOUS_TRADING,0.0,NOVA-7
+8,1788971403000000000,1.50,90,90,0.05,0.30,CONTINUOUS_TRADING,0.0,NOVA-8
+9,1788975003000000000,0.85,90,80,0.05,0.30,HALTED,0.0,NOVA-9

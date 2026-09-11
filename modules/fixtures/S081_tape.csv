@@ -1,5 +1,5 @@
 # TYPE: validation-run
-# Synthetic 90-second signed-trade tape (chapter S4, seed 81 [example]). Events 69-80 around the largest |z| burst; intensities are the chapter's stated values. All numbers synthetic. event_ts/asof_ts int64 ns UTC, per-event.
+# Synthetic burst-window signed-trade tape (chapter S4, seed 81 [example]). Events 69-82 around the largest |z| burst, plus boundary rows 81-82 (|z| just below/above kappa); intensities are the chapter's stated values. All numbers synthetic. event_ts/asof_ts int64 ns UTC, per-event.
 ev,event_ts,asof_ts,side,lam_b,lam_s
 69,7290000000,7290001000,-1,8.805,8.78
 70,7460000000,7460001000,-1,7.312,7.78
@@ -13,3 +13,5 @@ ev,event_ts,asof_ts,side,lam_b,lam_s
 78,7600000000,7600001000,-1,9.075,11.497
 79,7730000000,7730001000,-1,7.925,10.373
 80,7820000000,7820001000,-1,7.357,10.022
+81,7821000000,7821001000,1,10.0,7.42
+82,7822000000,7822001000,1,10.0,7.40

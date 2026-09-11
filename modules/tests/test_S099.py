@@ -1,8 +1,9 @@
-"""Acceptance tests for S099 — Google Trends ASVI.
+"""Acceptance tests for S099 — Google Trends ASVI (exposure scaler).
 
-Template v1.0.0. Loads the fixture tape, runs a reference implementation of the
-chapter's normative pseudocode, and asserts causality, the cost gate, and
-hand-checked arithmetic.
+Template v1.0.0 (module v1.1.0). Loads the fixture tape, runs a reference
+implementation of the chapter's normative pseudocode (§S3), and asserts
+causality, the cost gate, guards (staleness TTL, thin-SVI floor, halt freeze,
+post-change cooldown), and hand-checked arithmetic.
 
 Run: python3 -m pytest modules/tests/test_S099.py -q   (from repo root)
 """
@@ -19,8 +20,13 @@ TOL = 1e-9  # tolerance on float comparisons [default]
 EXPECTED_COLS = ["computed_at", "direction", "confidence", "capital", "module_state",
                  "edge_bps", "cost_bps", "asvi", "exposure", "gate_pass", "fill_event_ts"]
 
-# Chapter S3 parameters [example]
-CFG = {"delta": 1.0, "k": 0.5, "notional": 100000.0, "fee_rate_bps": 1.0}
+WEEK_NS = 7 * 86400 * 10**9          # one week in int64 ns [default]
+STALE_NS = 3 * WEEK_NS               # staleness TTL: 3x the 1-week cadence (F4) [default]
+
+# Chapter S3 Config [§S0.2]: delta matches the chapter default 0.5
+# (v1.0.0's test used 1.0 — a chapter/test inconsistency fixed in v1.1.0).
+CFG = {"delta": 0.5, "cost_gate_k": 0.5, "notional": 100000.0,
+       "cooldown_weeks": 2, "svi_min": 10.0}
 
 
 def load_csv(path):
@@ -53,62 +59,95 @@ def tape():
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
-    # Chapter S4 stack [example]: commissions/fees 1.0 + spread 2.0 + impact 3.0
-    spread_bps = 2.0
-    fee_bps = 1.0
-    borrow_bps = 0.0  # [default] chapter example is long-only on the ASVI screen
-    impact_bps = 3.0
+    # Chapter COST block, single source of truth (§S2): 2.0 + 1.0 + 0.0 + 3.0
+    spread_bps = 2.0   # [example]
+    fee_bps = 1.0      # [example]
+    borrow_bps = 0.0   # [default] long-only example; reason in COST block
+    impact_bps = 3.0   # [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
 def _bad(x):
-    return x is None or (isinstance(x, float) and math.isnan(x))
+    return x is None or (isinstance(x, float) and (math.isnan(x) or not math.isfinite(x)))
 
 
 def init_state():
-    return {"B_hist": []}
+    return {"B_hist": [], "last_event_ts": None,
+            "last_exposure": None, "last_change_week": None,
+            "market_state": "CONTINUOUS_TRADING"}
 
 
-def step(state, row, cfg):
+def step(state, row, cfg, adv_pct=0.01):
+    """Reference implementation of the §S3 normative pseudocode.
+
+    All guards inline: halt/auction freeze, staleness TTL, invalid input
+    (F1), thin-SVI floor, cost-gate predicate, post-change cooldown, and the
+    t->t+1 causality pin (fill_event = signal_event + 1, always > signal).
+    """
     ts = row.get("event_ts")
+    week = row.get("week")
     svi = row.get("svi")
-    out = {"computed_at": ts, "direction": 0, "confidence": 0.0, "capital": 0.0,
+    market = row.get("market_state", state.get("market_state", "CONTINUOUS_TRADING"))
+    out = {"computed_at": ts, "direction": 1, "confidence": 0.0, "capital": 0.0,
            "module_state": "UNKNOWN", "edge_bps": 0.0,
-           "cost_bps": expected_cost_bps(1e5, 0.01, "XNAS", "taker", "normal"),
+           "cost_bps": expected_cost_bps(cfg["notional"], adv_pct, "XNAS", "taker", "normal"),
            "asvi": float("nan"), "exposure": float("nan"), "gate_pass": 0,
            "fill_event_ts": ts + 1 if isinstance(ts, int) else None}
-    # F1: invalid input -> UNKNOWN, never interpolate
+    # Halt/auction -> freeze per §S0.5: do not advance the window
+    if market in ("HALTED", "AUCTION"):
+        out["module_state"] = "UNKNOWN" if market == "HALTED" else "DEGRADED"
+        return out, state
+    # F4 staleness: gap > 3x cadence -> UNKNOWN
+    if state["last_event_ts"] is not None and isinstance(ts, int) \
+            and (ts - state["last_event_ts"]) > STALE_NS:
+        return out, state
+    # F1: invalid input -> UNKNOWN, never interpolate; does not advance the window
     if any(_bad(v) for v in (ts, svi)) or svi <= 0:
+        return out, state
+    # Thin-ticker floor: unstable SVI -> UNKNOWN
+    if svi < cfg["svi_min"]:
         return out, state
     B = math.log(svi)
     state["B_hist"].append(B)
-    # separate-download warning: the prior 8-week median must come from a download
-    # that strictly precedes the current week (no renormalization on fresh data)
+    state["last_event_ts"] = ts
     if len(state["B_hist"]) < 9:
-        return out, state  # insufficient history -> UNKNOWN
-    window = state["B_hist"][-9:-1]
+        return out, state  # need 8 priors + the current week -> UNKNOWN
+    # the 8 most recent valid points before the current week; the current week
+    # is EXCLUDED [documented]; invalid weeks were never appended, never interpolated
+    window = state["B_hist"][:-1][-8:]
     med = statistics.median(window)
     asvi = B - med
-    clipped = max(-cfg["delta"], min(cfg["delta"], asvi))
-    exposure = 1.0 + clipped  # long-only scale around full exposure [example]
-    out["asvi"] = asvi
-    out["exposure"] = exposure
-    direction = 1  # exposure scaler, not a direction signal
+    proposed = 1.0 + max(-cfg["delta"], min(cfg["delta"], asvi))  # long-only clip
     confidence = min(1.0, abs(asvi))
-    # chapter S4 hand-check: fee drag 0.75 + spread 1.50 = 2.25 bps/event [example]
-    cost = cfg["notional"] * (cfg["fee_rate_bps"] / 10000.0)
-    edge_bps = abs(asvi) * 100.0
-    gate = 1 if out["cost_bps"] <= cfg["k"] * edge_bps else 0
-    out.update({"module_state": "OK", "direction": direction, "confidence": confidence,
-                "capital": 0.5 * confidence, "edge_bps": edge_bps, "gate_pass": gate})
+    edge_bps = abs(asvi) * 100.0  # illustrative edge [example]
+    gate_pass = 1 if out["cost_bps"] <= cfg["cost_gate_k"] * edge_bps else 0
+    if gate_pass == 0:
+        # C2 for exposure scalers: sub-threshold -> neutral scale 1.0
+        # (direction stays 1 per the scaler doctrine), never a tradeable hint
+        applied = 1.0
+    else:
+        applied = proposed
+    state_out = "OK"
+    last = state["last_exposure"]
+    if last is not None and abs(applied - last) > 1e-9 \
+            and (week - state["last_change_week"]) < cfg["cooldown_weeks"]:
+        applied = last  # post-change cooldown veto: hold last exposure
+        state_out = "DEGRADED"
+    elif last is None or abs(applied - last) > 1e-9:
+        state["last_exposure"] = applied
+        state["last_change_week"] = week
+    out.update({"module_state": state_out, "confidence": confidence,
+                "capital": 0.5 * confidence, "asvi": asvi, "exposure": applied,
+                "edge_bps": edge_bps, "gate_pass": gate_pass})
     return out, state
 
 
-def run(rows):
+def run(rows, cfg=None):
+    cfg = cfg or CFG
     st = init_state()
     out = []
     for r in rows:
-        sig, st = step(st, r, CFG)
+        sig, st = step(st, r, cfg)
         out.append(sig)
     return out
 
@@ -157,6 +196,10 @@ def test_signal_vector_valid():
         assert s["module_state"] in ("OK", "DEGRADED", "UNKNOWN", "OFF")
 
 
+def _mk(week, ts, svi):
+    return {"week": week, "event_ts": ts, "svi": svi}
+
+
 def test_hand_checks():
     # Chapter S4 worked numbers [example]: ln(100)=4.6052, ln(50)=3.9120,
     # ASVI = 4.6052-3.9120 = +0.6931; ln(75)=4.3175 -> 4.3175-3.9120 = +0.4055
@@ -164,21 +207,58 @@ def test_hand_checks():
     assert abs(math.log(50.0) - 3.9120) < 1e-4
     assert abs((math.log(100.0) - math.log(50.0)) - 0.6931) < 1e-4
     assert abs((math.log(75.0) - math.log(50.0)) - 0.4055) < 1e-4
-    # chapter cost accounting: 0.75 bps fee = $7.50 on $100k, spread 1.50 bps = $15.00 [example]
-    assert abs(1e5 * 0.75 / 10000.0 - 7.50) < 1e-9
-    assert abs(1e5 * 1.50 / 10000.0 - 15.00) < 1e-9
+    # COST block accounting (single source of truth): 1.0 bps fee = $10.00
+    # on $100k, 2.0 bps spread = $20.00 [example]
+    assert abs(1e5 * 1.0 / 10000.0 - 10.00) < 1e-9
+    assert abs(1e5 * 2.0 / 10000.0 - 20.00) < 1e-9
     sigs = run(tape())
     # weeks 1-8: insufficient history -> UNKNOWN
     for s in sigs[:8]:
         assert s["module_state"] == "UNKNOWN"
+    # week 9: SVI 88 vs priors (18,22,19,25,21,24,23,20) -> positive ASVI
     s9 = sigs[8]
-    assert s9["module_state"] == "OK"
-    # week 9: prior 8-week median of ln(svi) for weeks 1-8 (18,22,19,25,21,24,23,20)
     B9 = math.log(88.0)
-    prior = [math.log(x) for x in (18, 22, 19, 25, 21, 24, 23, 20)]
-    assert abs(s9["asvi"] - (B9 - statistics.median(prior))) < 1e-9
-    assert s9["exposure"] > 1.0, "positive ASVI must scale exposure above 1x"
+    prior9 = [math.log(x) for x in (18, 22, 19, 25, 21, 24, 23, 20)]
+    assert s9["module_state"] == "OK"
+    assert abs(s9["asvi"] - (B9 - statistics.median(prior9))) < 1e-9
+    assert s9["asvi"] > 0.5, "ASVI must exceed the 0.5 clip"
+    assert s9["exposure"] == 1.5, "clip at +delta=0.5 -> exposure exactly 1.5"
     assert s9["gate_pass"] == 1
+    # week 10: proposes 1.5 vs last 2.0... last is 1.5, equal -> OK, no change
+    s10 = sigs[9]
+    assert s10["module_state"] == "OK"
+    assert s10["exposure"] == 1.5
+    # week 11: NaN SVI -> UNKNOWN, never interpolate, window does not advance
+    s11 = sigs[10]
+    assert s11["module_state"] == "UNKNOWN"
+    # week 12: SVI 21 -> tiny edge -> gate veto -> neutral scale 1.0, gate_pass 0
+    s12 = sigs[11]
+    prior12 = [math.log(x) for x in (19, 25, 21, 24, 23, 20, 88, 64)]
+    asvi12 = math.log(21.0) - statistics.median(prior12)
+    assert abs(s12["asvi"] - asvi12) < 1e-9
+    assert s12["gate_pass"] == 0, "tiny edge must fail the cost gate"
+    assert s12["exposure"] == 1.0, "gate veto -> neutral scale"
+    assert s12["module_state"] == "OK"
+    # week 13: proposes ~1.5 but last change was week 12 -> cooldown veto
+    s13 = sigs[12]
+    assert s13["module_state"] == "DEGRADED", "cooldown must veto the week-13 rebound"
+    assert s13["exposure"] == 1.0, "cooldown holds the last applied exposure"
+    assert s13["gate_pass"] == 1, "gate itself passes; the cooldown vetoes"
+    # week 14: SVI 5 < svi_min 10 -> UNKNOWN (thin-ticker floor)
+    s14 = sigs[13]
+    assert s14["module_state"] == "UNKNOWN"
+    # week 15: SVI 15 -> negative ASVI, cooldown satisfied (15-12 >= 2) -> OK
+    s15 = sigs[14]
+    prior15 = [math.log(x) for x in (21, 24, 23, 20, 88, 64, 21, 88)]
+    asvi15 = math.log(15.0) - statistics.median(prior15)
+    assert abs(s15["asvi"] - asvi15) < 1e-9
+    assert s15["asvi"] < 0, "week 15 ASVI must be negative"
+    assert s15["module_state"] == "OK"
+    assert abs(s15["exposure"] - (1.0 + max(-0.5, asvi15))) < 1e-9
+    # week 16: proposes a rebound vs the week-15 change -> cooldown veto
+    s16 = sigs[15]
+    assert s16["module_state"] == "DEGRADED"
+    assert abs(s16["exposure"] - s15["exposure"]) < 1e-9, "cooldown holds week-15 exposure"
 
 
 def test_no_signal_bar_fills():
@@ -203,6 +283,94 @@ def test_cost_gate():
 
 def test_invalid_input_unknown():
     st = init_state()
-    bad = {"event_ts": 1, "week": 99, "svi": 0.0}
-    sig, _ = step(st, bad, CFG)
-    assert sig["module_state"] == "UNKNOWN", "invalid input must map to UNKNOWN, never interpolate"
+    for bad in (0.0, -5.0, float("nan"), float("inf"), None):
+        sig, _ = step(st, _mk(99, 10**18, bad), CFG)
+        assert sig["module_state"] == "UNKNOWN", \
+            f"svi={bad} must map to UNKNOWN, never interpolate"
+    sig, _ = step(st, _mk(99, float("nan"), 50.0), CFG)
+    assert sig["module_state"] == "UNKNOWN", "non-finite event_ts must map to UNKNOWN"
+
+
+def test_boundary_clip():
+    # 8 weeks of flat SVI 50 -> median ln(50); ASVI exactly 0 -> exposure 1.0
+    rows = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    rows.append(_mk(9, 9 * WEEK_NS, 50.0))
+    sigs = run(rows)
+    s = sigs[8]
+    assert abs(s["asvi"]) < 1e-12, "flat series must give ASVI 0"
+    assert s["exposure"] == 1.0, "zero ASVI -> neutral scale"
+    assert s["confidence"] == 0.0
+    assert s["gate_pass"] == 0, "zero edge must fail the cost gate"
+    # large shock: ASVI 1.386 > delta 0.5 -> exposure exactly 1+delta
+    rows2 = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    rows2.append(_mk(9, 9 * WEEK_NS, 200.0))
+    s2 = run(rows2)[8]
+    assert s2["asvi"] > CFG["delta"]
+    assert s2["exposure"] == 1.0 + CFG["delta"], "positive clip must bind exactly"
+
+
+def test_gate_veto_path():
+    # tiny edge -> gate_pass 0 -> neutral scale 1.0, module stays OK (no opinion)
+    rows = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    rows.append(_mk(9, 9 * WEEK_NS, 51.0))  # ASVI ~ ln(51/50) = 0.0198
+    s = run(rows)[8]
+    assert s["module_state"] == "OK"
+    assert s["gate_pass"] == 0
+    assert s["exposure"] == 1.0
+    assert s["direction"] == 1, "direction stays 1: the scaler's neutral is scale 1.0"
+
+
+def test_cooldown_veto_path():
+    # shock at week 9 applies; rebound at week 11 vetoed (11-9 < 2); week 12 allowed
+    rows = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    rows += [_mk(9, 9 * WEEK_NS, 150.0),   # shock up -> exposure 1.5
+             _mk(10, 10 * WEEK_NS, 150.0),  # same -> no change, OK
+             _mk(11, 11 * WEEK_NS, 50.0),   # propose 1.0, 11-9=2 -> allowed
+             _mk(12, 12 * WEEK_NS, 150.0)]  # propose 1.5, 12-11=1 < 2 -> veto
+    sigs = run(rows)
+    assert sigs[8]["exposure"] == 1.5 and sigs[8]["module_state"] == "OK"
+    assert sigs[9]["module_state"] == "OK" and sigs[9]["exposure"] == 1.5
+    assert sigs[10]["module_state"] == "OK" and sigs[10]["exposure"] == 1.0
+    s12 = sigs[11]
+    assert s12["module_state"] == "DEGRADED", "cooldown must veto the week-12 rebound"
+    assert s12["exposure"] == 1.0, "veto holds the last applied exposure"
+
+
+def test_staleness_unknown():
+    rows = [_mk(1, 1 * WEEK_NS, 50.0)]
+    rows.append(_mk(2, 1 * WEEK_NS + STALE_NS + 1, 60.0))  # gap > 3 weeks
+    s = run(rows)[1]
+    assert s["module_state"] == "UNKNOWN", "stale input must map to UNKNOWN"
+    # exactly at the TTL boundary is still accepted
+    rows2 = [_mk(1, 1 * WEEK_NS, 50.0)]
+    rows2.append(_mk(2, 1 * WEEK_NS + STALE_NS, 60.0))
+    s2 = run(rows2)[1]
+    assert s2["module_state"] == "UNKNOWN", "insufficient history dominates at week 2"
+
+
+def test_thin_svi_floor():
+    rows = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    rows.append(_mk(9, 9 * WEEK_NS, CFG["svi_min"] - 0.1))
+    s = run(rows)[8]
+    assert s["module_state"] == "UNKNOWN", "SVI below the thin floor must map to UNKNOWN"
+    rows2 = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    rows2.append(_mk(9, 9 * WEEK_NS, CFG["svi_min"]))
+    s2 = run(rows2)[8]
+    assert s2["module_state"] == "OK", "SVI exactly at the floor must be processed"
+
+
+def test_halt_freeze():
+    rows = [_mk(w, w * WEEK_NS, 50.0) for w in range(1, 9)]
+    halted = _mk(9, 9 * WEEK_NS, 80.0)
+    halted["market_state"] = "HALTED"
+    st = init_state()
+    for r in rows:
+        step(st, r, CFG)
+    before = list(st["B_hist"])
+    sig, st = step(st, halted, CFG)
+    assert sig["module_state"] == "UNKNOWN", "halt must freeze the module"
+    assert st["B_hist"] == before, "halt must not advance the feature window"
+    auction = _mk(10, 10 * WEEK_NS, 80.0)
+    auction["market_state"] = "AUCTION"
+    sig2, _ = step(st, auction, CFG)
+    assert sig2["module_state"] == "DEGRADED", "auction holds the last vector"

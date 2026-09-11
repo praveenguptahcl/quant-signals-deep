@@ -1,0 +1,10 @@
+# TYPE: validation-run
+# Boundary tape: months 0-3 flat VRP (z=0), month 4 VRP spikes so z=sqrt(3)≈1.732 > z_entry=1.5 [example].
+# Month 4 must emit direction=1 with the cost gate passing (edge_bps = 173.2 >> 2*6.6 cost).
+# event_ts/asof_ts int64 ns UTC. All numbers synthetic.
+month,event_ts,asof_ts,iv_ann,rv_ann
+0,1788960600000000000,1788960600000120000,20,18
+1,1791552600000000000,1791552600000120000,22,20
+2,1794144600000000000,1794144600000120000,19,17
+3,1796736600000000000,1796736600000120000,21,19
+4,1799328600000000000,1799328600000120000,25,16

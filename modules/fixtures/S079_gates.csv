@@ -1,0 +1,19 @@
+# TYPE: validation-run
+# Gate decision-table fixture for S079 §S2 Boolean rules (boundary conditions).
+# p_halve = 0.7, p_suspend = 0.8 [example]; cost gate predicate: cost_bps <= k*edge_bps, k = 0.5 [default].
+# Gate mapping: p_vol < 0.7 -> FULL/+1; 0.7 <= p_vol < 0.8 -> HALVE/0; p_vol >= 0.8 -> SUSPEND/-1.
+# Veto suffixes appended in order: |COST (cost gate fails), |COOLDOWN (in cooldown), |LOCATE (no locate for -1).
+p_vol,cost_ok,in_cooldown,locate_ok,gate,direction
+0.69999,1,0,1,FULL,1
+0.7,1,0,1,HALVE,0
+0.79999,1,0,1,HALVE,0
+0.8,1,0,1,SUSPEND,-1
+0.05,0,0,1,FULL|COST,0
+0.75,0,0,1,HALVE|COST,0
+0.95,0,0,1,SUSPEND|COST,0
+0.05,1,1,1,FULL|COOLDOWN,0
+0.95,1,1,1,SUSPEND|COOLDOWN,0
+0.95,1,0,0,SUSPEND|LOCATE,0
+0.05,0,1,1,FULL|COST|COOLDOWN,0
+0.0,1,0,1,FULL,1
+1.0,1,0,1,SUSPEND,-1

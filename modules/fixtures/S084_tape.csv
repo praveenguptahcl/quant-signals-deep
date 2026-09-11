@@ -1,5 +1,5 @@
 # TYPE: validation-run
-# Synthetic 6-event tape (chapter S4, seed 42): VAR(1) with chapter-estimated A carried as config
+# Synthetic 6-event tape (chapter S4, seed 84): VAR(1) with chapter-estimated A carried as config
 ev,event_ts,bid,ask,mid,dm,q
 1,1788947223000000000,99.9932,100.0032,99.9982,-0.0018,1
 2,1788947224000000000,100.0048,100.0148,100.0098,0.0116,1

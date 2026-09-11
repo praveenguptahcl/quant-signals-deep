@@ -1,0 +1,21 @@
+# TYPE: validation-run
+# S070 edge cases: boundary conditions, invalid inputs, and market-state gates.
+# Each row is evaluated as a single-bar input to signal(); single bar => z = 0
+# (population std over n=1 is 0), so expected_direction is 0 except where the
+# market-state gate holds a prior direction (tested programmatically instead).
+# event_ts/asof_ts int64 ns UTC. All numbers synthetic.
+case_id,implied_move,realized_move,iv_pct,event_ts,asof_ts,market_state,expected_state,expected_direction,note
+zero_implied,0.0,5.0,80,1788960600000000000,1788960600000120000,,UNKNOWN,0,F2: implied_move must be > 0
+neg_implied,-2.0,5.0,80,1788960601000000000,1788960601000120000,,UNKNOWN,0,F2: negative implied_move
+nan_implied,nan,5.0,80,1788960602000000000,1788960602000120000,,UNKNOWN,0,F2: non-finite implied_move
+inf_implied,inf,5.0,80,1788960603000000000,1788960603000120000,,UNKNOWN,0,F2: infinite implied_move
+neg_realized,8.0,-1.0,80,1788960604000000000,1788960604000120000,,UNKNOWN,0,F2: negative realized_move
+nan_realized,8.0,nan,80,1788960605000000000,1788960605000120000,,UNKNOWN,0,F2: non-finite realized_move
+zero_realized,8.0,0.0,80,1788960606000000000,1788960606000120000,,OK,0,zero post-event move is valid data
+bad_ivpct_high,8.0,5.0,150,1788960607000000000,1788960607000120000,,UNKNOWN,0,F2: iv_pct outside [0,100]
+bad_ivpct_neg,8.0,5.0,-5,1788960608000000000,1788960608000120000,,UNKNOWN,0,F2: iv_pct outside [0,100]
+nan_ivpct,8.0,5.0,nan,1788960609000000000,1788960609000120000,,UNKNOWN,0,F2: non-finite iv_pct
+stale,8.0,5.0,80,1788960610000000000,1788960620000000000,,UNKNOWN,0,staleness 10 s > TTL 3 s [default]
+halted,8.0,5.0,80,1788960611000000000,1788960611000120000,HALTED,UNKNOWN,0,freeze; contributions across reopen discarded
+auction,8.0,5.0,80,1788960612000000000,1788960612000120000,AUCTION,DEGRADED,0,no new signals; hold last
+closed,8.0,5.0,80,1788960613000000000,1788960613000120000,CLOSED,OFF,0,emit nothing

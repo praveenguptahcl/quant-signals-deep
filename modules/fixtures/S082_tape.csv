@@ -1,8 +1,9 @@
 # TYPE: validation-run
 # Accuracy-sweep eval tape (chapter S4 waterfall, seed 82 [example]). 5 scenarios at 50-70% accuracy; pence units echo the LSE review lead. All numbers synthetic. event_ts/asof_ts int64 ns UTC.
-ev,event_ts,asof_ts,acc,mu_c,mu_w,spread,fees
-1,1000000000000,1000000001000,0.5,0.06,-0.06,0.05,0.005
-2,1000000001000,1000000002000,0.55,0.06,-0.06,0.05,0.005
-3,1000000002000,1000000003000,0.6,0.06,-0.06,0.05,0.005
-4,1000000003000,1000000004000,0.65,0.06,-0.06,0.05,0.005
-5,1000000004000,1000000005000,0.7,0.06,-0.06,0.05,0.005
+# The classifier is modeled as confident (max_p=0.9 [example] > p_conf) so rows flow through to the cost arithmetic; every scenario is net-negative after cost.
+ev,event_ts,asof_ts,acc,mu_c,mu_w,spread,fees,max_p,cstar,locate_ok,market_state,last_emit_ts
+1,1000000000000,1000000001000,0.5,0.06,-0.06,0.05,0.005,0.9,1,1,CONTINUOUS_TRADING,0
+2,1000000001000,1000000002000,0.55,0.06,-0.06,0.05,0.005,0.9,1,1,CONTINUOUS_TRADING,0
+3,1000000002000,1000000003000,0.6,0.06,-0.06,0.05,0.005,0.9,1,1,CONTINUOUS_TRADING,0
+4,1000000003000,1000000004000,0.65,0.06,-0.06,0.05,0.005,0.9,1,1,CONTINUOUS_TRADING,0
+5,1000000004000,1000000005000,0.7,0.06,-0.06,0.05,0.005,0.9,1,1,CONTINUOUS_TRADING,0

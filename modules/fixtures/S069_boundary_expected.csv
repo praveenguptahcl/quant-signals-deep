@@ -1,0 +1,10 @@
+# TYPE: validation-run
+# Expected outputs for S069_boundary.csv. Hand-checked per the S069 chapter S4.
+# Month 4: hist=[2,2,2,9], mu=3.75, sd=3.0310889132, z=(9-3.75)/sd=1.7320508076 > 1.5 -> direction=1.
+# All numbers synthetic.
+month,vrp_vol,vrp_var,z,direction
+0,2,76,0.0000000000,0
+1,2,84,0.0000000000,0
+2,2,72,0.0000000000,0
+3,2,80,0.0000000000,0
+4,9,369,1.7320508076,1

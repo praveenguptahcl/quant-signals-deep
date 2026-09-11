@@ -1,0 +1,11 @@
+# TYPE: validation-run
+# Invalid-input tape: EVERY row must yield module_state=UNKNOWN and direction=0.
+# Row 0: iv_ann=0 (non-positive). Row 1: rv_ann=-5 (negative). Row 2: iv_ann=NaN.
+# Row 3: iv_ann=inf (non-finite). Row 4: rv_ann=NaN. Empty input is covered in the test.
+# event_ts/asof_ts int64 ns UTC.
+month,event_ts,asof_ts,iv_ann,rv_ann
+0,1788960600000000000,1788960600000120000,0,20
+1,1791552600000000000,1791552600000120000,22,-5
+2,1794144600000000000,1794144600000120000,NaN,20
+3,1796736600000000000,1796736600000120000,inf,20
+4,1799328600000000000,1799328600000120000,22,NaN

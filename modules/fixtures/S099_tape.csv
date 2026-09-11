@@ -1,5 +1,9 @@
 # TYPE: validation-run
-# Synthetic 10-week Google Trends tape for fictional XYZQ (chapter S4, seed 99): weekly SVI (0-100); attention shock at week 9
+# Synthetic 16-week Google Trends tape for fictional XYZQ (chapter S4, seed 99): weekly SVI (0-100); attention shock at week 9
+# weeks 1-8: baseline (insufficient history -> UNKNOWN) | 9: shock (OK, exposure 1.5) | 10: same scale (OK)
+# 11: NaN SVI -> UNKNOWN (F1, window does not advance) | 12: near-median SVI -> gate veto (exposure 1.0)
+# 13: rebound proposed -> cooldown veto (DEGRADED, holds 1.0) | 14: SVI 5 < floor -> UNKNOWN
+# 15: negative shock -> OK (cooldown satisfied) | 16: rebound -> cooldown veto (DEGRADED)
 week,event_ts,svi
 1,1787174400000000000,18
 2,1787779200000000000,22
@@ -11,3 +15,9 @@ week,event_ts,svi
 8,1791402000000000000,20
 9,1792006800000000000,88
 10,1792611600000000000,64
+11,1793216400000000000,NaN
+12,1793821200000000000,21
+13,1794426000000000000,88
+14,1795030800000000000,5
+15,1795635600000000000,15
+16,1796240400000000000,60

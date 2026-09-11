@@ -1,0 +1,10 @@
+# TYPE: validation-run
+# Edge-case tape for S092 (seed 92, hand-checked): boundary |z|==threshold (3.5),
+# cost-gate veto (edge 2 bps), invalid input -> UNKNOWN, HALTED -> UNKNOWN,
+# no-news down-jump -> fade long. market_state per the §S0.5 table.
+ev,event_ts,jump_pct,jump_z,news_flag,next60_pct,market_state
+7,1788962100000000000,1.6,3.0,1,0.6,CONTINUOUS_TRADING
+8,1788962400000000000,1.6,4.0,1,0.02,CONTINUOUS_TRADING
+9,1788962700000000000,NaN,4.0,1,0.5,CONTINUOUS_TRADING
+10,1788963000000000000,1.8,4.5,0,-0.8,HALTED
+11,1788963300000000000,-1.7,-3.9,0,0.4,CONTINUOUS_TRADING

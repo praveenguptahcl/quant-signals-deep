@@ -7,6 +7,10 @@ the crowding score here is the chapter's OWN illustrative §S3 example —
 the sum of cross-sectional z-scores of SI/float, days-to-cover, and fee
 (desk-specific example, not an institutional standard).
 
+v1.1.0 deep-review additions: threshold-boundary tests (strict > semantics),
+invalid-input -> UNKNOWN coverage, gate-veto path semantics
+(gate_pass == hard or squeeze, direction always 0), empty-panel UNKNOWN.
+
 Run: python3 -m pytest modules/tests/test_S098.py -q   (from repo root)
 """
 import csv
@@ -67,7 +71,8 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
 
 
 def _bad(x):
-    return x is None or (isinstance(x, float) and math.isnan(x))
+    # F1 invalid-input class: missing, NaN, or non-finite -> UNKNOWN, never interpolate
+    return x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x)))
 
 
 def _clip01(x):
@@ -248,3 +253,106 @@ def test_invalid_input_unknown():
            "fee_ann": 1.0, "util": 10.0, "dix": 8.0}
     sig, _ = step(st, bad, CFG)
     assert sig["module_state"] == "UNKNOWN", "invalid input must map to UNKNOWN, never interpolate"
+
+
+def _panel_state():
+    # state with the real tape's cross-sectional stats, for synthetic-row tests
+    st = init_state()
+    st["xstats"] = _xstats(tape())
+    return st
+
+
+def _row(**kw):
+    base = {"ticker": "SYN", "si_m": 42.0, "float_m": 150.0, "adv_m": 4.5,
+            "fee_ann": 42.0, "util": 97.0, "dix": 16.0}
+    base.update(kw)
+    return base
+
+
+def test_boundary_fee_exactly_at_threshold():
+    # fee_bps == hard_fee_bps is NOT hard (strict >); chapter S3 guard semantics
+    st = _panel_state()
+    sig, _ = step(st, _row(fee_ann=1.0), CFG)  # 1.0 %/ann == 100 bps exactly
+    assert sig["module_state"] == "OK"
+    assert sig["hard_flag"] == 0, "fee exactly at threshold must not flag hard"
+    assert sig["squeeze_flag"] == 0
+    assert sig["gate_pass"] == 0
+    assert sig["direction"] == 0
+
+
+def test_boundary_dtc_exactly_at_threshold():
+    # dtc == sqz_dtc is NOT a squeeze (strict >); other corner conditions pass
+    st = _panel_state()
+    sig, _ = step(st, _row(si_m=45.0, adv_m=9.0), CFG)  # 45.0/9.0 == 5.0 days exactly
+    assert sig["module_state"] == "OK"
+    assert sig["crowd_score"] > CFG["sqz_crowd"], "test must isolate the dtc boundary"
+    assert sig["squeeze_flag"] == 0, "dtc exactly at threshold must not squeeze"
+    assert sig["hard_flag"] == 1  # fee 4200 bps still hard
+    assert sig["gate_pass"] == 1  # hard veto path still gates
+    assert sig["direction"] == 0
+
+
+def test_boundary_crowd_exactly_at_threshold():
+    # squeeze requires crowd STRICTLY greater than sqz_crowd
+    st = _panel_state()
+    row = _row()
+    xs = st["xstats"]
+    crowd = (_z(row["si_m"] / row["float_m"] * 100.0, xs["si"])
+             + _z(row["si_m"] / row["adv_m"], xs["dtc"])
+             + _z(row["fee_ann"], xs["fee"]))
+    assert crowd > CFG["sqz_crowd"], "fixture corner must clear the crowd threshold"
+    cfg_at = dict(CFG, sqz_crowd=crowd)  # threshold exactly at the computed crowd
+    sig, _ = step(_panel_state(), row, cfg_at)
+    assert sig["squeeze_flag"] == 0, "crowd exactly at threshold must not squeeze"
+    sig2, _ = step(_panel_state(), row, CFG)
+    assert sig2["squeeze_flag"] == 1, "corner must squeeze under default thresholds"
+
+
+def test_boundary_util_exactly_at_threshold():
+    # util == sqz_util (percent units) is NOT a squeeze (strict >)
+    st = _panel_state()
+    sig, _ = step(st, _row(util=90.0), CFG)
+    assert sig["module_state"] == "OK"
+    assert sig["squeeze_flag"] == 0, "util exactly at 90.0% must not squeeze"
+    assert sig["hard_flag"] == 1
+    assert sig["gate_pass"] == 1
+
+
+def test_gate_veto_path():
+    # gate_pass == hard or squeeze on every tape row; direction is always 0
+    # even when the squeeze veto fires (module gates, never initiates).
+    sigs = run(tape())
+    rows = tape()
+    for s in sigs:
+        assert s["gate_pass"] == (1 if (s["hard_flag"] or s["squeeze_flag"]) else 0)
+        assert s["direction"] == 0
+    by_ticker = {r["ticker"]: s for r, s in zip(rows, sigs)}
+    assert by_ticker["MEMEQ"]["squeeze_flag"] == 1 and by_ticker["MEMEQ"]["gate_pass"] == 1
+    assert by_ticker["KLVR"]["hard_flag"] == 1 and by_ticker["KLVR"]["squeeze_flag"] == 0 \
+        and by_ticker["KLVR"]["gate_pass"] == 1  # hard veto path: gated without squeeze
+    assert by_ticker["ZQTA"]["gate_pass"] == 0
+
+
+def test_invalid_inputs_all_map_to_unknown():
+    st = _panel_state()
+    bad_rows = [
+        _row(si_m=float("nan")),      # NaN short interest
+        _row(si_m=-5.0),              # negative short interest
+        _row(float_m=0.0),            # zero float
+        _row(adv_m=0.0),              # zero ADV
+        _row(fee_ann=float("inf")),   # non-finite fee
+        _row(util=None),              # missing utilization
+    ]
+    for i, bad in enumerate(bad_rows):
+        sig, _ = step(_panel_state(), bad, CFG)
+        assert sig["module_state"] == "UNKNOWN", f"bad row {i} must map to UNKNOWN"
+        assert math.isnan(sig["crowd_score"]), f"bad row {i} must not produce a score"
+        assert sig["hard_flag"] == 0 and sig["squeeze_flag"] == 0, \
+            f"bad row {i} must not raise flags"
+
+
+def test_empty_panel_unknown():
+    # fewer than 2 valid names -> no cross-sectional stats -> UNKNOWN, never interpolate
+    st = init_state()
+    sig, _ = step(st, _row(), CFG)
+    assert sig["module_state"] == "UNKNOWN"

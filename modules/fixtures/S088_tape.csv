@@ -1,5 +1,5 @@
 # TYPE: validation-run
-# Synthetic 60-event schedule (chapter S4, seed 88088): E_i -> [i,i+5], test fold E41-60, embargo 3
+# Synthetic 60-event schedule (chapter S4, seed 88): E_i -> [i,i+5], test fold E41-60, embargo 5 (>= max horizon)
 ev,event_ts,t0_day,t1_day
 1,1788912000000000000,1,6
 2,1788998400000000000,2,7
