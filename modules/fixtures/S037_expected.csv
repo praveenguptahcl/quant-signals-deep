@@ -1,0 +1,5 @@
+# TYPE: validation-run
+# S037 expected features for the fixture tape. Recomputed by the reference implementation; blanks = warmup (NaN).
+id,r_open,V,Z,T,jump,dir
+s1,0.01980262729617973,1.535756765009531e-05,5.053143076614255,7.228084347954006,1,0
+s2,0.001998002662673058,1.0341106481705038e-06,1.9647737972588692,1.3345559596895744,0,0
