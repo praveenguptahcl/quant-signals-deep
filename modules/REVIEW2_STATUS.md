@@ -31,7 +31,7 @@ Commits: every ~25 modules done, `git status` + fetch first, stage ONLY modules/
 | `c3f9ed9` | R001/R034/R044/R047 (4 modules) | Deep-review wave 4c: 4 regime modules → 1.1.0 (46/50 total); R001 structural F3 gap fixed, R034 back-adjustment bug fixed, R044 corrected 13F claims, R047 raw-input fixtures (67/67 tests pass, independently verified) |
 | `0331293` | R033/R041/R042 (3 modules) | Deep-review wave 4d: 3 regime modules → 1.1.0 (49/50 total); R033 streak-promotion rule implemented, R041 hysteresis, R042 dispersion hysteresis + AFTER-COST evidence; cross-module inconsistency flagged (S069 gates on R033 ACTIVE state, which does not exist) (49/49 tests pass, independently verified) |
 | `4222ae3` | R046 (1 module) | Deep-review wave 4e: final regime module → 1.1.0 (50/50 total); real bug caught — CME-futures GLBX.MDP3 dataset on a US-equities module, corrected to DBEQ.BASIC ohlcv-1d; hysteresis, calibration recipe, normative DETECT, 5 documented evidence sources (19/19 tests pass, independently verified) |
-| _(pending)_ | DEEP_REVIEW_REPORT.md | Final consolidated report: top-20 fixes, test totals, material gaps, Grok queue |
+| `631e9d6` | DEEP_REVIEW_REPORT.md | Final consolidated report: top-20 fixes, test totals (2672/2672), material gaps, Grok queue (124 items) |
 
 ## Wave 2 results (committed in e70eae5)
 
