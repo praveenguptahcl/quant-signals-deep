@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Expected outputs for S058_tape.csv. Hand-checked per the S058 chapter S4.
+# All numbers synthetic.
+day,fair_spread,dev_pts,direction
+0,0.7921622288,0.0078377712,0
+1,0.7921622288,0.2078377712,1
+2,0.7921622288,-0.2921622288,-1
+3,0.7921622288,0.1078377712,1
+4,0.7921622288,-0.0921622288,0

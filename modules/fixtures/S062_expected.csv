@@ -1,0 +1,12 @@
+# TYPE: validation-run
+# Expected outputs for S062_tape.csv. Hand-checked per the S062 chapter S4.
+# All numbers synthetic.
+sector,formation_ret,rank,position
+XLK,1.2000000000,3,0
+XLF,0.8000000000,4,0
+XLE,2.1000000000,1,1
+XLV,-0.4000000000,7,-1
+XLI,0.3000000000,5,0
+XLP,-0.9000000000,8,-1
+XLU,0.1000000000,6,0
+XLY,1.5000000000,2,1

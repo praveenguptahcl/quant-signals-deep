@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Expected outputs for S057_tape.csv. Hand-checked per the S057 chapter S4.
+# All numbers synthetic.
+day,fstar,dev_bps,direction
+0,5039.6081114376,0.7837771248,0
+1,5039.6081114376,2.7837771248,0
+2,5039.6081114376,10.7837771248,0
+3,5039.6081114376,20.7837771248,-1
+4,5039.6081114376,-19.2162228752,1

@@ -1,0 +1,12 @@
+# TYPE: validation-run
+# Expected outputs for S056_tape.csv. Hand-checked per the S056 chapter S4.
+# All numbers synthetic.
+snap,premium_bps,direction
+0,0.0000000000,0
+1,0.4000000000,0
+2,-0.4000000000,0
+3,12.0000000000,-1
+4,-12.0000000000,1
+5,2.0000000000,0
+6,-2.0000000000,0
+7,0.2000000000,0
