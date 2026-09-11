@@ -1,14 +1,18 @@
-"""Acceptance tests for T050 - GEX Pin / Dealer-Positioning Fade.
+"""Acceptance tests for T050 - GEX Pin / Dealer-Positioning Fade (v1.1.0).
 
-Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
-reference emit() (normative pseudocode via process_bar), and asserts the
-TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
-the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
+Template v1.0.0. The reference harness below implements the module's
+normative emit() on the module's own terms: pin-distance entry rule
+(dist_bps >= pin_dist_bps, days_to_expiry <= expiry_days, gex_stable),
+the canonical fenced sizing shares() x pin-distance conviction scalar,
+the COST-block callable expected_cost_bps (side-driven borrow), exits
+never cost-gated, and t -> t+1 causality. Strategies emit ORDER INTENTS
+ONLY (Appendix C v1.0.0); execution/broker layers create orders.
 
 Run: python3 -m pytest modules/tests/test_T050.py -q   (from repo root)
 """
 import csv
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -16,18 +20,6 @@ TAPE = FIX / "T050_tape.csv"
 EXPECTED = FIX / "T050_expected.csv"
 
 TOL = 1e-9  # tolerance on float comparisons
-
-
-
-"""Reference implementation for T-module acceptance tests (shared sketch).
-
-Implements the module's normative emit() contract:
-    emit(state, signals, cfg) -> list[OrderTicket]
-at one-bar granularity via process_bar(). Strategies emit ORDER INTENTS
-ONLY (Appendix C v1.0.0); execution/broker layers create orders.
-"""
-import math
-from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -45,23 +37,29 @@ class OrderTicket:
 
 @dataclass
 class Config:
-    sid: str = "T000"
-    primary_signal: str = "S000"
-    z_entry: float = 2.0
-    z_exit: float = 0.5
+    sid: str = "T050"
+    primary_signal: str = "S074"
+    gex_window_d: int = 5
+    pin_dist_bps: float = 30.0
+    pin_reached_bps: float = 5.0
+    dist_conviction_cap: float = 1.5
+    expiry_days: int = 3
+    gex_stable_bars: int = 3
     cost_gate_k: float = 0.5
-    risk_R_usd: float = 1000.0
-    stop_bps: float = 100.0
-    adv_cap_pct: float = 10.0
-    spread_full_bps: float = 10.0
+    risk_R_usd: float = 250.0
+    stop_bps: float = 25.0
+    adv_cap_pct: float = 1.0
+    spread_full_bps: float = 3.0
     taker_fee_bps: float = 0.30
     maker_rebate_bps: float = 0.20
-    side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
-    impact_k: float = 0.5
-    daily_loss_stop_pct: float = -2.0
-    venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
+    borrow_bps_per_day: float = 30.0
+    expected_hold_days: int = 1
+    impact_k: float = 20.0
+    daily_loss_stop_pct: float = 2.0
+    max_gross_mult: float = 4.0
+    cooldown_sessions: int = 1
+    venue: str = "primary-lit"
+    default_side: str = "BUY"
 
 
 class KillSwitch:
@@ -88,29 +86,52 @@ class KillSwitch:
         return False
 
 
-def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
-    """4-component cost stack (COST-block callable). Example values."""
+def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg,
+                     intent_side="BUY"):
+    """COST-block callable: 4-component stack. `side` is the execution side
+    (taker|maker|mixed per the COST block); borrow accrues on SHORT fades
+    only (borrow_bps_per_day x expected_hold_days); LONG fades pay no borrow."""
     spread_bps = cfg.spread_full_bps / 2.0
-    fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
-    borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
+    fee_bps = -cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
+    borrow_bps = (cfg.borrow_bps_per_day * cfg.expected_hold_days
+                  if intent_side in ("SELL", "SHORT") else 0.0)
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
         impact_bps *= 1.5
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Canonical fenced sizing: shares = f(risk_budget_R, stop_distance,
+    vol_estimate, ADV_cap, cost). The cost gate is the §T3 predicate; sizing
+    stays cost-aware through the stop distance."""
+    per_share_risk = max(stop_distance * vol_estimate, 1e-12)
+    return max(0, min(int(risk_budget_R / per_share_risk), int(ADV_cap)))
+
+
+def size_pin_fade(bar, cfg):
+    """Module sizing: canonical shares() x pin-distance conviction scalar."""
+    base = shares(cfg.risk_R_usd, bar["stop_bps"] / 1e4, bar["close"],
+                  cfg.adv_cap_pct / 100.0 * bar["adv_shares"], None)
+    mult = min(bar["dist_bps"] / cfg.pin_dist_bps, cfg.dist_conviction_cap)
+    return max(1, int(base * mult))
+
+
 def process_bar(state, bar, cfg):
     """One bar through the strategy. Returns (ticket|None, module_state, note).
 
-    Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
-    switch -> size -> normative cost-gate predicate -> entry/exit rules.
-    Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
+    Mirrors the §T3 normative pseudocode: validate (F1/F2) -> market state
+    (§T0.5) -> kill switch -> exit rule -> normative cost-gate predicate ->
+    pin-distance entry rule. Earliest fill for a bar-t intent is bar t+1's
+    open (t -> t+1).
     """
     ks = state["kill"]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
     if (bar["close"] <= 0 or bar["market_state"] != "CONTINUOUS_TRADING"
-            or bar["asof_ts"] < bar["event_ts"]):
+            or bar["asof_ts"] < bar["event_ts"]
+            or bar["dist_bps"] < 0 or bar["days_to_expiry"] < 0):
         state["position"] = 0
+        state["qty"] = 0
         return None, "UNKNOWN", "invalid-input"
     # Kill switch: TRIPPED blocks everything; breach trips it
     if ks.state != "ARMED":
@@ -118,52 +139,49 @@ def process_bar(state, bar, cfg):
     if bar["daily_pnl_pct"] <= -cfg.daily_loss_stop_pct:
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
+        state["qty"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
-    # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
-    cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
-                             cfg.side_exec, bar["urgency"], cfg)
-    gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
-    z = bar["signal_z"]
     pos = state.get("position", 0)
-    if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
+    if pos != 0:
+        # Exit rule: pin reached | GEX flipped | expiry today. Exits are
+        # never cost-gated.
+        if (bar["dist_bps"] < cfg.pin_reached_bps or not bar["gex_stable"]
+                or bar["days_to_expiry"] == 0):
+            exit_side = "SELL" if pos > 0 else "BUY"
+            qty = max(1, int(state.get("qty", 0)))
             ticket = OrderTicket(
-                symbol=bar["symbol"], side=side, qty=qty,
-                limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
+                symbol=bar["symbol"], side=exit_side, qty=qty, limit=None,
+                tif="DAY", ticket_id="%s-%04dx" % (cfg.sid, int(bar["bar"])),
+                parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
+                intent_ts=bar["event_ts"], state="NEW")
+            state["position"] = 0
+            state["qty"] = 0
+            return ticket, "OK", "exit"
+        return None, "OK", "hold"
+    # Entry rule (Boolean): pin-distance + expiry window + stable GEX
+    if (bar["dist_bps"] >= cfg.pin_dist_bps
+            and bar["days_to_expiry"] <= cfg.expiry_days
+            and bar["gex_stable"]):
+        side = "SELL" if bar["spot_above_pin"] else "BUY"  # fade toward pin
+        cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
+                                 "taker", bar["urgency"], cfg,
+                                 intent_side=side)
+        # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
+        if cost <= cfg.cost_gate_k * bar["edge_bps"]:
+            qty = size_pin_fade(bar, cfg)
+            ticket = OrderTicket(
+                symbol=bar["symbol"], side=side, qty=qty, limit=None,
                 tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
                 parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
                 intent_ts=bar["event_ts"], state="NEW")
             state["position"] = 1 if side == "BUY" else -1
+            state["qty"] = qty
             return ticket, "OK", "entry"
-        return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
-    # Position open: exit on z through the exit band (exits never cost-gated)
-    if abs(z) <= cfg.z_exit:
-        exit_side = "SELL" if pos > 0 else "BUY"
-        ticket = OrderTicket(
-            symbol=bar["symbol"], side=exit_side, qty=qty,
-            limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
-            tif="DAY", ticket_id="%s-%04dx" % (cfg.sid, int(bar["bar"])),
-            parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
-            intent_ts=bar["event_ts"], state="NEW")
-        state["position"] = 0
-        return ticket, "OK", "exit"
-    return None, "OK", "hold"
+        return None, "OK", "gate-block"
+    return None, "OK", "flat"
 
 
-CFG = Config(
-    sid="T050", primary_signal="S074",
-    z_entry=2.0, z_exit=0.5, cost_gate_k=0.5,
-    risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
-    spread_full_bps=3.0, taker_fee_bps=0.3,
-    maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=30.0, impact_k=20.0,
-    daily_loss_stop_pct=2.0, venue="primary",
-    default_side="LONG")
+CFG = Config()
 
 
 # ---------------------------------------------------------------- fixtures
@@ -179,7 +197,10 @@ def tape():
         rows.append({
             "bar": int(r["bar"]), "event_ts": int(r["event_ts"]),
             "asof_ts": int(r["asof_ts"]), "symbol": r["symbol"],
-            "close": float(r["close"]), "signal_z": float(r["signal_z"]),
+            "close": float(r["close"]), "dist_bps": float(r["dist_bps"]),
+            "days_to_expiry": int(r["days_to_expiry"]),
+            "gex_stable": bool(int(r["gex_stable"])),
+            "spot_above_pin": bool(int(r["spot_above_pin"])),
             "edge_bps": float(r["edge_bps"]), "notional": float(r["notional"]),
             "adv_pct": float(r["adv_pct"]), "adv_shares": float(r["adv_shares"]),
             "stop_bps": float(r["stop_bps"]), "urgency": r["urgency"],
@@ -194,7 +215,7 @@ def expected():
 
 
 def fresh_state():
-    return {"position": 0, "kill": KillSwitch()}
+    return {"position": 0, "qty": 0, "kill": KillSwitch()}
 
 
 def run_tape():
@@ -215,7 +236,8 @@ def test_type_header_and_columns():
         assert first.startswith("# TYPE:"), path
     tcols = set(load_csv(TAPE)[0].keys())
     ecols = set(load_csv(EXPECTED)[0].keys())
-    assert {"event_ts", "asof_ts", "close", "signal_z", "market_state"} <= tcols
+    assert {"event_ts", "asof_ts", "close", "dist_bps", "days_to_expiry",
+            "gex_stable", "spot_above_pin", "market_state"} <= tcols
     assert {"intent_ts", "action", "qty", "cost_call_bps",
             "gate_pass", "module_state"} <= ecols
     assert len(load_csv(TAPE)) == len(load_csv(EXPECTED)) == 12
@@ -231,18 +253,42 @@ def test_fixture_recomputes_to_expected():
         assert int(w["qty"]) == (t.qty if t else 0), b["bar"]
         assert w["module_state"] == ms, b["bar"]
         assert w["note"] == note, b["bar"]
-        assert w["gate_pass"] == str(
-            float(w["cost_call_bps"]) <= CFG.cost_gate_k * b["edge_bps"]), b["bar"]
-        assert math.isclose(float(w["cost_call_bps"]),
-                            expected_cost_bps(b["notional"], b["adv_pct"], CFG.venue,
-                                              CFG.side_exec, b["urgency"], CFG),
+        entry_side = "SELL" if b["spot_above_pin"] else "BUY"
+        # cost_call_bps: COST-block reference (taker, LONG fade); gate_pass
+        # uses the actual intent-side cost.
+        ref_cost = expected_cost_bps(b["notional"], b["adv_pct"], CFG.venue,
+                                     "taker", b["urgency"], CFG)
+        side_cost = expected_cost_bps(b["notional"], b["adv_pct"], CFG.venue,
+                                      "taker", b["urgency"], CFG,
+                                      intent_side=entry_side)
+        assert w["gate_pass"] == str(side_cost <= CFG.cost_gate_k * b["edge_bps"]), b["bar"]
+        assert math.isclose(float(w["cost_call_bps"]), ref_cost,
                             rel_tol=TOL), b["bar"]
         if t is not None:
             assert t.qty > 0
-            assert t.side in ("BUY", "SELL", "SHORT", "LONG")
+            assert t.side in ("BUY", "SELL", "SHORT")
             assert t.intent_ts == b["event_ts"]
             assert t.ticket_id.startswith(CFG.sid)
             assert t.parent_signal == "%s@%d" % (CFG.primary_signal, b["event_ts"])
+
+
+def test_entry_exit_sides_and_dist_sizing():
+    """Entry fades toward the pin (spot below pin -> BUY); the exit of a
+    LONG is a SELL; sizing carries the pin-distance conviction scalar."""
+    st = fresh_state()
+    bars = tape()
+    t3, ms3, note3 = process_bar(st, bars[3], CFG)
+    assert t3 is not None and t3.side == "BUY" and ms3 == "OK" and note3 == "entry"
+    # dist multiplier: base = 250 / (25/1e4 * 99.55) = 1004; x min(42/30, 1.5) = 1405
+    base = int(250 / (25 / 1e4 * 99.55))
+    assert t3.qty == max(1, int(base * min(42.0 / 30.0, 1.5))) == 1405
+    # position held through bars 4-5, exited at bar 6 (pin reached, dist < 5 bps)
+    for b in bars[4:6]:
+        t, ms, note = process_bar(st, b, CFG)
+        assert t is None and note == "hold", b["bar"]
+    t6, ms6, note6 = process_bar(st, bars[6], CFG)
+    assert t6 is not None and t6.side == "SELL" and t6.qty == 1405
+    assert ms6 == "OK" and note6 == "exit"
 
 
 def test_no_signal_bar_fills():
@@ -262,17 +308,30 @@ def test_cost_gate_predicate():
     bars = tape()
     entry = bars[3]
     cost_bps = expected_cost_bps(entry["notional"], entry["adv_pct"], CFG.venue,
-                                 CFG.side_exec, entry["urgency"], CFG)
+                                 "taker", entry["urgency"], CFG,
+                                 intent_side="BUY")
     edge_bps = entry["edge_bps"]
     assert cost_bps <= CFG.cost_gate_k * edge_bps  # entry edge clears the gate
-    if cost_bps > 0:
-        blocked = bars[7]
-        cost7 = expected_cost_bps(blocked["notional"], blocked["adv_pct"], CFG.venue,
-                                  CFG.side_exec, blocked["urgency"], CFG)
-        assert not (cost7 <= CFG.cost_gate_k * blocked["edge_bps"])  # tiny edge blocks
-    else:
-        # zero-cost overlay/filter/normalizer: the predicate holds vacuously
-        assert cost_bps == 0.0
+    blocked = bars[7]
+    cost7 = expected_cost_bps(blocked["notional"], blocked["adv_pct"], CFG.venue,
+                              "taker", blocked["urgency"], CFG,
+                              intent_side="SELL")
+    # bar 7 would be a SHORT fade: borrow accrues, tiny edge blocks it
+    assert not (cost7 <= CFG.cost_gate_k * blocked["edge_bps"])
+
+
+def test_short_side_borrow_in_cost():
+    """COST-block: SHORT fades carry borrow_bps_per_day x expected_hold_days;
+    LONG fades carry no borrow."""
+    long_cost = expected_cost_bps(100000, 0.5, CFG.venue, "taker", "normal",
+                                  CFG, intent_side="BUY")
+    short_cost = expected_cost_bps(100000, 0.5, CFG.venue, "taker", "normal",
+                                   CFG, intent_side="SELL")
+    assert math.isclose(short_cost - long_cost,
+                        CFG.borrow_bps_per_day * CFG.expected_hold_days,
+                        rel_tol=TOL)
+    assert math.isclose(short_cost, 1.5 + 0.3 + 30.0 + 1.4142135623730951,
+                        rel_tol=TOL)
 
 
 def test_kill_switch_trip_and_rearm():
@@ -311,3 +370,7 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+    bad2 = dict(bars[3])
+    bad2["dist_bps"] = -5.0  # invalid indicator
+    t2, ms2, _ = process_bar(fresh_state(), bad2, CFG)
+    assert t2 is None and ms2 == "UNKNOWN"

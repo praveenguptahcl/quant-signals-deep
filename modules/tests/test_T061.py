@@ -2,6 +2,8 @@
 
 Real imports, fixture load, real assertions. Not a production harness.
 Definition of done: `python3 -m pytest modules/tests/test_T061.py -q` exits 0.
+7 tests: fixture replay, cost gate, causality, kill switch, UNKNOWN on
+invalid input, hand-check literals, normative sizing (ADV cap + cost haircut).
 """
 import csv
 import math
@@ -357,3 +359,29 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 0.8)
     assert _close(float(t["cost_usd"]), 2.400549)
     assert _close(float(t["edge_bps"]), 8.4)
+
+def size_contracts(risk_budget_R=500.0, stop_distance=100.0, vol_estimate=0.0,
+                   ADV_cap=1e18, cost=0.00008, ref_price=6000.0, point_value=50.0):
+    """Normative sizing mirror of the §T2 fenced function:
+    shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    stop = stop_distance
+    if vol_estimate > 0:  # floor the stop at half the bar's dollar range [default]
+        stop = max(stop_distance, 0.5 * vol_estimate)
+    qty = int(risk_budget_R // max(stop, 1e-9))                 # dollar-risk core
+    # ADV participation cap: notional <= 2% of ADV [default]
+    max_qty_adv = int((0.02 * ADV_cap) / max(ref_price * point_value, 1e-9))
+    qty = min(qty, max(1, max_qty_adv))
+    # cost haircut: stand down when the modeled round-trip cost eats >50% of R [default]
+    if qty * ref_price * point_value * cost > 0.5 * risk_budget_R:
+        return 0
+    return max(1, qty)
+
+def test_7_sizing_adv_cap_and_cost_haircut():
+    # degenerate case: matches the fixture's sketch sizing (qty 5)
+    assert size_contracts(500.0, 100.0) == 5
+    # binding ADV cap: 2% of $1M ADV = $20k < one ES contract notional -> qty 1
+    assert size_contracts(500.0, 100.0, ADV_cap=1e6) == 1
+    # cost haircut: 5% cost on real notional eats far more than half of R -> 0
+    assert size_contracts(500.0, 100.0, cost=0.05) == 0
+    # vol floor: stop floored at half the bar range (150) -> 500 // 150 = 3
+    assert size_contracts(500.0, 100.0, vol_estimate=300.0) == 3

@@ -3,7 +3,8 @@
 Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
 reference emit() (normative pseudocode via process_bar), and asserts the
 TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
-the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
+the cost-gate predicate, kill-switch trip/re-arm, invalid-input handling,
+the C7 locate veto, and the C10 post-exit cooldown.
 
 Run: python3 -m pytest modules/tests/test_T027.py -q   (from repo root)
 """
@@ -57,11 +58,12 @@ class Config:
     taker_fee_bps: float = 0.30
     maker_rebate_bps: float = 0.20
     side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
+    borrow_bps_per_day: float = 25.0  # extreme-HTB tier [example]; see COST block for reason
+    borrow_days: float = 1.0           # hold priced as 1 day [example]
     impact_k: float = 0.5
+    cooldown_bars: int = 78           # C10 post-exit cooldown [default]; 78 ~= 1 session of 5-min bars
     daily_loss_stop_pct: float = -2.0
     venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
 
 
 class KillSwitch:
@@ -92,7 +94,7 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
     """4-component cost stack (COST-block callable). Example values."""
     spread_bps = cfg.spread_full_bps / 2.0
     fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
-    borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
+    borrow_bps = cfg.borrow_bps_per_day * cfg.borrow_days  # short fade leg; priced conservatively
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
         impact_bps *= 1.5
@@ -119,6 +121,9 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
+    # C10: post-exit cooldown suppresses new entries
+    if int(bar["bar"]) < state.get("cooldown_until_bar", -1):
+        return None, "OK", "gate-veto-c10"
     # Position sizing: risk_R / (stop_frac * price), ADV-capped
     raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
     cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
@@ -131,7 +136,9 @@ def process_bar(state, bar, cfg):
     pos = state.get("position", 0)
     if pos == 0:
         if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
+            side = "SHORT" if z > 0 else "BUY"  # fade the shock
+            if side == "SHORT" and not bar["locate_ok"]:  # C7 locate veto
+                return None, "OK", "gate-veto-c7"
             ticket = OrderTicket(
                 symbol=bar["symbol"], side=side, qty=qty,
                 limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
@@ -151,6 +158,7 @@ def process_bar(state, bar, cfg):
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
         state["position"] = 0
+        state["cooldown_until_bar"] = int(bar["bar"]) + cfg.cooldown_bars  # C10
         return ticket, "OK", "exit"
     return None, "OK", "hold"
 
@@ -161,9 +169,9 @@ CFG = Config(
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=5.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=25.0, impact_k=40.0,
-    daily_loss_stop_pct=1.0, venue="primary",
-    default_side="SHORT")
+    borrow_bps_per_day=25.0, borrow_days=1.0, impact_k=40.0,
+    cooldown_bars=78,
+    daily_loss_stop_pct=1.0, venue="primary")
 
 
 # ---------------------------------------------------------------- fixtures
@@ -185,6 +193,7 @@ def tape():
             "stop_bps": float(r["stop_bps"]), "urgency": r["urgency"],
             "market_state": r["market_state"],
             "daily_pnl_pct": float(r["daily_pnl_pct"]),
+            "locate_ok": int(r["locate_ok"]),
         })
     return rows
 
@@ -194,7 +203,7 @@ def expected():
 
 
 def fresh_state():
-    return {"position": 0, "kill": KillSwitch()}
+    return {"position": 0, "kill": KillSwitch(), "cooldown_until_bar": -1}
 
 
 def run_tape():
@@ -311,3 +320,39 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+
+
+def _synthetic_bar(bar, signal_z, edge_bps, locate_ok=1, pnl=0.05):
+    return {"bar": bar, "event_ts": 1789048800000000000 + bar * 300000000000,
+            "asof_ts": 1789048800000250000 + bar * 300000000000, "symbol": "XYZ",
+            "close": 99.44, "signal_z": signal_z, "edge_bps": edge_bps,
+            "notional": 100000.0, "adv_pct": 0.5, "adv_shares": 2000000.0,
+            "stop_bps": 25.0, "urgency": "normal",
+            "market_state": "CONTINUOUS_TRADING", "daily_pnl_pct": pnl,
+            "locate_ok": locate_ok}
+
+
+def test_locate_veto_c7():
+    """C7: SHORT entry without locate_ok is vetoed; negative shock fades BUY."""
+    st = fresh_state()
+    b = _synthetic_bar(12, 3.6, 200.0, locate_ok=0)  # shock entry, no locate
+    t, ms, note = process_bar(st, b, CFG)
+    assert t is None and ms == "OK" and note == "gate-veto-c7"
+    st = fresh_state()
+    b = _synthetic_bar(12, -3.6, 200.0, locate_ok=1)  # negative shock fades BUY
+    t, ms, note = process_bar(st, b, CFG)
+    assert t is not None and t.side == "BUY" and ms == "OK" and note == "entry"
+    assert t.qty == 1005
+
+
+def test_post_exit_cooldown_c10():
+    """C10: no re-entry within cooldown_bars of an exit."""
+    st = fresh_state()
+    bars = tape()
+    for b in bars[:7]:  # exit happens at bar 6
+        t, ms, note = process_bar(st, b, CFG)
+    assert note == "exit"
+    assert st["cooldown_until_bar"] == 6 + CFG.cooldown_bars
+    b = _synthetic_bar(12, 3.9, 200.0)  # would otherwise pass gate
+    t, ms, note = process_bar(st, b, CFG)
+    assert t is None and ms == "OK" and note == "gate-veto-c10"

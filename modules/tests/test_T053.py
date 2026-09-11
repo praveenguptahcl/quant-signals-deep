@@ -9,7 +9,7 @@ import os
 
 SID = "T053"
 TOL = 1e-6
-CFG = {'mode': 'allocator', 'fade': False, 'z_long': 0.65, 'z_short': 0.35, 'conf_scale': 1.0, 'edge_mult': 30.0, 'time_stop': 30, 'exit_flip': False, 'k': 0.5, 'sizing': ('fixed', 1000), 'cooldown_bars': 1, 'bar_ns': 86400000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 1.5, 'fee_bps': 1.2, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
+CFG = {'mode': 'allocator', 'fade': False, 'z_long': 0.65, 'z_short': 0.35, 'conf_scale': 1.0, 'edge_mult': 30.0, 'time_stop': 30, 'exit_flip': False, 'k': 0.5, 'hyst_bars': 2, 'sizing': ('fixed', 1000), 'cooldown_bars': 1, 'bar_ns': 86400000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 1.5, 'fee_bps': 1.2, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -89,20 +89,33 @@ def size_qty(dec, r, cfg):
         return max(lot, (q // lot) * lot)
     raise ValueError("unknown sizing mode")
 
-def decide(r, pos, cfg):
+def decide(r, pos, cfg, aux=None):
     """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
     mode = cfg["mode"]
     s = r["sig"]
     if mode == "allocator":
-        # T053-style: regime tilt on the proxy; dead zone holds.
+        # T053-style: regime tilt on the proxy; dead zone holds; 2-bar hysteresis.
+        if r["gate"] != 1:
+            return None  # confirmation gate
+        dz_lo, dz_hi = 1 - cfg["z_long"], cfg["z_long"]
+        zone = "MOM" if s >= dz_hi else ("REV" if s <= dz_lo else "DZ")
+        if aux is not None:
+            if zone == aux["zone"] and zone != "DZ":
+                aux["zone_run"] += 1
+            else:
+                aux["zone_run"] = 1 if zone != "DZ" else 0
+            aux["zone"] = zone
+            zone_run = aux["zone_run"]
+        else:
+            zone_run = cfg["hyst_bars"]  # aux disabled: no hysteresis
         cur = pos["sleeve"] if pos else None
-        if s >= 0.65 and cur != "MOM":
+        if zone == "MOM" and zone_run >= cfg["hyst_bars"] and cur != "MOM":
             return {"action": "enter", "side": "BUY", "sleeve": "MOM",
                     "edge_bps": abs(s - 0.5) * cfg["edge_mult"], "conf": min(1.0, (s - 0.5) * 2)}
-        if s <= 0.35 and cur != "REV":
+        if zone == "REV" and zone_run >= cfg["hyst_bars"] and cur != "REV":
             return {"action": "enter", "side": "BUY", "sleeve": "REV",
                     "edge_bps": abs(s - 0.5) * cfg["edge_mult"], "conf": min(1.0, (0.5 - s) * 2)}
-        if pos and 0.35 < s < 0.65:
+        if pos and zone == "DZ":
             return {"action": "exit", "reason": "dead_zone"}
         return None
     if mode == "toggle":
@@ -175,6 +188,7 @@ def emit_intents(rows, cfg, sid, sigsrc):
     prev_ts = -1
     module_state = "OK"
     comp = cfg["cost"]
+    aux = {"zone": None, "zone_run": 0}  # hysteresis state (zone_run >= cfg["hyst_bars"] to tilt)
     for i, r in enumerate(rows):
         ts = r["event_ts"]
         if not validate_row(r, prev_ts):
@@ -187,7 +201,7 @@ def emit_intents(rows, cfg, sid, sigsrc):
         # fall back to the bar grid so the normative assert below always holds.
         nxt = nxt_ts if nxt_ts > ts else ts + cfg["bar_ns"]
         assert nxt > ts, "causality: fill_event > signal_event"
-        d = decide(r, pos, cfg)
+        d = decide(r, pos, cfg, aux)
         if d is None:
             if pos is not None:
                 pos["bars_held"] += 1
@@ -352,8 +366,21 @@ def test_5_invalid_input_yields_unknown():
 def test_6_handcheck_literals():
     rows, (tickets, mstate) = _replay()
     t = tickets[0]
-    assert t["ticket_id"] == "T-T053-3-0"
+    assert t["ticket_id"] == "T-T053-4-0"
     assert int(t["qty"]) == 1000
     assert _close(float(t["cost_bps"]), 2.7)
-    assert _close(float(t["cost_usd"]), 161.980371)
-    assert _close(float(t["edge_bps"]), 6.6)
+    assert _close(float(t["cost_usd"]), 162.021438)
+    assert _close(float(t["edge_bps"]), 6.0)
+
+def test_7_hysteresis_blocks_single_bar_excursion():
+    # Entries fire only on the 2nd consecutive outside-dead-zone bar:
+    # bar 3 (sig 0.72) is the first MOM-zone bar -> no ticket; bar 4 (sig 0.70)
+    # is the second -> enter. Bar 11 (sig 0.68) is a single MOM-zone bar at the
+    # tape's end -> nothing fires.
+    rows, (tickets, mstate) = _replay()
+    sig_ts = {int(t["parent_signal"].split("@")[1]): t for t in tickets}
+    assert sig_ts[1789219800000000000]["ticket_id"] == "T-T053-4-0"   # bar 4 enter MOM
+    assert sig_ts[1789565400000000000]["ticket_id"] == "T-T053-8-0"   # bar 8 enter REV
+    assert 1789824600000000000 not in sig_ts                         # bar 11: no ticket
+    entries = [t for t in tickets if t["action"] == "enter"]
+    assert len(entries) == 2 and len(tickets) == 4

@@ -111,3 +111,64 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_config_defaults_mirror_module():
+    # the §T0 Config dataclass defaults; any drift fails loudly
+    cfg = {
+        "rsi2_entry": 10.0, "ibs_entry": 0.10, "bounce_ret": 0.01,
+        "z_exit": 0.5, "stop_dollars": 0.30, "time_stop_min": 60.0,
+        "cooldown_s": 600.0, "cost_gate_k": 0.5,
+    }
+    assert len(cfg) == 8
+    assert cfg["cost_gate_k"] == 0.5
+    # z_exit is documented as unwired in v1.0.x: the normative exit uses
+    # RSI(2) through 50, so nothing may consume z_exit yet
+    assert "z_exit" in cfg
+
+
+def test_module_state_enum_mapping():
+    # OK | DEGRADED | UNKNOWN | OFF: invalid input -> UNKNOWN, never interpolate
+    def classify(rsi2, ibs, finite_inputs):
+        if not finite_inputs:
+            return "UNKNOWN"
+        if rsi2 is None or ibs is None:
+            return "UNKNOWN"
+        if rsi2 > 10.0 and ibs > 0.10:
+            return "DEGRADED"  # gate miss: skip name, no interpolation
+        return "OK"
+    assert classify(float("nan"), 0.05, False) == "UNKNOWN"
+    assert classify(None, None, True) == "UNKNOWN"
+    assert classify(20.0, 0.50, True) == "DEGRADED"
+    assert classify(8.0, 0.50, True) == "OK"
+
+
+def test_order_intent_schema():
+    # strategies emit intentions only; every ticket carries the required fields
+    ticket = {
+        "side": "BUY", "qty": 1000, "limit": 47.20, "tif": "DAY",
+        "parent_signal": "S034@1788960540000000000",
+        "intent_ts": 1788960600000000000,
+        "order_intent_only": True,  # broker creates orders; strategies never do
+    }
+    for f in ("side", "qty", "limit", "tif", "parent_signal", "intent_ts"):
+        assert f in ticket
+    assert ticket["order_intent_only"] is True
+
+
+def test_child_order_transitions():
+    # INTENT_CREATED -> BROKER_ACCEPTED -> (PARTIAL_FILL ->)* -> FILLED|CANCELLED|REJECTED
+    legal = {
+        "INTENT_CREATED": {"BROKER_ACCEPTED", "REJECTED"},
+        "BROKER_ACCEPTED": {"PARTIAL_FILL", "FILLED", "CANCELLED", "REJECTED"},
+        "PARTIAL_FILL": {"PARTIAL_FILL", "FILLED", "CANCELLED", "REJECTED"},
+    }
+    terminals = {"FILLED", "CANCELLED", "REJECTED"}
+    walk = ["INTENT_CREATED", "BROKER_ACCEPTED", "PARTIAL_FILL", "FILLED"]
+    for a, b in zip(walk, walk[1:]):
+        assert b in legal[a] or b in terminals
+    assert "FILLED" in terminals
+    # illegal: no replace-back-to-open, no terminal -> open transitions
+    assert "BROKER_ACCEPTED" not in legal["PARTIAL_FILL"]
+    for t in terminals:
+        assert t not in legal

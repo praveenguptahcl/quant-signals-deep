@@ -3,7 +3,8 @@
 Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
 reference emit() (normative pseudocode via process_bar), and asserts the
 TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
-the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
+the cost-gate predicate, kill-switch trip/re-arm, stop-out + post-stop
+cooldown, and invalid-input handling.
 
 Run: python3 -m pytest modules/tests/test_T030.py -q   (from repo root)
 """
@@ -49,9 +50,11 @@ class Config:
     primary_signal: str = "S000"
     z_entry: float = 2.0
     z_exit: float = 0.5
+    pred_threshold: float = 0.60   # S002-side logistic calibration target [default]
     cost_gate_k: float = 0.5
     risk_R_usd: float = 1000.0
     stop_bps: float = 100.0
+    vol_floor_mult: float = 2.0    # stop floor = vol_floor_mult * vol_estimate_bps [example]
     adv_cap_pct: float = 10.0
     spread_full_bps: float = 10.0
     taker_fee_bps: float = 0.30
@@ -60,6 +63,7 @@ class Config:
     borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
     impact_k: float = 0.5
     daily_loss_stop_pct: float = -2.0
+    cooldown_s: float = 300.0      # post-stop-out re-entry cooldown [default]
     venue: str = "XNAS"
     default_side: str = "BUY"      # BUY | SHORT
 
@@ -103,7 +107,9 @@ def process_bar(state, bar, cfg):
     """One bar through the strategy. Returns (ticket|None, module_state, note).
 
     Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
-    switch -> size -> normative cost-gate predicate -> entry/exit rules.
+    switch -> cost gate -> size -> entry/exit rules. Exits: stop-out
+    (adverse >= stop_bps) sets a post-stop cooldown; one-tick exit on z
+    through the exit band (exits never cost-gated).
     Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
     """
     ks = state["kill"]
@@ -119,17 +125,23 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
     # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
+    cost_usd = cost / 1e4 * bar["notional"]
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
+    # Position sizing: shares = f(risk_budget_R, stop_distance, vol_estimate,
+    # ADV_cap, cost) - vol floor on the stop, cost-aware budget (§T2)
+    qty = size_ofi(cfg.risk_R_usd, bar["stop_bps"], bar["vol_estimate_bps"],
+                   bar["close"], bar["adv_shares"], cfg.adv_cap_pct,
+                   cost_usd, cfg.vol_floor_mult)
     z = bar["signal_z"]
     pos = state.get("position", 0)
+    now = bar["event_ts"]
     if pos == 0:
+        # Post-stop cooldown: suppress re-entry until it elapses
+        if now < state.get("cooldown_until", 0):
+            return None, "OK", "cooldown"
         if abs(z) >= cfg.z_entry and gate:
             side = cfg.default_side
             ticket = OrderTicket(
@@ -138,9 +150,24 @@ def process_bar(state, bar, cfg):
                 tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
                 parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
                 intent_ts=bar["event_ts"], state="NEW")
-            state["position"] = 1 if side == "BUY" else -1
+            state["position"] = 1 if side in ("BUY", "LONG") else -1
+            state["entry_px"] = bar["close"]
             return ticket, "OK", "entry"
         return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
+    # Position open: stop-out first (sets the cooldown), then the z exit band
+    entry_px = state.get("entry_px", bar["close"])
+    adverse_bps = (entry_px - bar["close"]) / entry_px * 1e4 * (1 if pos > 0 else -1)
+    if adverse_bps >= bar["stop_bps"]:
+        exit_side = "SELL" if pos > 0 else "BUY"
+        ticket = OrderTicket(
+            symbol=bar["symbol"], side=exit_side, qty=qty,
+            limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
+            tif="DAY", ticket_id="%s-%04ds" % (cfg.sid, int(bar["bar"])),
+            parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
+            intent_ts=bar["event_ts"], state="NEW")
+        state["position"] = 0
+        state["cooldown_until"] = now + int(cfg.cooldown_s * 1e9)
+        return ticket, "OK", "stop-exit"
     # Position open: exit on z through the exit band (exits never cost-gated)
     if abs(z) <= cfg.z_exit:
         exit_side = "SELL" if pos > 0 else "BUY"
@@ -153,6 +180,20 @@ def process_bar(state, bar, cfg):
         state["position"] = 0
         return ticket, "OK", "exit"
     return None, "OK", "hold"
+
+
+def size_ofi(risk_budget_R, stop_bps, vol_estimate_bps, px, adv_shares,
+             adv_cap_pct, cost_usd, vol_floor_mult=2.0):
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    vol_estimate floors the stop distance (never size on a stop tighter than
+    vol_floor_mult x realized micro-vol); the expected cost is subtracted from
+    the risk budget so the gate economics survive in the size. [example].
+    """
+    stop_eff = max(stop_bps, vol_floor_mult * vol_estimate_bps)
+    budget = max(risk_budget_R - cost_usd, 0.0)
+    raw = budget / max(stop_eff / 1e4 * px, 1e-9)
+    return max(0, min(int(raw), int(adv_cap_pct / 100.0 * adv_shares)))
 
 
 CFG = Config(
@@ -183,6 +224,7 @@ def tape():
             "edge_bps": float(r["edge_bps"]), "notional": float(r["notional"]),
             "adv_pct": float(r["adv_pct"]), "adv_shares": float(r["adv_shares"]),
             "stop_bps": float(r["stop_bps"]), "urgency": r["urgency"],
+            "vol_estimate_bps": float(r["vol_estimate_bps"]),
             "market_state": r["market_state"],
             "daily_pnl_pct": float(r["daily_pnl_pct"]),
         })
@@ -215,7 +257,8 @@ def test_type_header_and_columns():
         assert first.startswith("# TYPE:"), path
     tcols = set(load_csv(TAPE)[0].keys())
     ecols = set(load_csv(EXPECTED)[0].keys())
-    assert {"event_ts", "asof_ts", "close", "signal_z", "market_state"} <= tcols
+    assert {"event_ts", "asof_ts", "close", "signal_z", "market_state",
+            "vol_estimate_bps"} <= tcols
     assert {"intent_ts", "action", "qty", "cost_call_bps",
             "gate_pass", "module_state"} <= ecols
     assert len(load_csv(TAPE)) == len(load_csv(EXPECTED)) == 12
@@ -299,6 +342,36 @@ def test_kill_switch_trip_and_rearm():
     st["kill"].begin_recovery()
     assert st["kill"].rearm([True, True, False, True, True]) is False
     assert st["kill"].state == "RECOVERY"
+
+
+def test_stop_exit_and_post_stop_cooldown():
+    """Stop-out flattens and arms a 5-min re-entry cooldown; the cooldown
+    suppresses even a strong entry signal until it elapses."""
+    st = fresh_state()
+    t0 = 1789045200000000000
+    def bar(i, close, z, edge=10.0, pnl=0.0, mkt="CONTINUOUS_TRADING"):
+        return {"bar": i, "event_ts": t0 + i * 10_000_000_000,
+                "asof_ts": t0 + i * 10_000_000_000, "symbol": "XYZ",
+                "close": close, "signal_z": z, "edge_bps": edge,
+                "notional": 100000.0, "adv_pct": 0.5, "adv_shares": 2000000.0,
+                "stop_bps": 25.0, "vol_estimate_bps": 12.0, "urgency": "normal",
+                "market_state": mkt, "daily_pnl_pct": pnl}
+    # entry: strong z, gate passes
+    t, ms, note = process_bar(st, bar(0, 100.0, 2.4), CFG)
+    assert t is not None and note == "entry" and ms == "OK"
+    assert st["entry_px"] == 100.0
+    # adverse 30 bps >= 25 stop -> stop-exit, cooldown armed
+    t, ms, note = process_bar(st, bar(1, 99.70, 1.5), CFG)
+    assert t is not None and t.side == "SELL" and note == "stop-exit"
+    assert st["position"] == 0
+    assert st["cooldown_until"] == t0 + 10_000_000_000 + int(300.0 * 1e9)
+    # strong entry signal 20 s later is suppressed by the cooldown
+    t, ms, note = process_bar(st, bar(2, 99.70, 2.4), CFG)
+    assert t is None and note == "cooldown" and ms == "OK"
+    # after the cooldown elapses the same signal may enter again
+    late = bar(32, 99.70, 2.4)   # 320 s later
+    t, ms, note = process_bar(st, late, CFG)
+    assert t is not None and note == "entry" and ms == "OK"
 
 
 def test_invalid_input_unknown():

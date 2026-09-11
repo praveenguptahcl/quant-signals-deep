@@ -9,6 +9,7 @@ Run: python3 -m pytest modules/tests/test_T076.py -q   (from repo root)
 """
 import csv
 import hashlib
+import math
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,6 +74,15 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     borrow_bps = 0.0   # [example]
     impact_bps = 5.0   # [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost) -> int:
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost) — §T2.4."""
+    if stop_distance <= 0:
+        return 0
+    qty = math.floor(risk_budget_R / stop_distance)
+    qty = min(qty, math.floor(ADV_cap))
+    return max(qty, 0)
 
 
 # ------------------------------------------------- normative pseudocode stub
@@ -248,3 +258,31 @@ def test_ticket_schema_and_compliance():
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
 
+
+
+def test_short_mirror_emits_sell():
+    """Normative pseudocode short-mirror: a passing SHORT-side row emits a
+    SELL-side intent (never a buy into a short-liquidation cascade)."""
+    rows = [{"bar": 2, "signal_ts": 1700000600000000000,
+             "fill_ts": 1700000900000000000, "side": "SHORT",
+             "edge_bps": 120.0, "g1": 14.0, "g2": 82.0, "g3": 1.0,
+             "price": 66450.0, "qty": 50, "valid": 1}]
+    tickets = emit({}, rows, {})
+    assert len(tickets) == 1
+    assert tickets[0].side == "SHORT"
+    assert tickets[0].stp is True                      # C1
+    assert tickets[0].intent_ts > rows[0]["signal_ts"]  # causality (C2)
+    assert rows[0]["fill_ts"] > rows[0]["signal_ts"]
+
+
+def test_sizing_fenced_function():
+    """§T2.4 normative sizing: risk budget / stop distance, capped at 10%
+    participation; degenerate stop yields zero, never negative size."""
+    R = 250.0          # [example]
+    bar_volume = 2000.0
+    adv_cap = 0.10 * bar_volume                         # [default]
+    assert size_shares(R, 225.0, vol_estimate=450.0, ADV_cap=adv_cap, cost=None) == 1
+    assert size_shares(R, 25.0, vol_estimate=450.0, ADV_cap=adv_cap, cost=None) == 10
+    assert size_shares(R, 25.0, vol_estimate=450.0, ADV_cap=5.0, cost=None) == 5   # ADV cap binds
+    assert size_shares(R, 0.0, vol_estimate=450.0, ADV_cap=adv_cap, cost=None) == 0  # degenerate stop
+    assert size_shares(R, -1.0, vol_estimate=450.0, ADV_cap=adv_cap, cost=None) == 0

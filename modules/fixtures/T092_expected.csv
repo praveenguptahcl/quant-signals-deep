@@ -1,3 +1,4 @@
 # TYPE: validation-run
+# TOLERANCE: cost_bps ±0.0001; qty exact; intent_ts exact; side exact
 ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
 T092-0,0,GATE:MULTI,BUY,500,,IOC,1700000000000001000,S009@1700000000000000000,1700000300000000000,3.0000

@@ -1,16 +1,17 @@
-"""Acceptance tests for T099 — ADR + Borrow Corporate Arb.
+"""Acceptance tests for T099 — ADR + Borrow Corporate Arb (v1.1.0).
 
 Template v1.0.0 (strategy). Concrete sketch: loads the fixture tape, runs a
 reference implementation of the chapter's normative pseudocode (entry Boolean +
-cost gate + kill switch), and asserts causality, ticket schema, the cost gate,
-kill-switch behavior, and invalid-input handling.
+cost gate + kill switch + premium-sign leg branch), and asserts causality,
+ticket schema, the cost gate, kill-switch behavior, sizing, and invalid-input
+handling.
 
 Run: python3 -m pytest modules/tests/test_T099.py -q   (from repo root)
 """
 import csv
 import hashlib
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -20,10 +21,12 @@ EXPECTED = FIX / "T099_expected.csv"
 GATE_CFG = [('>=', 1.5), ('>=', 1.0), ('>=', 1.0)]   # [(op, threshold)] for g1, g2, g3
 GATE_NAMES = ['premium_ok', 'borrow_ok', 'cal_ok']
 COST_GATE_K = 0.5                       # [default]
-PER_TRADE_R = 400        # $ risk per trade [example]
+PER_TRADE_R = 2025       # $ risk per trade [example] (= 3000 sh x $45 x 1.5% adverse premium move)
 DAILY_LOSS_STOP_R = 10  # in units of R [default]
-SYMBOL = 'ADR:XNYS'
+ADR_SYMBOL = 'ADR:XNYS'
+ORD_SYMBOL = 'ORD:HOME'
 PARENT_SIGNAL = 'S061'
+COST_TOL_BPS = 1e-4      # cost_bps tolerance [default]
 INFRA = False  # normative emitter emits OrderTicket intents
 
 # ------------------------------------------------------------ schemas (App C/G)
@@ -73,6 +76,17 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     borrow_bps = 2.0   # [example]
     impact_bps = 2.0   # [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Reference sizing (§T2.4): adverse-to-stop loss <= risk_budget_R.
+
+    cost is already covered by the cost gate; the assert keeps it inside the
+    risk budget. vol_estimate is reserved (unused in this chapter).
+    """
+    assert cost <= risk_budget_R, "round-trip cost must not exceed the risk budget"
+    qty = int(round(risk_budget_R / max(stop_distance, 1e-9)))
+    return int(min(qty, ADV_cap))
 
 
 # ------------------------------------------------- normative pseudocode stub
@@ -125,15 +139,20 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if not (cost <= COST_GATE_K * row["edge_bps"]):
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
             continue
-        side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
-        t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
-                        tif="IOC", ticket_id=f"{uuid.uuid4()}",
-                        parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
-                        intent_ts=sig_ts + 1000, state="NEW", stp=True)
-        assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
-        tickets.append(t)
-        append("EMIT_INTENT", "emit", t.ticket_id + t.parent_signal + str(t.intent_ts),
-               before, state["module_state"])
+        # Premium-sign branch (§T2.2): short the rich leg, long the cheap leg.
+        # The tape's `side` column is the resolved ADR-leg side.
+        adr_side = row["side"]
+        ord_side = {"SHORT": "BUY", "BUY": "SHORT",
+                    "LONG": "SELL", "SELL": "BUY"}[adr_side]
+        for sym, side in ((ADR_SYMBOL, adr_side), (ORD_SYMBOL, ord_side)):
+            t = OrderTicket(symbol=sym, side=side, qty=int(row["qty"]), limit=None,
+                            tif="OPG", ticket_id=f"{uuid.uuid4()}",
+                            parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
+                            intent_ts=sig_ts + 1000, state="NEW", stp=True)
+            assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
+            tickets.append(t)
+            append("EMIT_INTENT", "emit", t.ticket_id + t.parent_signal + str(t.intent_ts),
+                   before, state["module_state"])
 
     return tickets
 
@@ -172,6 +191,15 @@ def test_fixture_recomputes_to_expected():
         assert t.symbol == e["symbol"], e["ticket_idx"]
 
 
+def test_expected_cost_within_tolerance():
+    """Expected cost_bps matches the callable within the declared tolerance."""
+    exp = load_csv(EXPECTED)
+    for e in exp:
+        notional = 45.0 * int(e["qty"])          # reference row: $45 x 3000 [example]
+        got = expected_cost_bps(notional, 0.001, "ADR:XNYS", "taker", "normal")
+        assert abs(got - float(e["cost_bps"])) <= COST_TOL_BPS, e["ticket_idx"]
+
+
 def test_no_signal_bar_fills():
     """Causality: every fill/boundary event is strictly after its signal event."""
     rows = tape_rows()
@@ -190,6 +218,14 @@ def test_cost_gate_predicate():
     assert cost > 0
     assert cost <= k * 100.0      # large edge -> gate passes
     assert not (cost <= k * 1.6)  # tiny edge -> gate blocks
+
+
+def test_sizing_function():
+    """Reference sizing: adverse-to-stop loss stays within the risk budget."""
+    qty = size_shares(2025.0, 0.675, 0.02, 100_000, 108.0)  # [example] reference inputs
+    assert qty == 3000
+    assert qty * 0.675 <= 2025.0 + 1e-6                       # adverse-to-stop <= one R
+    assert size_shares(2025.0, 0.675, 0.02, 500, 108.0) == 500  # ADV cap binds
 
 
 def test_kill_switch_trip():
@@ -242,9 +278,12 @@ def test_ticket_schema_and_compliance():
         assert t.ticket_id not in seen; seen.add(t.ticket_id)
         assert t.stp is True                      # C1 self-trade prevention
         assert "@" in t.parent_signal              # provenance
+    # premium-sign branch: short the rich leg, long the cheap leg
+    by_symbol = {t.symbol: t.side for t in tickets}
+    assert by_symbol[ADR_SYMBOL] == "SHORT"
+    assert by_symbol[ORD_SYMBOL] == "BUY"
     log = state["decision_log"]
     assert any(r["action"] == "EMIT_INTENT" for r in log)
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
-

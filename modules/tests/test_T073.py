@@ -9,7 +9,24 @@ import os
 
 SID = "T073"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': True, 'z_long': 2.5, 'z_short': -2.5, 'conf_scale': 1.0, 'edge_mult': 2.0, 'time_stop': 5, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 600.0, None), 'cooldown_bars': 5, 'bar_ns': 86400000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 1.5, 'fee_bps': 1.2, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
+# CFG mirrors the §T2 Config dataclass. Fee-component tags per the tag law:
+# per_share_comm/min_order_comm [documented — IBKR-style fixed pricing],
+# sec_bps_blended/taf_per_share [documented — SEC FY2026 advisory / FINRA TAF],
+# spread_bps [example], borrow_bps [default], impact_bps [example],
+# press_up/press_down/part_cap [default], ref_price [example].
+CFG = {
+    'mode': 'z', 'fade': True, 'z_long': 2.5, 'z_short': -2.5,
+    'press_up': 1.5, 'press_down': -1.5, 'conf_scale': 1.0,
+    'edge_mult': 2.0, 'time_stop': 5, 'exit_flip': False,
+    'k': 0.5, 'sizing': ('risk', 600.0, None), 'part_cap': 0.05,
+    'borrow_bps_per_day': 0.0, 'cooldown_bars': 5, 'bar_ns': 86400000000000,
+    'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02,
+    'cost': {
+        'per_share_comm': 0.005, 'min_order_comm': 1.00, 'ref_price': 250.0,
+        'sec_bps_blended': 0.103, 'taf_per_share': 0.000090,
+        'spread_bps': 1.5, 'borrow_bps': 0.0, 'impact_bps': 0.0,
+    },
+}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -47,110 +64,83 @@ class KillSwitch:
 """Concrete sketch of the <SID> emit harness (module contract sketch)."""
 import math
 
+
 def expected_cost_bps(notional, adv_pct, venue, side, urgency, comp):
-    """Callable cost model - 4-component stack (single source of truth: COST block)."""
-    spread = comp["spread_bps"]
-    fee = comp["fee_bps"]
+    """Callable cost model - 4-component stack (single source of truth: §T2 COST block).
+
+    Fee basis: retail fixed-pricing commission ($0.005/share, min $1.00/order)
+    [documented]; SEC Section 31 FY2026 $20.60/M on sell legs, blended per side
+    [documented]; FINRA TAF $0.000090/share, max $4.50/trade, blended per side
+    [documented]; $250 reference price is an [example] scaling assumption.
+    """
+    shares = notional / comp["ref_price"]
+    comm_bps = max(comp["min_order_comm"],
+                   comp["per_share_comm"] * shares) / notional * 1e4
+    sec_bps = comp["sec_bps_blended"]
+    taf_bps = comp["taf_per_share"] * shares / notional * 1e4
+    fee_bps = comm_bps + sec_bps + taf_bps
     if side == "maker":
-        fee = -abs(fee) * 0.5  # rebate proxy [example]
-    borrow = comp["borrow_bps"]
-    impact = comp["impact_bps"]
-    return spread + fee + borrow + impact
+        fee_bps = -abs(fee_bps) * 0.5  # rebate proxy [example]
+    return comp["spread_bps"] + fee_bps + comp["borrow_bps"] + comp["impact_bps"]
+
 
 def cost_gate_pass(cost_bps, k, edge_bps):
     """Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps."""
     return cost_bps <= k * edge_bps
 
+
 def validate_row(r, prev_ts):
     """F1/F2: invalid input -> UNKNOWN, never interpolate."""
-    for f in ("open", "high", "low", "close", "volume", "sig", "gate"):
+    for f in ("open", "high", "low", "close", "volume", "sig", "gate",
+              "pressure", "stop_dist", "adv_shares"):
         v = r.get(f)
         if v is None or (isinstance(v, float) and not math.isfinite(v)):
             return False
     if r["close"] <= 0 or r["open"] <= 0 or r["high"] < r["low"]:
         return False
+    if r["stop_dist"] <= 0 or r["adv_shares"] <= 0:
+        return False
     if r["event_ts"] <= prev_ts:
         return False
     return True
 
+
 def size_qty(dec, r, cfg):
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    Dollar-risk quantity, capped by the ADV participation cap; the cost
+    component enters through the C2 cost-gate veto (not through qty).
+    """
     mode = cfg["sizing"][0]
-    if mode == "fixed":
-        return int(cfg["sizing"][1])
     if mode == "risk":
-        R_usd, _ = cfg["sizing"][1], None
+        R_usd = cfg["sizing"][1]
         sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
-        return max(1, int(R_usd // sd))
-    if mode == "conf":
-        q_base, c_min = cfg["sizing"][1], cfg["sizing"][2]
-        frac = max(0.0, dec["conf"] - c_min) / max(1.0 - c_min, 1e-9)
-        q = int(q_base * frac)
-        lot = cfg.get("lot", 1)
-        return max(lot, (q // lot) * lot)
+        n_risk = int(R_usd // sd)
+        n_adv = int(cfg["part_cap"] * float(r.get("adv_shares", 0.0)))
+        return max(1, min(n_risk, n_adv))
     raise ValueError("unknown sizing mode")
 
+
 def decide(r, pos, cfg):
-    """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
-    mode = cfg["mode"]
+    """Per-module entry/exit logic. Returns None or a decision dict."""
     s = r["sig"]
-    if mode == "allocator":
-        # T053-style: regime tilt on the proxy; dead zone holds.
-        cur = pos["sleeve"] if pos else None
-        if s >= 0.65 and cur != "MOM":
-            return {"action": "enter", "side": "BUY", "sleeve": "MOM",
-                    "edge_bps": abs(s - 0.5) * cfg["edge_mult"], "conf": min(1.0, (s - 0.5) * 2)}
-        if s <= 0.35 and cur != "REV":
-            return {"action": "enter", "side": "BUY", "sleeve": "REV",
-                    "edge_bps": abs(s - 0.5) * cfg["edge_mult"], "conf": min(1.0, (0.5 - s) * 2)}
-        if pos and 0.35 < s < 0.65:
-            return {"action": "exit", "reason": "dead_zone"}
-        return None
-    if mode == "toggle":
-        # T054-style: Hurst toggle; dead zone [0.45, 0.55] is dark.
-        if pos is None:
-            if r["gate"] != 1:
-                return None
-            if s >= 0.55:
-                return {"action": "enter", "side": "BUY", "edge_bps": abs(s - 0.5) * cfg["edge_mult"],
-                        "conf": min(1.0, (s - 0.5) * 4)}
-            if s <= 0.45:
-                return {"action": "enter", "side": "SHORT", "edge_bps": abs(s - 0.5) * cfg["edge_mult"],
-                        "conf": min(1.0, (0.5 - s) * 4)}
-            return None
-        if 0.45 < s < 0.55:
-            return {"action": "exit", "reason": "dead_zone"}
-        if pos["bars_held"] + 1 >= cfg["time_stop"]:
-            return {"action": "exit", "reason": "time_stop"}
-        return None
-    if mode == "pair":
-        # T058-style: two-leg dispersion entry/exit.
-        if pos is None:
-            if r["gate"] != 1 or s < cfg["z_long"]:
-                return None
-            edge = s * cfg["edge_mult"]
-            conf = min(1.0, s / (cfg["z_long"] * 2))
-            return [{"action": "enter", "side": "BUY", "leg": "basket",
-                     "edge_bps": edge, "conf": conf},
-                    {"action": "enter", "side": "SELL", "leg": "index",
-                     "edge_bps": edge, "conf": conf}]
-        if s <= cfg.get("z_exit", 0.05) or pos["bars_held"] + 1 >= cfg["time_stop"]:
-            return {"action": "exit", "reason": "signal_flip" if s <= cfg.get("z_exit", 0.05) else "time_stop"}
-        return None
-    # mode == "z": signed-score trigger, fade or trend.
+    p = r["pressure"]
+    # mode == "z": signed-score trigger, fade or trend, with the S045
+    # pressure confirmation gate (§T2 entry rule, Boolean).
     if pos is None:
         if r["gate"] != 1:
             return None
         side = None
-        if not cfg["fade"]:
+        if cfg["fade"]:
+            if s >= cfg["z_long"] and p >= cfg["press_up"]:
+                side = "SHORT"
+            elif s <= cfg["z_short"] and p <= cfg["press_down"]:
+                side = "BUY"
+        else:
             if s >= cfg["z_long"]:
                 side = "BUY"
             elif s <= cfg["z_short"]:
                 side = "SELL"
-        else:
-            if s >= cfg["z_long"]:
-                side = "SHORT"
-            elif s <= cfg["z_short"]:
-                side = "BUY"
         if side is None:
             return None
         conf = min(1.0, abs(s) / cfg["conf_scale"])
@@ -167,8 +157,11 @@ def decide(r, pos, cfg):
         return {"action": "exit", "reason": "exit_signal"}
     return None
 
+
 def emit_intents(rows, cfg, sid, sigsrc):
     """emit(state, signals, cfg) -> list[OrderTicket intent dicts]. Sketch."""
+    if not rows:
+        return [], "UNKNOWN"  # F1: empty signals -> UNKNOWN
     tickets = []
     pos = None
     cooldown_until = -1
@@ -192,61 +185,58 @@ def emit_intents(rows, cfg, sid, sigsrc):
             if pos is not None:
                 pos["bars_held"] += 1
             continue
-        ds = d if isinstance(d, list) else [d]
-        for leg_i, dd in enumerate(ds):
-            if dd["action"] == "enter" and pos is None and ts >= cooldown_until:
-                qty = size_qty(dd, r, cfg)
-                notional = qty * r["close"]
-                cost = expected_cost_bps(notional, cfg["adv_pct"], cfg["venue"],
-                                         cfg["side_class"], "normal", comp)
-                # normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
-                if not cost_gate_pass(cost, cfg["k"], dd["edge_bps"]):
-                    continue  # C2 bona-fide intent: sub-threshold -> no ticket
-                limit = None
-                if cfg["side_class"] in ("maker", "mixed"):
-                    half = r["close"] * comp["spread_bps"] / 2 / 1e4
-                    limit = round(r["close"] - half if dd["side"] in ("BUY",) else r["close"] + half, 4)
-                tickets.append({
-                    "ticket_id": "T-%s-%d-%d" % (sid, i, leg_i),
-                    "symbol": r["symbol"], "side": dd["side"], "qty": qty,
-                    "limit": limit, "tif": cfg["tif"],
-                    "parent_signal": "%s@%d" % (sigsrc, ts),
-                    "intent_ts": ts, "signal_ts": ts, "fill_ts": nxt,
-                    "leg": dd.get("leg", ""), "edge_bps": round(dd["edge_bps"], 6),
-                    "cost_bps": round(cost, 6),
-                    "cost_usd": round(notional * cost / 1e4, 6),
-                    "gate": "PASS", "action": "enter",
-                })
-                assert tickets[-1]["fill_ts"] > tickets[-1]["signal_ts"]  # assert fill_event > signal_event
-                if cfg["mode"] == "pair" and leg_i == 0:
-                    continue  # second leg shares the position
-                pos = {"side": dd["side"], "bars_held": 0,
-                       "sleeve": dd.get("sleeve", ""), "entry_ts": ts,
-                       "qty": qty}
-                if cfg["mode"] == "pair":
-                    break
-            elif dd["action"] == "exit" and pos is not None:
-                xqty = pos.get("qty", size_qty({"conf": 1.0}, r, cfg))
-                xnot = xqty * r["close"]
-                xcost = expected_cost_bps(xnot, cfg["adv_pct"], cfg["venue"],
-                                          cfg["side_class"], "normal", comp)
-                tickets.append({
-                    "ticket_id": "T-%s-%d-X" % (sid, i),
-                    "symbol": r["symbol"],
-                    "side": "SELL" if pos["side"] == "BUY" else "BUY",
-                    "qty": xqty,
-                    "limit": None, "tif": "DAY",
-                    "parent_signal": "%s@%d" % (sigsrc, ts),
-                    "intent_ts": ts, "signal_ts": ts, "fill_ts": nxt,
-                    "leg": "", "edge_bps": 0.0,
-                    "cost_bps": round(xcost, 6),
-                    "cost_usd": round(xnot * xcost / 1e4, 6), "gate": "N/A",
-                    "action": "exit", "reason": dd["reason"],
-                })
-                assert tickets[-1]["fill_ts"] > tickets[-1]["signal_ts"]  # assert fill_event > signal_event
-                pos = None
-                cooldown_until = ts + cfg["cooldown_bars"] * cfg["bar_ns"]
-                break
+        dd = d
+        if dd["action"] == "enter" and pos is None and ts >= cooldown_until:
+            qty = size_qty(dd, r, cfg)
+            notional = qty * r["close"]
+            cost = expected_cost_bps(notional, cfg["adv_pct"], cfg["venue"],
+                                     cfg["side_class"], "normal", comp)
+            # normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
+            if not cost_gate_pass(cost, cfg["k"], dd["edge_bps"]):
+                continue  # C2 bona-fide intent: sub-threshold -> no ticket
+            limit = None
+            if cfg["side_class"] in ("maker", "mixed"):
+                half = r["close"] * comp["spread_bps"] / 2 / 1e4
+                limit = round(r["close"] - half if dd["side"] in ("BUY",) else r["close"] + half, 4)
+            tickets.append({
+                "ticket_id": "T-%s-%d-%d" % (sid, i, 0),
+                "symbol": r["symbol"], "side": dd["side"], "qty": qty,
+                "limit": limit, "tif": cfg["tif"],
+                "parent_signal": "%s@%d" % (sigsrc, ts),
+                "intent_ts": ts, "signal_ts": ts, "fill_ts": nxt,
+                "leg": "", "edge_bps": round(dd["edge_bps"], 6),
+                "cost_bps": round(cost, 6),
+                "cost_usd": round(notional * cost / 1e4, 6),
+                "borrow_usd": 0.0,
+                "gate": "PASS", "action": "enter", "reason": "",
+            })
+            assert tickets[-1]["fill_ts"] > tickets[-1]["signal_ts"]  # assert fill_event > signal_event
+            pos = {"side": dd["side"], "bars_held": 0,
+                   "entry_ts": ts, "qty": qty}
+        elif dd["action"] == "exit" and pos is not None:
+            xqty = pos.get("qty", size_qty({"conf": 1.0}, r, cfg))
+            xnot = xqty * r["close"]
+            xcost = expected_cost_bps(xnot, cfg["adv_pct"], cfg["venue"],
+                                      cfg["side_class"], "normal", comp)
+            days_held = pos["bars_held"] + 1  # entry bar -> exit bar, calendar days
+            borrow_usd = cfg["borrow_bps_per_day"] * days_held * xnot / 1e4
+            tickets.append({
+                "ticket_id": "T-%s-%d-X" % (sid, i),
+                "symbol": r["symbol"],
+                "side": "SELL" if pos["side"] == "BUY" else "BUY",
+                "qty": xqty,
+                "limit": None, "tif": "DAY",
+                "parent_signal": "%s@%d" % (sigsrc, ts),
+                "intent_ts": ts, "signal_ts": ts, "fill_ts": nxt,
+                "leg": "", "edge_bps": 0.0,
+                "cost_bps": round(xcost, 6),
+                "cost_usd": round(xnot * xcost / 1e4, 6),
+                "borrow_usd": round(borrow_usd, 6),
+                "gate": "N/A", "action": "exit", "reason": dd["reason"],
+            })
+            assert tickets[-1]["fill_ts"] > tickets[-1]["signal_ts"]  # assert fill_event > signal_event
+            pos = None
+            cooldown_until = ts + cfg["cooldown_bars"] * cfg["bar_ns"]
     return tickets, module_state
 
 
@@ -258,12 +248,14 @@ def _load(name):
         rd = csv.DictReader(f)
         rows = []
         for r in rd:
-            for k in ("event_ts","volume","gate"):
+            for k in ("event_ts", "volume", "gate", "adv_shares"):
                 r[k] = int(float(r[k]))
-            for k in ("open","high","low","close","sig","stop_dist"):
+            for k in ("open", "high", "low", "close", "sig",
+                      "pressure", "stop_dist"):
                 r[k] = float(r[k])
             rows.append(r)
     return rows
+
 
 def _load_expected():
     path = os.path.join(FIX, SID + "_expected.csv")
@@ -272,12 +264,15 @@ def _load_expected():
         assert first.startswith("# TYPE:"), "expected must carry a # TYPE: line"
         return list(csv.DictReader(f))
 
+
 def _replay():
     rows = _load(SID + "_tape.csv")
     return rows, emit_intents(rows, CFG, SID, "S099")
 
+
 def _close(a, b, tol=TOL):
     return abs(a - b) <= tol
+
 
 def test_1_fixture_replays_to_expected():
     rows, (tickets, mstate) = _replay()
@@ -285,17 +280,19 @@ def test_1_fixture_replays_to_expected():
     assert mstate == "OK"
     assert len(tickets) == len(exp), (len(tickets), len(exp))
     for t, e in zip(tickets, exp):
-        for k in ("ticket_id","symbol","side","tif","parent_signal","leg","gate","action","reason"):
+        for k in ("ticket_id", "symbol", "side", "tif", "parent_signal",
+                  "leg", "gate", "action", "reason"):
             assert str(t.get(k, "")) == e[k], (k, t.get(k, ""), e[k])
         assert int(t["qty"]) == int(e["qty"])
-        for k in ("intent_ts","signal_ts","fill_ts"):
+        for k in ("intent_ts", "signal_ts", "fill_ts"):
             assert int(t[k]) == int(e[k])
         if t.get("limit") in (None, ""):
             assert e["limit"] == ""
         else:
             assert _close(float(t["limit"]), float(e["limit"]))
-        for k in ("edge_bps","cost_bps","cost_usd"):
+        for k in ("edge_bps", "cost_bps", "cost_usd", "borrow_usd"):
             assert _close(float(t[k]), float(e[k])), (k, t[k], e[k])
+
 
 def test_2_cost_gate_blocks_tiny_edge():
     rows, (tickets, mstate) = _replay()
@@ -305,7 +302,12 @@ def test_2_cost_gate_blocks_tiny_edge():
             assert t["cost_bps"] <= K * t["edge_bps"] + 1e-9, t
             assert t["gate"] == "PASS"
     # counter-case: a tiny edge must fail the normative predicate
-    assert not cost_gate_pass(2.7, K, 0.1)
+    assert not cost_gate_pass(1.81, K, 0.1)
+    # the documented-basis fee stack is material: entry ticket cost is
+    # commission+SEC+TAF based, not the old 2.7 bps plug
+    t = tickets[0]
+    assert 1.5 < float(t["cost_bps"]) < 3.0, t
+
 
 def test_3_causality_no_signal_bar_fills():
     rows, (tickets, mstate) = _replay()
@@ -316,6 +318,7 @@ def test_3_causality_no_signal_bar_fills():
         sig_ts = int(t["parent_signal"].split("@")[1])
         assert sig_ts not in gated_off, ("ticket on a gated-off bar", t)
 
+
 def test_4_kill_switch_trip_and_rearm():
     ks = KillSwitch(1800.0)
     assert ks.state == "ARMED"
@@ -324,7 +327,7 @@ def test_4_kill_switch_trip_and_rearm():
     ks_fresh = KillSwitch(1800.0)
     try:
         ks_fresh.rearm({"a": True})
-        raise SystemExit("re-arm must only run from TRIPPED")
+        raise SystemExit("re-arm only from TRIPPED")
     except AssertionError:
         pass
     ks2 = KillSwitch(1800.0)
@@ -333,6 +336,7 @@ def test_4_kill_switch_trip_and_rearm():
     assert ks2.rearm({"a": True, "b": False}) == "TRIPPED"  # partial checklist: stays TRIPPED
     assert ks2.rearm({"a": True, "b": True}) == "ARMED"     # ARMED -> TRIPPED -> RECOVERY -> ARMED
     assert [s for s, _, _ in ks2.transitions] == ["ARMED", "TRIPPED", "RECOVERY"]
+
 
 def test_5_invalid_input_yields_unknown():
     rows = _load(SID + "_tape.csv")
@@ -348,12 +352,64 @@ def test_5_invalid_input_yields_unknown():
     bad3[5]["event_ts"] = bad3[4]["event_ts"]  # non-monotonic: not a later event
     _, mstate3 = emit_intents(bad3, CFG, SID, "S099")
     assert mstate3 == "UNKNOWN"
+    bad4 = [dict(r) for r in rows]
+    bad4[6]["pressure"] = float("inf")  # non-finite feature -> UNKNOWN
+    _, mstate4 = emit_intents(bad4, CFG, SID, "S099")
+    assert mstate4 == "UNKNOWN"
+    t0, ms0 = emit_intents([], CFG, SID, "S099")
+    assert t0 == [] and ms0 == "UNKNOWN"  # F1: empty signals -> UNKNOWN
+
 
 def test_6_handcheck_literals():
     rows, (tickets, mstate) = _replay()
     t = tickets[0]
     assert t["ticket_id"] == "T-T073-2-0"
     assert int(t["qty"]) == 240
-    assert _close(float(t["cost_bps"]), 2.7)
-    assert _close(float(t["cost_usd"]), 16.203707)
+    assert _close(float(t["cost_bps"]), 1.80659, tol=1e-4)
+    # cost_usd = notional * cost_bps / 1e4, notional = 240 * 250.0572
+    notional = 240 * 250.0572
+    assert _close(float(t["cost_usd"]), notional * float(t["cost_bps"]) / 1e4, tol=1e-4)
     assert _close(float(t["edge_bps"]), 5.6)
+    # exit ticket carries the borrow-accrual mechanism (0.0 at the [default] rate)
+    x = [tt for tt in tickets if tt["action"] == "exit"][0]
+    assert x["ticket_id"] == "T-T073-7-X"
+    assert _close(float(x["borrow_usd"]), 0.0)
+
+
+def test_7_pressure_veto_blocks_entry():
+    # fixture bar 12: z=2.9 >= 2.5 but pressure 0.8 < 1.5 -> no entry (§T2 entry rule)
+    rows, (tickets, mstate) = _replay()
+    ids = [t["ticket_id"] for t in tickets]
+    assert "T-T073-12-0" not in ids
+    # synthetic: panic bar with pressure confirmation DOES enter the long fade
+    rows2 = _load(SID + "_tape.csv")
+    syn = [dict(rows2[0])]
+    syn[0]["event_ts"] = 1790000000000000000
+    syn[0]["sig"] = -3.0
+    syn[0]["pressure"] = -2.0
+    tickets2, ms2 = emit_intents(syn, CFG, SID, "S099")
+    assert ms2 == "OK"
+    assert len(tickets2) == 1 and tickets2[0]["side"] == "BUY", tickets2
+
+
+def test_8_adv_participation_cap():
+    rows, (tickets, mstate) = _replay()
+    assert int(tickets[0]["qty"]) == 240  # risk qty binds; ADV cap does not
+    # synthetic: thin name -> ADV cap binds
+    rows2 = _load(SID + "_tape.csv")
+    thin = [dict(rows2[2])]
+    thin[0]["adv_shares"] = 2000  # 5% of 2000 = 100 shares
+    tickets2, ms2 = emit_intents(thin, CFG, SID, "S099")
+    assert ms2 == "OK"
+    assert int(tickets2[0]["qty"]) == 100, tickets2
+
+
+def test_9_borrow_accrual_on_exit():
+    cfg2 = dict(CFG)
+    cfg2["borrow_bps_per_day"] = 50.0  # [example] stress rate
+    rows = _load(SID + "_tape.csv")
+    tickets2, ms2 = emit_intents(rows, cfg2, SID, "S099")
+    x = [t for t in tickets2 if t["action"] == "exit"][0]
+    days_held = 5  # entry bar 2 -> exit bar 7
+    xnot = int(x["qty"]) * rows[7]["close"]
+    assert _close(float(x["borrow_usd"]), 50.0 * days_held * xnot / 1e4, tol=1e-4)

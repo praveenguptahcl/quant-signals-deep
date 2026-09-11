@@ -1,4 +1,4 @@
-# TYPE: expected-output
+# TYPE: validation-run
 ticket_id,symbol,side,qty,limit,tif,parent_signal,intent_ts,signal_ts,fill_ts,leg,edge_bps,cost_bps,cost_usd,gate,action,reason
 T-T068-2-0,SPX-EVT,BUY,50,99.9929,DAY,S034@1789047000000000000,1789047000000000000,1789047000000000000,1789133400000000000,,25.0,10.0,5.001145,PASS,enter,
 T-T068-7-X,SPX-EVT,SELL,50,,DAY,S034@1789479000000000000,1789479000000000000,1789479000000000000,1789565400000000000,,0.0,10.0,4.998875,N/A,exit,time_stop

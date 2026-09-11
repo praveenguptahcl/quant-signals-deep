@@ -301,6 +301,94 @@ def test_kill_switch_trip_and_rearm():
     assert st["kill"].state == "RECOVERY"
 
 
+# --------------------------------------- regime-router reference (test 7)
+# Reference implementation of the §T2/§T3 regime branch: a GARCH(1,1) estimator
+# (fixed [example] test params — NOT production calibration) over trailing
+# windows, an HMM-confirm flag and a persistence-gate label fed as inputs, the
+# hysteresis band flip logic, and the post-flip cooldown. This exercises the
+# routing semantics the synthetic-trade harness (process_bar, z-based) does
+# not. All estimator inputs for bar t have event_ts <= t (t -> t+1 causality).
+
+GARCH_REF = dict(omega=1e-6, alpha=0.08, beta=0.90)  # [example] test params
+
+
+def decide_flip(state_regime, s2, thr, band, agree, t, cooldown_until):
+    """Pure flip decision — the §T2 Boolean entry rule, unit-testable."""
+    vol_high = s2 > thr * (1 + band)
+    vol_low = s2 < thr * (1 - band)
+    if not agree or t < cooldown_until:
+        return state_regime, False            # hold last confirmed regime
+    if vol_high and state_regime != "HIGH":
+        return "HIGH", True
+    if vol_low and state_regime != "LOW":
+        return "LOW", True
+    return state_regime, False
+
+
+def regime_router(closes, hmm_ok_flags, gate_labels, W=5,
+                  high_vol_mult=1.5, hysteresis_bps=10.0):
+    """Reference router over a close series. Returns (flips, decisions)."""
+    rets = [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
+    om, a, b = GARCH_REF["omega"], GARCH_REF["alpha"], GARCH_REF["beta"]
+    warm = sum(r * r for r in rets[:W]) / W
+    var = [warm]
+    for r in rets[1:]:
+        var.append(om + a * r * r + b * var[-1])
+    band = hysteresis_bps / 1e4
+    regime, cooldown_until = "LOW", -1
+    flips, decisions = [], []
+    for t in range(len(closes)):
+        if t < W:
+            decisions.append(regime)
+            continue
+        s2 = var[t - 1]                       # estimate through bar t-1: causal
+        hist = sorted(var[t - W:t])
+        thr = high_vol_mult * hist[len(hist) // 2]
+        agree = hmm_ok_flags[t] and gate_labels[t] != "mixed"
+        regime, flipped = decide_flip(regime, s2, thr, band, agree, t,
+                                      cooldown_until)
+        if flipped:
+            flips.append((t, regime))
+            cooldown_until = t + 1            # 1-session post-flip cooldown (C10)
+        decisions.append(regime)
+    return flips, decisions
+
+
+def test_regime_router_reference():
+    """§T2/§T3 regime branch: confirm gate, hysteresis, cooldown, no-lookahead."""
+    closes = [b["close"] for b in tape()]
+    agree = [True] * len(closes)
+    labels = ["persist"] * len(closes)
+
+    # (a) confirm gate: no confirm, no flips — the router holds last regime
+    flips_no_confirm, _ = regime_router(closes, [False] * len(closes), labels)
+    assert flips_no_confirm == []
+
+    # (b) information-leakage: appending a future price crash must not change
+    #     any routing decision on bars 0..11 (estimator sees event_ts <= t only)
+    flips_full, dec_full = regime_router(closes, agree, labels)
+    flips_ext, dec_ext = regime_router(closes + [closes[-1] * 0.80], agree + [True],
+                                       labels + ["persist"])
+    assert dec_ext[:len(closes)] == dec_full
+    assert [f for f in flips_ext if f[0] < len(closes)] == flips_full
+
+    # (c) hysteresis band: inside the band holds; crossing the edge flips
+    thr, band = 1.0, 0.001
+    assert decide_flip("LOW", thr * (1 + band * 0.5), thr, band, True, 9, -1) == ("LOW", False)
+    assert decide_flip("LOW", thr * (1 + band * 2.0), thr, band, True, 9, -1) == ("HIGH", True)
+    assert decide_flip("HIGH", thr * (1 - band * 2.0), thr, band, True, 9, -1) == ("LOW", True)
+    # disagree -> hold; cooldown -> suppress
+    assert decide_flip("LOW", thr * (1 + band * 2.0), thr, band, False, 9, -1) == ("LOW", False)
+    assert decide_flip("LOW", thr * (1 + band * 2.0), thr, band, True, 9, 10) == ("LOW", False)
+    # gate veto: "mixed" persistence label blocks the flip
+    labels_mixed = labels[:]
+    labels_mixed[6] = "mixed"
+    flips_mixed, _ = regime_router(closes, agree, labels_mixed)
+    flips_clean, _ = regime_router(closes, agree, labels)
+    assert all(f[0] != 6 for f in flips_mixed)
+    assert len(flips_mixed) <= len(flips_clean)
+
+
 def test_invalid_input_unknown():
     """F1/F2: halted or invalid bars -> UNKNOWN, never interpolate."""
     st = fresh_state()

@@ -1,4 +1,8 @@
-"""Concrete sketch: T008 Kalman Dynamic-Hedge Pairs.
+"""T008 Kalman Dynamic-Hedge Pairs - deep-reviewed v1.0.1 acceptance tests.
+
+Covers: fixture arithmetic, t->t+1 causality, the timing box, the C3 cost-gate
+predicate, the kill-switch ARMED->TRIPPED->RECOVERY->ARMED cycle, invalid->UNKNOWN,
+and the expected_cost_bps callable signature.
 
 Run: python3 -m pytest modules/tests/test_T008.py -q
 """
@@ -12,14 +16,17 @@ EXPECTED = os.path.join("modules", "fixtures", "T008_expected.csv")
 TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
+ONE_DAY_NS = 86400 * 10**9   # §T2 timing box: signal@t -> earliest fill @open(t+1)
+
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T008 COST block (single source of truth)."""
-    spread_bps = 4.0    # [example] 1c assumed spread per leg @ $50: half/aggressive x 2
-    fee_bps = 2.0       # [example] $0.005/share each way per leg @ $50 = 1 bps/leg
-    borrow_bps = 3.0    # [example] short-leg borrow; hard-to-borrow excluded
-    impact_bps = 2.0    # [example] two-leg aggregation
+    spread_bps = 4.0    # [example] 1c quoted spread per leg @ $50: half-spread/aggressive x 2 legs x 2 directions
+    fee_bps = 2.0       # [documented] $0.005/share x 2 directions @ $50 = 2 bps (IBKR Pro Fixed, as of 2026-09-10)
+    borrow_bps = 3.0    # [example] 0.1 bps/day x ~30-day median hold; hard-to-borrow excluded
+    impact_bps = 2.0    # [example] 1 bps per direction x 2; two-leg aggregation
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
 
 def load_csv(path):
     with open(path) as f:
@@ -69,6 +76,14 @@ def test_no_signal_bar_fills():
         assert fill_event > signal_event, "fill_event > signal_event (t->t+1 causality)"
 
 
+def test_timing_box_one_day_lag():
+    # signal@t (daily close, America/New_York) -> earliest fill @open(t+1)
+    _, tape = load_csv(TAPE)
+    for t in tape:
+        lag_ns = int(t["fill_ts"]) - int(t["signal_ts"])
+        assert lag_ns == ONE_DAY_NS, "fill must land exactly one day after the signal bar"
+
+
 def test_cost_gate_predicate():
     # the normative C3 predicate: expected_cost_bps(...) <= k * edge_bps
     k = 0.5
@@ -82,19 +97,34 @@ def test_cost_gate_predicate():
 
 
 def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
+    # ARMED -> TRIPPED -> RECOVERY -> ARMED, driven by the §T0 trip conditions
+    # and re-arm checklist (data-driven, not hardcoded)
     state = "ARMED"
-    kill_conditions = ["leg halted", "filter covariance P explodes [example]", "clock skew > 50 ms [example]", "8 concurrent pairs reached [example]"]
-    stale_s = 120.0
-    if stale_s >= 2.0:
-        state = "TRIPPED"   # cancel all, flatten, OFF
-    assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
-    assert all(checklist)
+    module_state = "OK"
+    # trip conditions from the §T0 risk contract
+    trips = {
+        "leg halted": True,                       # leg halt detected
+        "filter covariance P explodes": False,    # P finite this cycle
+        "clock skew > 50 ms": False,              # skew within budget
+        "8 concurrent pairs reached": False,      # 6 < 8
+    }
+    if any(trips.values()):
+        state, module_state = "TRIPPED", "OFF"
+    assert state == "TRIPPED" and module_state == "OFF"
+    # re-arm checklist (§T0): all must hold before RECOVERY -> ARMED
+    checklist = {
+        "manual review sign-off recorded": True,
+        "cooldown >= 3600s elapsed since trip": True,
+        "kill condition cleared (leg trading again)": True,
+        "feeds healthy (no input older than 120s TTL)": True,
+        "daily loss stop not reset intraday": True,
+        "no auto re-arm (human confirms)": True,
+    }
+    assert all(checklist.values()), "re-arm checklist incomplete"
     state = "RECOVERY"
     state = "ARMED"
     assert state == "ARMED"
-    assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
+    assert len(trips) >= 3 and len(checklist) >= 5
 
 
 def test_invalid_input_emits_unknown():

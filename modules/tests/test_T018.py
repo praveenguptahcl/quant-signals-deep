@@ -69,6 +69,23 @@ def test_no_signal_bar_fills():
         assert fill_event > signal_event, "fill_event > signal_event (t->t+1 causality)"
 
 
+def emit_gate(module_state, candidate_tickets):
+    """Mirrors the §T0 normative rule: when the kill switch has tripped
+    (module_state == OFF), emit() returns [] and creates nothing."""
+    if module_state == "OFF":
+        return []
+    return candidate_tickets
+
+
+def test_tripped_state_emits_nothing():
+    # §T0: emit() returns [] while module_state == OFF (kill switch tripped);
+    # on trip the module also flattens per the exit rule, never adds risk.
+    tickets = emit_gate("OFF", ["ticket-1", "ticket-2"])
+    assert tickets == [], "tripped module must emit no tickets"
+    tickets = emit_gate("ARMED", ["ticket-1"])
+    assert tickets == ["ticket-1"], "armed module emits normally"
+
+
 def test_cost_gate_predicate():
     # the normative C3 predicate: expected_cost_bps(...) <= k * edge_bps
     k = 0.5

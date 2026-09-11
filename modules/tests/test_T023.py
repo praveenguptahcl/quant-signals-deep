@@ -53,7 +53,8 @@ def test_fixture_arithmetic():
         stack_bps = (float(t["spread_bps"]) + float(t["fee_bps"])
                      + float(t["borrow_bps"]) + float(t["impact_bps"]))
         cbps = expected_cost_bps(notional, float(t["adv_pct"]), t["venue"],
-                                 "taker", t["urgency"])
+                                 t["exec_side"], t["urgency"])
+        assert t["exec_side"] in ("taker", "maker", "mixed"), "exec_side must be taker/maker/mixed"
         assert abs(cbps - stack_bps) <= TOL
         assert abs(cbps - float(e["expected_cost_bps"])) <= CSV_TOL_BPS
         sign = 1 if t["side"] in ("BUY", "LONG") else -1
@@ -84,19 +85,44 @@ def test_cost_gate_predicate():
 
 
 def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
+    # ARMED -> TRIPPED -> RECOVERY -> ARMED; the 5-item re-arm checklist from
+    # the spec §T0 must be present and named
+    with open(SPEC) as f:
+        spec = f.read()
     state = "ARMED"
     kill_conditions = ["VPIN > 0.45 [example]", "trade feed stale > 1 s [example]", "clock skew > 1 ms [example]", "tick-to-trade > 100 ms [example]"]
+    for cond in kill_conditions:
+        assert cond in spec, f"trip condition missing from spec: {cond}"
     stale_s = 1.0
     if stale_s >= 1.0:
         state = "TRIPPED"   # cancel all, flatten, OFF
     assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
+    checklist = [
+        "Manual review sign-off recorded",
+        "Post-trip cooldown expired",
+        "Trade feed fresh: staleness < `1` s",
+        "Clock skew < `1` ms",
+        "Latency probe: tick-to-trade < `100` ms",
+    ]
+    for item in checklist:
+        assert item in spec, f"re-arm checklist item missing from spec: {item}"
     assert all(checklist)
     state = "RECOVERY"
     state = "ARMED"
     assert state == "ARMED"
     assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
+
+
+def test_borrow_zero_with_reason():
+    # borrow convention: 0 bps/day requires an explicit reason in the spec
+    with open(SPEC) as f:
+        spec = f.read()
+    assert "borrow_bps_per_day" in spec, "borrow_bps_per_day missing"
+    m = re.search(r"borrow_bps_per_day[\"']?\s*[:=]\s*[\"']?([\d.]+)", spec)
+    assert m is not None, "borrow_bps_per_day value missing"
+    assert float(m.group(1)) == 0.0, "intraday scalp must carry 0 borrow"
+    assert "borrow_reason" in spec, "borrow_reason missing for zero borrow"
+    assert "borrow_bps = 0.0" in spec, "COST block borrow component missing"
 
 
 def test_invalid_input_emits_unknown():
@@ -131,10 +157,12 @@ def test_spec_cost_block_single_source():
 
 
 def test_module_version_bump():
-    # deep review v1.0.1: semver bump + changelog entry present
+    # adoption verification v1.0.3: semver bump + changelog entry present
     with open(SPEC) as f:
         spec = f.read()
-    assert 'version: "1.0.1"' in spec, "§0 semver bump missing"
+    assert 'version: "1.0.3"' in spec, "§0 semver bump missing"
+    fm = spec.split("---")[1]
+    assert 'version: "1.0.2"' not in fm, "stale version pin left in front-matter"
     assert "template_version: 1.0.0" in spec, "template_version missing"
     assert "Deep review v1.0.1" in spec, "deep-review changelog entry missing"
     assert "GROK-NEEDED" in spec, "GROK-NEEDED block missing"

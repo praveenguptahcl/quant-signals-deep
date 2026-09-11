@@ -1,16 +1,17 @@
 """Acceptance tests for T096 — Kalman + HMM Adaptive Trend.
 
-Template v1.0.0 (strategy). Concrete sketch: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode (entry Boolean +
-cost gate + kill switch), and asserts causality, ticket schema, the cost gate,
-kill-switch behavior, and invalid-input handling.
+Template v1.0.0 (strategy), module v1.1.0. Concrete sketch: loads the fixture
+tape, runs a reference implementation of the chapter's normative pseudocode
+(entry Boolean + exits + cooldown + locate check + cost gate + kill switch),
+and asserts causality, ticket schema, the cost gate, kill-switch behavior,
+and invalid-input handling.
 
 Run: python3 -m pytest modules/tests/test_T096.py -q   (from repo root)
 """
 import csv
 import hashlib
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -26,6 +27,9 @@ SYMBOL = 'KAL:XNAS'
 PARENT_SIGNAL = 'S077'
 INFRA = False  # normative emitter emits OrderTicket intents
 
+NS_PER_MIN = 60_000_000_000
+
+
 # ------------------------------------------------------------ schemas (App C/G)
 @dataclass(frozen=True)
 class OrderTicket:
@@ -35,10 +39,31 @@ class OrderTicket:
     limit: float | None
     tif: str             # DAY | IOC | FOK | GTC | OPG | CLS
     ticket_id: str
-    parent_signal: str   # "S<nnn>@<computed_at_ns>"
+    parent_signal: str   # "S<nnn>@<computed_at_ns>" (entries) or "EXIT@<ts>"
     intent_ts: int       # int64 ns UTC
     state: str           # NEW | WORKING | ...
     stp: bool = True     # self-trade prevention flag (C1)
+
+
+@dataclass
+class Config:
+    """Single Config source — mirrors the §T0.2 table (module v1.1.0)."""
+    innov_k: float = 1.5
+    flatten_tol: float = 0.25
+    chop_standdown_pct: float = 70.0
+    chop_time_stop_bars: int = 15
+    target_sigma_mult: float = 1.8
+    stop_sigma_mult: float = 1.0
+    cost_gate_k: float = 0.5
+    risk_R_usd: float = 250.0
+    equity_ref: float = 100000.0
+    adv_cap_pct: float = 0.05
+    max_concurrent: int = 2
+    cooldown_min: int = 15
+    daily_loss_stop_R: float = 12.0
+    staleness_ttl_min: int = 15
+    ref_notional: float = 60000.0
+    vol_median: float = 0.02
 
 
 @dataclass
@@ -70,22 +95,40 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model — reference constant stack (§T2 COST block)."""
     spread_bps = 1.5   # [example]
     fee_bps = 1.0         # [example]
-    borrow_bps = 0.0   # [example]
+    borrow_bps = 0.0   # [example] intraday; flat daily — no borrow leg
     impact_bps = 2.0   # [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def size_position(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost_bps, cfg):
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    risk_usd = cfg.risk_R_usd                      # R budget in $ [example]
+    cost_usd = cost_bps / 1e4 * cfg.ref_notional   # expected $ cost haircut [example]
+    budget_net = max(risk_usd - cost_usd, 0.0)
+    stop_leg = budget_net / max(stop_distance, 1e-12)   # shares the stop allows
+    adv_leg = cfg.adv_cap_pct * ADV_cap            # 5% of ADV [example]
+    if vol_estimate > 3.0 * cfg.vol_median:        # R001: halve in high vol [default]
+        stop_leg *= 0.5
+        adv_leg *= 0.5
+    return int(max(min(stop_leg, adv_leg), 0))
+
+
 # ------------------------------------------------- normative pseudocode stub
-def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
+def emit(state: dict, rows: list[dict], cfg) -> list[OrderTicket]:
     """emit(state, signals, cfg) -> list[OrderTicket] — reference stub.
 
     Intents only (Appendix c v1.0.0): never places orders. Invalid input ->
     module_state UNKNOWN, never interpolated (F1/F2). Infra publishers (T081)
     publish bar boundaries downstream and never emit OrderTickets.
     """
+    if isinstance(cfg, dict):
+        cfg = Config(**{k: v for k, v in cfg.items() if hasattr(Config, k)})
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
+    state.setdefault("position", 0)        # +1 long / -1 short / 0 flat (intent-side)
+    state.setdefault("position_qty", 0)
+    state.setdefault("cooldown_until", 0)  # int64 ns UTC; C10
     log = state.setdefault("decision_log", [])
 
     def chain_hash(prev, payload):
@@ -96,6 +139,19 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         log.append({"action": action, "reason": reason,
                      "state_before": before, "state_after": after,
                      "prev_hash": prev, "hash": chain_hash(prev, payload)})
+
+    def exit_trigger(row):
+        if row.get("flattened"):
+            return "flatten"
+        if row.get("chop_stop"):
+            return "chop-stop"
+        pnl = row.get("pnl_usd", 0.0)
+        sig = row.get("sigma20_usd", 1.0)
+        if pnl <= -cfg.stop_sigma_mult * sig:
+            return "stop"
+        if pnl >= cfg.target_sigma_mult * sig:
+            return "target"
+        return None
 
     for row in rows:
         sig_ts = row["signal_ts"]
@@ -113,6 +169,23 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
                    before, "UNKNOWN")
             continue
 
+        # --- exits first: existing position; exits are never cost-gated ---
+        if state["position"] != 0:
+            trig = exit_trigger(row)
+            if trig is not None:
+                side = "SELL" if state["position"] > 0 else "BUY"
+                t = OrderTicket(symbol=SYMBOL, side=side, qty=int(state["position_qty"]),
+                                limit=None, tif="IOC", ticket_id=f"{uuid.uuid4()}",
+                                parent_signal=f"EXIT@{sig_ts}",
+                                intent_ts=sig_ts + 1000, state="NEW", stp=True)
+                assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
+                tickets.append(t)
+                append("EMIT_INTENT", f"exit:{trig}", t.ticket_id + t.parent_signal,
+                       before, state["module_state"])
+                state["position"], state["position_qty"] = 0, 0
+                state["cooldown_until"] = sig_ts + cfg.cooldown_min * NS_PER_MIN  # C10
+            continue  # no entries while a position is open
+
         # Entry Boolean: three chapter gates (all must pass)
         gates = []
         for (op, th), v in zip(GATE_CFG, (row["g1"], row["g2"], row["g3"])):
@@ -120,10 +193,17 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if not all(gates):
             append("GATE_VETO", "entry-boolean", f"veto@{sig_ts}", before, before)
             continue
+        # C10: post-exit cooldown suppresses re-entry
+        if sig_ts < state["cooldown_until"]:
+            append("GATE_VETO", "cooldown", f"cooldown-veto@{sig_ts}", before, before)
+            continue
         # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
         cost = expected_cost_bps(row["qty"] * row["price"], 0.001, "venue", "taker", "normal")
-        if not (cost <= COST_GATE_K * row["edge_bps"]):
+        if not (cost <= cfg.cost_gate_k * row["edge_bps"]):
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
+            continue
+        if row["side"] == "SHORT" and not row.get("locate_ok", False):
+            append("GATE_VETO", "locate", f"C7-veto@{sig_ts}", before, before)  # C7
             continue
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
         t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
@@ -155,6 +235,15 @@ def tape_rows():
                       "price": float(r["price"]), "qty": int(r["qty"]),
                       "valid": int(r["valid"]) == 1})
     return rows
+
+
+def good_row(**kw):
+    """A gate-passing entry row; override fields as needed."""
+    base = {"bar": 0, "signal_ts": 1700000000000000000, "fill_ts": 1700000300000000000,
+            "side": "LONG", "edge_bps": 22.0, "g1": 1.0, "g2": 1.0, "g3": 1.0,
+            "price": 75.0, "qty": 800, "valid": True}
+    base.update(kw)
+    return base
 
 
 # -------------------------------------------------------------------- tests
@@ -248,3 +337,65 @@ def test_ticket_schema_and_compliance():
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
 
+
+def test_post_exit_cooldown_blocks_reentry():
+    """C10: after an exit, re-entry is vetoed until cooldown_until elapses."""
+    state = {"position": 1, "position_qty": 800}
+    t0 = 1700000000000000000
+    exit_row = good_row(signal_ts=t0, fill_ts=t0 + 300_000_000_000, flattened=True)
+    outs = emit(state, [exit_row], {})
+    assert len(outs) == 1 and outs[0].side == "SELL"
+    cd = state["cooldown_until"]
+    assert cd == t0 + 15 * NS_PER_MIN            # 15 min [default]
+    # Re-entry one minute later: vetoed even though every gate passes.
+    soon = good_row(signal_ts=t0 + NS_PER_MIN, fill_ts=t0 + 2 * NS_PER_MIN)
+    assert emit(state, [soon], {}) == []
+    assert any(r["reason"] == "cooldown" for r in state["decision_log"])
+    # After the cooldown: entry passes again.
+    later = good_row(signal_ts=t0 + 16 * NS_PER_MIN, fill_ts=t0 + 17 * NS_PER_MIN)
+    assert len(emit(state, [later], {})) == 1
+
+
+def test_short_requires_locate():
+    """C7: SHORT without locate_ok is vetoed; with locate_ok it passes gates."""
+    no_locate = good_row(side="SHORT", locate_ok=False)
+    state = {}
+    assert emit(state, [no_locate], {}) == []
+    assert any(r["reason"] == "locate" for r in state["decision_log"])
+    state2 = {}
+    ok_locate = good_row(side="SHORT", locate_ok=True,
+                         signal_ts=1700000600000000000, fill_ts=1700000900000000000)
+    outs = emit(state2, [ok_locate], {})
+    assert len(outs) == 1 and outs[0].side == "SHORT"
+
+
+def test_exits_never_cost_gated():
+    """Exits fire on flatten/stop/target/chop-stop even when the cost gate would block entry."""
+    cfg = Config()
+    t0 = 1700000000000000000
+    for trig, kw in [("flatten", {"flattened": True}),
+                     ("stop", {"pnl_usd": -200.0, "sigma20_usd": 100.0}),
+                     ("target", {"pnl_usd": 300.0, "sigma20_usd": 100.0}),
+                     ("chop-stop", {"chop_stop": True})]:
+        state = {"position": 1, "position_qty": 800}
+        row = good_row(signal_ts=t0, fill_ts=t0 + 300_000_000_000,
+                       edge_bps=0.01, **kw)  # edge so tiny the entry cost gate blocks
+        outs = emit(state, [row], cfg)
+        assert len(outs) == 1, trig
+        assert outs[0].side == "SELL", trig
+        assert state["position"] == 0, trig
+        assert state["cooldown_until"] == t0 + cfg.cooldown_min * NS_PER_MIN, trig
+
+
+def test_sizing_legs_and_r001_halve():
+    """size_position: stop leg binds; ADV leg binds; cost haircut; R001 halve."""
+    cfg = Config()
+    # Stop leg binds: ($250 - $27 cost haircut) / $2.50 stop = 89 sh; ADV leg huge.
+    q = size_position(250.0, 2.50, 0.01, 1_000_000, 4.5, cfg)
+    assert q == int((250.0 - 4.5 / 1e4 * 60000.0) / 2.50)  # cost haircut then stop leg
+    # ADV leg binds: 5% of 1,000 sh = 50.
+    assert size_position(250.0, 0.01, 0.01, 1_000, 0.0, cfg) == 50
+    # R001: vol > 3x median halves both legs.
+    q_hi = size_position(250.0, 2.50, 0.10, 1_000_000, 0.0, cfg)
+    q_lo = size_position(250.0, 2.50, 0.01, 1_000_000, 0.0, cfg)
+    assert q_hi * 2 == q_lo

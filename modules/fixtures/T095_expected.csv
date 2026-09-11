@@ -1,3 +1,4 @@
 # TYPE: validation-run
+# TOLERANCE: cost_bps ±0.0001; qty/ts exact; intent_ts > signal_ts required
 ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
 T095-0,0,DSP:CBOE,BUY,8,,IOC,1700000000000001000,S075@1700000000000000000,1700000300000000000,16.0000

@@ -9,7 +9,7 @@ import os
 
 SID = "T064"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': False, 'z_long': 0.5, 'z_short': -0.5, 'conf_scale': 1.0, 'edge_mult': 6.5, 'time_stop': 4, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 400.0, None), 'cooldown_bars': 2, 'bar_ns': 1800000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 1.5, 'fee_bps': 1.2, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
+CFG = {'mode': 'z', 'fade': False, 'z_long': 0.5, 'z_short': -0.5, 'conf_scale': 1.0, 'edge_mult': 6.5, 'time_stop': 4, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 400.0, None), 'cooldown_bars': 2, 'bar_ns': 1800000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'lull_start_ts': 1788879600000000000, 'lull_end_ts': 1788890400000000000, 'cost': {'spread_bps': 1.5, 'fee_bps': 1.2, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -137,8 +137,14 @@ def decide(r, pos, cfg):
             return {"action": "exit", "reason": "signal_flip" if s <= cfg.get("z_exit", 0.05) else "time_stop"}
         return None
     # mode == "z": signed-score trigger, fade or trend.
+    # T064 lull leg: entry fires only inside the lull window (§T2 ENTER_LULL_FADE).
+    # The close leg (ENTER_CLOSE_RIDE) needs the S067 imbalance feed, which the
+    # cheapest stack does not source — so it cannot fire in this sketch.
     if pos is None:
         if r["gate"] != 1:
+            return None
+        in_lull = cfg["lull_start_ts"] <= r["event_ts"] < cfg["lull_end_ts"]
+        if not in_lull:
             return None
         side = None
         if not cfg["fade"]:
@@ -352,8 +358,13 @@ def test_5_invalid_input_yields_unknown():
 def test_6_handcheck_literals():
     rows, (tickets, mstate) = _replay()
     t = tickets[0]
-    assert t["ticket_id"] == "T-T064-2-0"
+    assert t["ticket_id"] == "T-T064-3-0"  # entry is bar 3 (11:00 ET), inside the lull window
     assert int(t["qty"]) == 400
     assert _close(float(t["cost_bps"]), 2.7)
-    assert _close(float(t["cost_usd"]), 27.006178)
-    assert _close(float(t["edge_bps"]), 5.85)
+    assert _close(float(t["cost_usd"]), 26.996728)
+    assert _close(float(t["edge_bps"]), 7.15)
+    assert int(t["fill_ts"]) == int(rows[4]["event_ts"])  # earliest fill @open(t+1)
+    x = tickets[1]
+    assert x["ticket_id"] == "T-T064-7-X"
+    assert _close(float(x["cost_usd"]), 26.99393)
+    assert x["reason"] == "time_stop"

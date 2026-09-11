@@ -2,8 +2,9 @@
 
 Template v1.0.0 (strategy). Concrete sketch: loads the fixture tape, runs a
 reference implementation of the chapter's normative pseudocode (entry Boolean +
-cost gate + kill switch), and asserts causality, ticket schema, the cost gate,
-kill-switch behavior, and invalid-input handling.
+cost gate + kill switch + exit cooldown + normative sizing), and asserts
+causality, ticket schema, the cost gate, the COST-block mirror, kill-switch
+behavior, and invalid-input handling.
 
 Run: python3 -m pytest modules/tests/test_T100.py -q   (from repo root)
 """
@@ -13,15 +14,19 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pytest
+
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "T100_tape.csv"
 EXPECTED = FIX / "T100_expected.csv"
 
+TOL = 1e-9  # tolerance on float comparisons [default]
 GATE_CFG = [('>=', 0.55), ('>=', 1.0), ('>=', 1.0)]   # [(op, threshold)] for g1, g2, g3
 GATE_NAMES = ['stacker_p', 'meta_ok', 'calib_ok']
 COST_GATE_K = 0.5                       # [default]
 PER_TRADE_R = 2500        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 8  # in units of R [default]
+UNIT_RISK = 2500  # $/bet [example]
 SYMBOL = 'GRD:MULTI'
 PARENT_SIGNAL = 'S082'
 INFRA = False  # normative emitter emits OrderTicket intents
@@ -67,12 +72,21 @@ class KillSwitch:
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
-    """Callable cost model — reference constant stack (§T2 COST block)."""
+    """Callable cost model — mirrors the §T2 COST block exactly."""
     spread_bps = 2.0   # [example]
     fee_bps = 1.0         # [example]
-    borrow_bps = 0.0   # [example]
+    borrow_bps = 0.0   # [default] borrow_bps_per_day(0.0); reason in the COST block
     impact_bps = 2.0   # [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost_bps) -> int:
+    """Normative sizing (§T2.4): shares = f(risk_budget_R, stop_distance,
+    vol_estimate, ADV_cap, cost). stop_distance is estimated upstream from
+    vol_estimate; cost_bps already gated entry and is not re-deducted here."""
+    assert stop_distance > 0 and ADV_cap > 0, "invalid sizing input -> UNKNOWN"
+    raw = risk_budget_R / stop_distance
+    return max(0, int(min(raw, ADV_cap)))
 
 
 # ------------------------------------------------- normative pseudocode stub
@@ -86,6 +100,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
+    state.setdefault("cooldown_until", 0)  # C10 post-exit cooldown [default]
     log = state.setdefault("decision_log", [])
 
     def chain_hash(prev, payload):
@@ -111,6 +126,11 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             state["module_state"] = "UNKNOWN"
             append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
                    before, "UNKNOWN")
+            continue
+
+        # C10: post-exit cooldown — no re-entry until now >= cooldown_until
+        if sig_ts < state["cooldown_until"]:
+            append("GATE_VETO", "exit-cooldown", f"cooldown@{sig_ts}", before, before)
             continue
 
         # Entry Boolean: three chapter gates (all must pass)
@@ -247,4 +267,41 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_cost_stack_mirrors_block():
+    """The callable mirrors the §T2 COST block exactly (2+1+0+2 = 5.0 bps)."""
+    cost = expected_cost_bps(100000.0, 0.001, "GRD:MULTI", "taker", "normal")
+    assert abs(cost - 5.0) <= TOL * max(1.0, abs(5.0)), cost
+    # decomposition check: components sum to the total (block is single source)
+    components = (2.0, 1.0, 0.0, 2.0)  # spread, fee, borrow, impact [example]/[default]
+    assert abs(sum(components) - cost) <= TOL * max(1.0, abs(cost))
+    # fixture agreement: gate-pass row cost_bps=5.0000 within tolerance
+    assert abs(cost - 5.0000) <= TOL * max(1.0, abs(5.0000))
+
+
+def test_sizing_function_bounds():
+    """Normative size_shares: risk/stop, capped by ADV, no negative sizes."""
+    # unit_risk * mult = 2500 * 1.0 over a $2.50 stop -> 1000 shares [example]
+    assert size_shares(2500.0, 2.5, 5.0, 10000, 5.0) == 1000
+    # ADV cap binds: min(raw, cap)
+    assert size_shares(2500.0, 2.5, 5.0, 100, 5.0) == 100
+    # zero stop -> invalid input (F2), never a guessed size
+    with pytest.raises(AssertionError):
+        size_shares(2500.0, 0.0, 5.0, 10000, 5.0)
+    # vol_estimate/cost are carried for provenance; sizing never goes negative
+    assert size_shares(1.0, 10.0, 3.0, 10000, 50.0) == 0
+
+
+def test_exit_cooldown():
+    """C10: post-exit cooldown blocks re-entry until now >= cooldown_until."""
+    rows = tape_rows()
+    # cooldown far in the future: every row vetoed, no intents
+    state = {"cooldown_until": 9_999_999_999_999_999_999}
+    assert emit(state, rows, {}) == []
+    # cooldown expired: the gate-pass row emits exactly as in the fixture
+    state2 = {"cooldown_until": 0}
+    tickets = emit(state2, rows, {})
+    assert len(tickets) == 1
+    assert tickets[0].intent_ts == 1700000000000001000
 

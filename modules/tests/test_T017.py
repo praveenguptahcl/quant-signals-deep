@@ -13,12 +13,14 @@ TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
 
+# Round-trip cost convention (entry + exit legs), charged once against entry
+# notional in the fixtures [default].
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T017 COST block (single source of truth)."""
-    spread_bps = 1.0    # [example] ~1c effective spread on SPY @ $500 around announcements
-    fee_bps = 0.5       # [example] ~0.5c commission on SPY @ $500
-    borrow_bps = 0.0    # [default] intraday ETF hold; borrow stubbed at zero
-    impact_bps = 0.0    # [example] conservative variant: +1c adverse on release
+    spread_bps = 2.0    # [example] ~1c round-trip half-spread on SPY @ $500 around announcements
+    fee_bps = 1.4       # [documented] IBKR Pro tiered $0.0035/share one-way -> 0.7 bps @ $500; x2 round-trip
+    borrow_bps = 0.0    # [default] intraday ETF hold; borrow stubbed at zero; locate required (C7)
+    impact_bps = 0.0    # [example] base 0; conservative variant +1c adverse = 2 bps
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 def load_csv(path):
@@ -82,16 +84,26 @@ def test_cost_gate_predicate():
 
 
 def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
+    # ARMED -> TRIPPED -> RECOVERY -> ARMED, per the §T0 re-arm checklist
     state = "ARMED"
-    kill_conditions = ["announcement surprise > 3σ [example]", "clock skew > 50 ms [example]", "HMM inputs stale [example]"]
+    kill_conditions = ["announcement surprise > 3-sigma [example]", "clock skew > 50 ms [example]", "HMM inputs stale [example]"]
     stale_s = 180.0
     if stale_s >= 2.0:
-        state = "TRIPPED"   # cancel all, flatten, OFF
+        state = "TRIPPED"   # cancel all, flatten, page
     assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
-    assert all(checklist)
+    # re-arm checklist: root cause logged, cooldown expired, feeds healthy,
+    # calendar re-verified, manual sign-off, paper dry-run passed
+    checklist = {
+        "root_cause_logged": True,
+        "cooldown_expired": True,
+        "feeds_healthy": True,
+        "calendar_reverified": True,
+        "manual_signoff": True,
+        "paper_dryrun_passed": True,
+    }
+    assert all(checklist.values())
     state = "RECOVERY"
+    assert state == "RECOVERY"
     state = "ARMED"
     assert state == "ARMED"
     assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
@@ -106,6 +118,16 @@ def test_invalid_input_emits_unknown():
     assert emit_state(50.00, 50.00) == "UNKNOWN"
     assert emit_state(50.01, 50.00) == "UNKNOWN"
     assert emit_state(50.00, 50.01) == "OK"
+
+
+def test_entry_gate_veto():
+    # C11: intent on a non-announcement day -> veto, no tickets
+    def emit_gate(announcement_today):
+        if not announcement_today:
+            return []  # GATE_VETO
+        return ["ticket"]
+    assert emit_gate(False) == []
+    assert len(emit_gate(True)) == 1
 
 
 def test_cost_callable_signature():

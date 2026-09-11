@@ -57,11 +57,15 @@ class Config:
     taker_fee_bps: float = 0.30
     maker_rebate_bps: float = 0.20
     side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
+    borrow_bps_per_day: float = 0.0  # per-day example borrow charge (SHORT leg only)
     impact_k: float = 0.5
     daily_loss_stop_pct: float = -2.0
     venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
+    default_side: str = "BUY"      # BUY | SELL | SHORT - direction from parent signal
+    adv_share_max: float = 0.70    # Huang-Stoll adverse-selection cap
+    queue_tilt_min: float = 0.20   # |queue_imb| minimum to post passively
+    depth_cap_pct: float = 0.25    # max fraction of visible queue depth to post
+    vol_est_default: float = 0.5   # price units; 3-sigma fallback when stop<=0
 
 
 class KillSwitch:
@@ -89,14 +93,36 @@ class KillSwitch:
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
-    """4-component cost stack (COST-block callable). Example values."""
+    """4-component cost stack (COST-block callable). Mirrors §T2 exactly.
+
+    Spread is booked POSITIVE vs arrival mid (the passive harvest is the
+    router's edge vs taking, not a negative cost line); the maker rebate is
+    the only negative line. All literals [example].
+    """
     spread_bps = cfg.spread_full_bps / 2.0
     fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
-    borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
+    borrow_bps = cfg.borrow_bps_per_day if cfg.default_side == "SHORT" else 0.0
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
         impact_bps *= 1.5
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, adv_shares,
+                queue_depth, cost_bps, px, cfg):
+    """Normative sizing: shares = f(risk_budget_R, stop_distance, vol_estimate,
+    ADV_cap, cost) — mirrors the §T2 fenced function.
+
+    stop_distance is a price fraction; vol_estimate (price units) is the
+    3-sigma fallback [default] when stop_distance <= 0. cost_bps is the
+    COST-block callable output for the ticket and enters the per-share risk,
+    so modeled cost cannot be levered past the risk budget.
+    """
+    sd = stop_distance if stop_distance > 0 else 3.0 * vol_estimate / px
+    risk_per_share = sd * px + abs(cost_bps) / 1e4 * px
+    raw = risk_budget_R / max(risk_per_share, 1e-9)
+    return max(1, int(min(raw, cfg.depth_cap_pct * queue_depth,
+                          cfg.adv_cap_pct / 100.0 * adv_shares)))
 
 
 def process_bar(state, bar, cfg):
@@ -107,11 +133,15 @@ def process_bar(state, bar, cfg):
     Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
     """
     ks = state["kill"]
-    # F1/F2: invalid input -> UNKNOWN, never interpolate
+    # F1: invalid input -> UNKNOWN, never interpolate
     if (bar["close"] <= 0 or bar["market_state"] != "CONTINUOUS_TRADING"
             or bar["asof_ts"] < bar["event_ts"]):
         state["position"] = 0
         return None, "UNKNOWN", "invalid-input"
+    # F2: out-of-bounds indicator (decomposition blowup, §T8 #3) -> UNKNOWN
+    if not (0.0 <= bar["adv_share"] <= 1.0) or abs(bar["queue_imb"]) > 1.0:
+        state["position"] = 0
+        return None, "UNKNOWN", "decomp-bounds"
     # Kill switch: TRIPPED blocks everything; breach trips it
     if ks.state != "ARMED":
         return None, "OFF", "kill-" + ks.state.lower()
@@ -119,19 +149,23 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
-    # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
+    # Normative cost-gate inputs: expected_cost_bps(...) from the COST block
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
+    # Normative sizing: cost enters the per-share risk (§T2 fenced function)
+    qty = size_shares(cfg.risk_R_usd, bar["stop_bps"] / 1e4,
+                      cfg.vol_est_default, bar["adv_shares"],
+                      bar["queue_depth"], cost, bar["close"], cfg)
     z = bar["signal_z"]
     pos = state.get("position", 0)
     if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
+        # §T2 entry Boolean: z trigger AND decomposition gate AND tilt gate
+        z_ok = abs(z) >= cfg.z_entry
+        decomp_ok = bar["adv_share"] <= cfg.adv_share_max
+        tilt_ok = abs(bar["queue_imb"]) >= cfg.queue_tilt_min
+        if z_ok and decomp_ok and tilt_ok and gate:
+            side = cfg.default_side  # direction from the parent S014 signal
             ticket = OrderTicket(
                 symbol=bar["symbol"], side=side, qty=qty,
                 limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
@@ -140,7 +174,11 @@ def process_bar(state, bar, cfg):
                 intent_ts=bar["event_ts"], state="NEW")
             state["position"] = 1 if side == "BUY" else -1
             return ticket, "OK", "entry"
-        return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
+        if z_ok and not decomp_ok:
+            return None, "OK", "decomp-veto"
+        if z_ok and not tilt_ok:
+            return None, "OK", "tilt-veto"
+        return None, "OK", "gate-block" if z_ok else "flat"
     # Position open: exit on z through the exit band (exits never cost-gated)
     if abs(z) <= cfg.z_exit:
         exit_side = "SELL" if pos > 0 else "BUY"
@@ -161,9 +199,11 @@ CFG = Config(
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=2.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="maker",
-    borrow_bps=0.0, impact_k=15.0,
+    borrow_bps_per_day=0.0, impact_k=15.0,
     daily_loss_stop_pct=1.0, venue="primary",
-    default_side="LONG")
+    default_side="BUY", adv_share_max=0.70,
+    queue_tilt_min=0.20, depth_cap_pct=0.25,
+    vol_est_default=0.5)
 
 
 # ---------------------------------------------------------------- fixtures
@@ -185,6 +225,9 @@ def tape():
             "stop_bps": float(r["stop_bps"]), "urgency": r["urgency"],
             "market_state": r["market_state"],
             "daily_pnl_pct": float(r["daily_pnl_pct"]),
+            "adv_share": float(r["adv_share"]),
+            "queue_imb": float(r["queue_imb"]),
+            "queue_depth": float(r["queue_depth"]),
         })
     return rows
 
@@ -239,7 +282,7 @@ def test_fixture_recomputes_to_expected():
                             rel_tol=TOL), b["bar"]
         if t is not None:
             assert t.qty > 0
-            assert t.side in ("BUY", "SELL", "SHORT", "LONG")
+            assert t.side in ("BUY", "SELL", "SHORT")
             assert t.intent_ts == b["event_ts"]
             assert t.ticket_id.startswith(CFG.sid)
             assert t.parent_signal == "%s@%d" % (CFG.primary_signal, b["event_ts"])
@@ -311,3 +354,25 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+
+
+def test_decomp_and_tilt_veto_and_f2_bounds():
+    """§T2 entry Boolean: decomposition/tilt vetoes suppress entry (state OK);
+    F2 decomposition blowup (alpha-hat outside [0,1]) -> UNKNOWN."""
+    bars = tape()
+    base = dict(bars[3])  # entry bar: z=2.4, gate passes
+    # tilt below minimum -> veto, no intent, state stays OK
+    b = dict(base)
+    b["queue_imb"] = 0.05
+    t, ms, note = process_bar(fresh_state(), b, CFG)
+    assert t is None and ms == "OK" and note == "tilt-veto"
+    # adverse-selection share above cap -> veto, no intent, state stays OK
+    b = dict(base)
+    b["adv_share"] = 0.85
+    t, ms, note = process_bar(fresh_state(), b, CFG)
+    assert t is None and ms == "OK" and note == "decomp-veto"
+    # F2: decomposition blowup -> UNKNOWN (§T8 #3)
+    b = dict(base)
+    b["adv_share"] = 1.25
+    t, ms, note = process_bar(fresh_state(), b, CFG)
+    assert t is None and ms == "UNKNOWN" and note == "decomp-bounds"

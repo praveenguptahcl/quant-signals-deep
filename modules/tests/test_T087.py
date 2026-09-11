@@ -22,9 +22,34 @@ GATE_NAMES = ['haircut_ok', 'meta_ok', 'weight_ok']
 COST_GATE_K = 0.5                       # [default]
 PER_TRADE_R = 250        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 12  # in units of R [default]
+SLEEVE_STOP_PCT = 3.0    # sleeve daily loss stop, % of NAV [default]
 SYMBOL = 'SLEEVE:MULTI'
 PARENT_SIGNAL = 'S088'
 INFRA = False  # normative emitter emits OrderTicket intents
+
+# Config defaults — mirrors the §T0.2 Config dataclass in T087.md exactly.
+CONFIG = {
+    "tau": 0.40,
+    "cash_pct": 0.10,
+    "strat_cap": 0.70,
+    "sleeve_stop_pct": 3.0,
+    "inelig_kill": 3,
+    "cost_gate_k": 0.5,
+    "per_trade_R": 250.0,
+    "daily_loss_stop_R": 12,
+    "max_concurrent_positions": 20,
+    "meta_p_min": 0.5,
+    "haircut_min": 0.0,
+    "psr_band_mult": 2.0,
+    "rebalance_cadence": "monthly",
+    "sleeve_max_notional_usd": 1000000.0,
+    "spread_bps": 2.0,
+    "fee_bps": 2.0,
+    "borrow_bps": 0.0,
+    "impact_bps": 1.0,
+    "max_skew_s": 300.0,
+    "staleness_ttl_days": 40.0,
+}
 
 # ------------------------------------------------------------ schemas (App C/G)
 @dataclass(frozen=True)
@@ -47,6 +72,7 @@ class KillSwitch:
     state: str = "ARMED"
     trip_reason: str = ""
     day_loss_R: float = 0.0
+    sleeve_loss_pct: float = 0.0
 
     def note_loss(self, loss_R: float) -> None:
         self.day_loss_R += loss_R
@@ -54,13 +80,22 @@ class KillSwitch:
             self.state = "TRIPPED"
             self.trip_reason = f"daily loss stop: {self.day_loss_R:.2f}R <= -{DAILY_LOSS_STOP_R}R"
 
+    def note_sleeve_loss(self, loss_pct: float) -> None:
+        """Sleeve drawdown stop (§T0.7): sleeve daily loss <= -3% NAV trips."""
+        self.sleeve_loss_pct += loss_pct
+        if self.sleeve_loss_pct <= -SLEEVE_STOP_PCT and self.state == "ARMED":
+            self.state = "TRIPPED"
+            self.trip_reason = (f"sleeve stop: {self.sleeve_loss_pct:.2f}% "
+                                f"<= -{SLEEVE_STOP_PCT}% NAV")
+
     def begin_recovery(self) -> None:
         assert self.state == "TRIPPED", "recovery only from TRIPPED"
         self.state = "RECOVERY"
 
     def rearm(self, checklist: dict) -> bool:
         ok = (self.state == "RECOVERY" and all(checklist.values())
-              and self.day_loss_R > -DAILY_LOSS_STOP_R)
+              and self.day_loss_R > -DAILY_LOSS_STOP_R
+              and self.sleeve_loss_pct > -SLEEVE_STOP_PCT)
         if ok:
             self.state, self.trip_reason = "ARMED", ""
         return ok
@@ -247,4 +282,51 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_kill_switch_sleeve_stop():
+    """Sleeve daily loss <= -3% NAV trips the switch (§T0.7, §T8 failure mode)."""
+    kill = KillSwitch()
+    assert kill.state == "ARMED"
+    kill.note_sleeve_loss(-1.5)
+    assert kill.state == "ARMED"          # half the sleeve stop: still armed
+    kill.note_sleeve_loss(-1.5)
+    assert kill.state == "TRIPPED"
+    assert "sleeve stop" in kill.trip_reason
+    state = {"kill": kill}
+    assert emit(state, tape_rows(), {}) == []   # tripped: no intents
+    assert state["module_state"] == "OFF"
+    kill.begin_recovery()
+    kill.day_loss_R = 0.0
+    kill.sleeve_loss_pct = 0.0
+    checklist = {"losses_reconciled": True, "feeds_healthy": True,
+                 "risk_limits_reviewed": True, "decision_log_intact": True,
+                 "fixture_replay_green": True, "operator_signoff": True}
+    assert kill.rearm(checklist)
+    assert kill.state == "ARMED"
+
+
+def test_cost_stack_single_source():
+    """The §T2 COST block is the single source of truth: the callable totals 5.0 bps."""
+    total = expected_cost_bps(632900.00, 0.001, "SLEEVE:MULTI", "taker", "normal")
+    assert total == 5.0, total   # 2.0 spread + 2.0 fee + 0.0 borrow + 1.0 impact
+    assert CONFIG["spread_bps"] + CONFIG["fee_bps"] \
+        + CONFIG["borrow_bps"] + CONFIG["impact_bps"] == 5.0
+    exp = load_csv(EXPECTED)
+    assert len(exp) == 1
+    assert abs(float(exp[0]["cost_bps"]) - 5.0) <= 1e-9   # §T4 tolerance
+
+
+def test_config_matches_doc():
+    """The test CONFIG dict mirrors the §T0.2 Config dataclass in T087.md."""
+    import re
+    doc = (Path(__file__).resolve().parent.parent / "strategies" / "T087.md").read_text()
+    t02 = doc.split("### T0.2 Config dataclass", 1)[1].split("### T0.3", 1)[0]
+    for m in re.finditer(r"\|\s*`(\w+)`\s*\|\s*(\w+)\s*\|\s*`([^`]+)`", t02):
+        name, ptype, default = m.group(1), m.group(2), m.group(3)
+        assert name in CONFIG, f"CONFIG missing {name}"
+        if ptype in ("float", "int"):
+            assert float(CONFIG[name]) == float(default), name
+        else:
+            assert str(CONFIG[name]) == default, name
 

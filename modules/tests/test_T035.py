@@ -33,7 +33,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class OrderTicket:
     symbol: str
-    side: str            # BUY | SELL | SHORT - intent, not a wire order
+    side: str            # BUY | SELL | SHORT | LONG (futures long/short convention)
+                         # intent, not a wire order
     qty: int             # shares, integer, > 0
     limit: float | None  # limit price; None = marketable intent
     tif: str             # DAY | IOC | FOK | GTC | OPG | CLS
@@ -45,6 +46,10 @@ class OrderTicket:
 
 @dataclass
 class Config:
+    # Single Config dataclass per §T0.2: z_entry/z_exit are the harness's
+    # normalized proxies for the dev-based trigger_bps/exit_bps (the
+    # synthetic tape carries signal_z directly); all other defaults match
+    # the §T0.2 table verbatim.
     sid: str = "T000"
     primary_signal: str = "S000"
     z_entry: float = 2.0

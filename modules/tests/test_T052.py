@@ -357,3 +357,23 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 1.08)
     assert _close(float(t["cost_usd"]), 21.597382)
     assert _close(float(t["edge_bps"]), 3.9)
+
+def size_shares_doc(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Mirror of the §T2 fenced sizing function: shares=f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    q_risk = risk_budget_R / max(stop_distance, 1e-9)
+    q = min(q_risk, ADV_cap, 800)  # 800 = fixed_qty reference anchor
+    return int(max(0, q))
+
+def test_7_sizing_caps_bind():
+    price = 250.0
+    sigma_eps = 0.0003
+    stop_dist = 3 * sigma_eps * price       # $ adverse move exhausting per_trade_R
+    adv_cap = int(0.0002 * 5e9 / price)     # participation_cap * ADV_dollar / price = 4000
+    # fixed anchor binds first: q_risk = 600 / 0.225 = 2666 > 800, ADV cap = 4000
+    assert size_shares_doc(600.0, stop_dist, sigma_eps, adv_cap, 0.0) == 800
+    # tight ADV cap binds: participation cap of 4 shares on a thin name
+    assert size_shares_doc(600.0, stop_dist, sigma_eps, 4, 0.0) == 4
+    # tiny risk budget binds below both
+    assert size_shares_doc(1.0, stop_dist, sigma_eps, adv_cap, 0.0) == int(1.0 / stop_dist)
+    # degenerate stop distance never divides by zero
+    assert size_shares_doc(600.0, 0.0, sigma_eps, adv_cap, 0.0) == 800

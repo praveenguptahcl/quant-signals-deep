@@ -6,10 +6,11 @@ Definition of done: `python3 -m pytest modules/tests/test_T072.py -q` exits 0.
 import csv
 import math
 import os
+import statistics
 
 SID = "T072"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': False, 'z_long': 3.0, 'z_short': 99.0, 'conf_scale': 1.0, 'edge_mult': 3.0, 'time_stop': 6, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 300.0, None), 'cooldown_bars': 12, 'bar_ns': 300000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 3.0, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 1.0}}
+CFG = {'mode': 'z', 'fade': False, 'z_long': 3.0, 'z_short': 99.0, 'conf_scale': 1.0, 'edge_mult': 3.0, 'vol_mult': 2.0, 'vol_window': 20, 'bot_max': 0.5, 'time_stop': 6, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 300.0, None), 'adv_cap': 1000000, 'cooldown_bars': 12, 'bar_ns': 300000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 3.0, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 1.0}}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -63,7 +64,7 @@ def cost_gate_pass(cost_bps, k, edge_bps):
 
 def validate_row(r, prev_ts):
     """F1/F2: invalid input -> UNKNOWN, never interpolate."""
-    for f in ("open", "high", "low", "close", "volume", "sig", "gate"):
+    for f in ("open", "high", "low", "close", "volume", "sig", "gate", "bot"):
         v = r.get(f)
         if v is None or (isinstance(v, float) and not math.isfinite(v)):
             return False
@@ -78,9 +79,12 @@ def size_qty(dec, r, cfg):
     if mode == "fixed":
         return int(cfg["sizing"][1])
     if mode == "risk":
+        # 5-arg sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+        # cost gates (C2), never shrinks size; vol_estimate unused by this book.
         R_usd, _ = cfg["sizing"][1], None
         sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
-        return max(1, int(R_usd // sd))
+        adv_cap = int(cfg.get("adv_cap", 10 ** 18))
+        return max(1, min(int(R_usd // sd), adv_cap))
     if mode == "conf":
         q_base, c_min = cfg["sizing"][1], cfg["sizing"][2]
         frac = max(0.0, dec["conf"] - c_min) / max(1.0 - c_min, 1e-9)
@@ -89,10 +93,14 @@ def size_qty(dec, r, cfg):
         return max(lot, (q // lot) * lot)
     raise ValueError("unknown sizing mode")
 
-def decide(r, pos, cfg):
-    """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
+def decide(r, pos, cfg, vol_med=None):
+    """Per-module entry/exit logic. Returns None, a decision dict, or a list.
+    vol_med = trailing median volume over cfg['vol_window'] prior bars (None until
+    a minimum history exists); the ignition entry requires volume confirmation.
+    """
     mode = cfg["mode"]
     s = r["sig"]
+    bot = float(r.get("bot", 0.0))
     if mode == "allocator":
         # T053-style: regime tilt on the proxy; dead zone holds.
         cur = pos["sleeve"] if pos else None
@@ -140,6 +148,10 @@ def decide(r, pos, cfg):
     if pos is None:
         if r["gate"] != 1:
             return None
+        if bot > cfg["bot_max"]:
+            return None  # bot veto [default]: bot share of ignition volume too high
+        if vol_med is not None and vol_med > 0 and r["volume"] < cfg["vol_mult"] * vol_med:
+            return None  # volume confirmation [example]: vol >= 2x trailing median
         side = None
         if not cfg["fade"]:
             if s >= cfg["z_long"]:
@@ -175,6 +187,7 @@ def emit_intents(rows, cfg, sid, sigsrc):
     prev_ts = -1
     module_state = "OK"
     comp = cfg["cost"]
+    vol_hist = []  # prior-bar volumes for the ignition volume-confirmation gate
     for i, r in enumerate(rows):
         ts = r["event_ts"]
         if not validate_row(r, prev_ts):
@@ -182,12 +195,14 @@ def emit_intents(rows, cfg, sid, sigsrc):
             prev_ts = ts
             continue
         prev_ts = ts
+        med = statistics.median(vol_hist[-cfg["vol_window"]:]) if len(vol_hist) >= 2 else None
         nxt_ts = rows[i + 1]["event_ts"] if i + 1 < len(rows) else -1
         # F1/F2: a corrupt later row must not break causality on this row;
         # fall back to the bar grid so the normative assert below always holds.
         nxt = nxt_ts if nxt_ts > ts else ts + cfg["bar_ns"]
         assert nxt > ts, "causality: fill_event > signal_event"
-        d = decide(r, pos, cfg)
+        d = decide(r, pos, cfg, med)
+        vol_hist.append(r["volume"])
         if d is None:
             if pos is not None:
                 pos["bars_held"] += 1
@@ -260,7 +275,7 @@ def _load(name):
         for r in rd:
             for k in ("event_ts","volume","gate"):
                 r[k] = int(float(r[k]))
-            for k in ("open","high","low","close","sig","stop_dist"):
+            for k in ("open","high","low","close","sig","stop_dist","bot"):
                 r[k] = float(r[k])
             rows.append(r)
     return rows
@@ -348,6 +363,40 @@ def test_5_invalid_input_yields_unknown():
     bad3[5]["event_ts"] = bad3[4]["event_ts"]  # non-monotonic: not a later event
     _, mstate3 = emit_intents(bad3, CFG, SID, "S097")
     assert mstate3 == "UNKNOWN"
+    bad4 = [dict(r) for r in rows]
+    bad4[2]["bot"] = float("nan")  # non-finite bot share -> UNKNOWN
+    _, mstate4 = emit_intents(bad4, CFG, SID, "S097")
+    assert mstate4 == "UNKNOWN"
+
+def _unit_row(sig, vol, bot, gate=1, close=250.0):
+    return {"event_ts": 1, "symbol": "AAA", "open": close, "high": close,
+            "low": close, "close": close, "volume": vol, "sig": sig,
+            "gate": gate, "stop_dist": 0.75, "bot": bot}
+
+def test_7_bot_veto_and_volume_gate():
+    # bot share over the veto -> no entry, even with a strong ignition
+    r = _unit_row(4.0, 300000, 0.65)
+    assert decide(r, None, CFG, 100000.0) is None
+    # ignition without volume confirmation (vol < 2x trailing median) -> no entry
+    r = _unit_row(4.0, 100000, 0.20)
+    assert decide(r, None, CFG, 100000.0) is None
+    # gated-off bar -> no entry
+    r = _unit_row(4.0, 300000, 0.20, gate=0)
+    assert decide(r, None, CFG, 100000.0) is None
+    # all guards green -> enter long
+    r = _unit_row(4.0, 300000, 0.20)
+    d = decide(r, None, CFG, 100000.0)
+    assert d is not None and d["action"] == "enter" and d["side"] == "BUY"
+    assert _close(d["edge_bps"], 12.0)
+
+def test_8_sizing_adv_cap():
+    # 5-arg sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)
+    assert size_qty({"conf": 1.0}, {"stop_dist": 0.75}, CFG) == 400
+    small = dict(CFG)
+    small["adv_cap"] = 100
+    assert size_qty({"conf": 1.0}, {"stop_dist": 0.75}, small) == 100  # ADV cap binds
+    tiny_stop = {"stop_dist": 0.05}
+    assert size_qty({"conf": 1.0}, tiny_stop, small) == 100  # cap still binds
 
 def test_6_handcheck_literals():
     rows, (tickets, mstate) = _replay()

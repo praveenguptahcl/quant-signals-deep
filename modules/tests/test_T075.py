@@ -9,7 +9,7 @@ import os
 
 SID = "T075"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': True, 'z_long': 2.5, 'z_short': -2.5, 'conf_scale': 1.0, 'edge_mult': 3.5, 'time_stop': 8, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 500.0, None), 'cooldown_bars': 24, 'bar_ns': 3600000000000, 'tif': 'GTC', 'venue': 'PERP', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 2.0, 'fee_bps': 1.0, 'borrow_bps': 0.0, 'impact_bps': 1.0}}
+CFG = {'mode': 'z', 'fade': True, 'z_long': 2.5, 'z_short': -2.5, 'conf_scale': 1.0, 'edge_mult': 3.5, 'time_stop': 8, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 500.0, None), 'cooldown_bars': 24, 'bar_ns': 3600000000000, 'tif': 'GTC', 'venue': 'PERP', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 2.0, 'fee_bps': 1.0, 'borrow_bps': 0.0, 'impact_bps': 1.0}, 'oi_gate': 1.5, 'liq_min': 0.30}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -140,6 +140,13 @@ def decide(r, pos, cfg):
     if pos is None:
         if r["gate"] != 1:
             return None
+        # §T2 entry guards: OI confirmation and liquidation distance.
+        # If the stack cannot measure these, they are absent from the row
+        # and the guard vetoes entry (never faked); see test_7.
+        if r.get("oi_mult", 0.0) < cfg.get("oi_gate", 1.5):
+            return None
+        if r.get("liq_dist", 0.0) < cfg.get("liq_min", 0.30):
+            return None
         side = None
         if not cfg["fade"]:
             if s >= cfg["z_long"]:
@@ -260,7 +267,7 @@ def _load(name):
         for r in rd:
             for k in ("event_ts","volume","gate"):
                 r[k] = int(float(r[k]))
-            for k in ("open","high","low","close","sig","stop_dist"):
+            for k in ("open","high","low","close","sig","stop_dist","oi_mult","liq_dist"):
                 r[k] = float(r[k])
             rows.append(r)
     return rows
@@ -357,3 +364,22 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 4.0)
     assert _close(float(t["cost_usd"]), 24.005495)
     assert _close(float(t["edge_bps"]), 9.8)
+
+def test_7_oi_and_liq_guards_veto_entry():
+    """§T2 prose guards are machine-tested: OI confirmation and liquidation
+    distance veto entry even when funding z alone would enter."""
+    rows, (tickets, mstate) = _replay()
+    assert mstate == "OK"
+    probe = rows[-1]
+    assert probe["sig"] >= CFG["z_long"], "probe bar is funding-extreme"
+    assert probe["gate"] == 1
+    # no ticket may reference the probe bar: the OI guard vetoed entry
+    probe_ts = probe["event_ts"]
+    assert not [t for t in tickets if int(t["parent_signal"].split("@")[1]) == probe_ts]
+    # direct guard checks on the module's own decide()
+    assert decide(probe, None, CFG) is None  # oi_mult 1.2 < 1.5 -> veto
+    low_liq = dict(rows[2]); low_liq["liq_dist"] = 0.10
+    assert decide(low_liq, None, CFG) is None  # liq_dist 0.10 < 0.30 -> veto
+    control = dict(rows[2])  # guards green -> enters
+    d = decide(control, None, CFG)
+    assert d is not None and d["action"] == "enter"

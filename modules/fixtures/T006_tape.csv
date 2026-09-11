@@ -1,4 +1,4 @@
-# TYPE: validation-run
+# TYPE: validation-run (synthetic tape, seed 106)
 trade_id,side,qty,entry_px,exit_px,signal_ts,fill_ts,notional,adv_pct,venue,order_side,urgency,spread_bps,fee_bps,borrow_bps,impact_bps,exit_reason
 1,BUY,200,500.1,501.35,1788960600000000000,1788962400000000000,100020.0,0.01,ARCX,taker,normal,0.5,0.5,0.0,0.0,MOC 16:00
 2,SELL,200,502.2,501.1,1789047000000000000,1789048800000000000,100440.0,0.01,ARCX,taker,normal,0.5,0.5,0.0,0.0,MOC 16:00

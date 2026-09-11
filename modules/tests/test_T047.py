@@ -1,9 +1,10 @@
 """Acceptance tests for T047 - Risk-Reversal Skew Momentum.
 
-Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
-reference emit() (normative pseudocode via process_bar), and asserts the
-TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
-the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
+Deep-reviewed v1.0.1. Loads the fixture tape, runs the module's reference
+emit() (normative pseudocode via process_bar), and asserts the TYPE header,
+fixture-vs-expected agreement, causality (no-signal-bar fills), the
+cost-gate predicate, post-exit cooldown (C10), kill-switch trip/re-arm, and
+invalid-input handling.
 
 Run: python3 -m pytest modules/tests/test_T047.py -q   (from repo root)
 """
@@ -43,11 +44,14 @@ class OrderTicket:
     state: str           # NEW | WORKING | ... (intent-side mirror only)
 
 
+ONE_SESSION_NS = 86_400_000_000_000  # 1 session post-exit cooldown [default]
+
+
 @dataclass
 class Config:
     sid: str = "T000"
     primary_signal: str = "S000"
-    z_entry: float = 2.0
+    entry_z: float = 2.0
     z_exit: float = 0.5
     cost_gate_k: float = 0.5
     risk_R_usd: float = 1000.0
@@ -61,7 +65,7 @@ class Config:
     impact_k: float = 0.5
     daily_loss_stop_pct: float = -2.0
     venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
+    default_side: str = "BUY"      # BUY | SELL (Appendix C side enum)
 
 
 class KillSwitch:
@@ -99,11 +103,26 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost_bps):
+    """Canonical sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    risk_budget_R : dollars of risk capital per trade [USD]
+    stop_distance : fractional stop distance (stop_bps / 1e4) [ratio]
+    vol_estimate  : {"px": float} - reference price for the dollar conversion [USD]
+    ADV_cap       : max shares from the ADV participation cap [shares]
+    cost_bps      : expected cost from the COST callable [bps] (not used to
+                    shrink size in the MVB reference; carried for the contract)
+    """
+    qty = risk_budget_R / max(stop_distance * vol_estimate["px"], 1e-9)
+    return max(1, int(min(qty, ADV_cap)))
+
+
 def process_bar(state, bar, cfg):
     """One bar through the strategy. Returns (ticket|None, module_state, note).
 
     Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
-    switch -> size -> normative cost-gate predicate -> entry/exit rules.
+    switch -> canonical size_shares -> normative cost-gate predicate ->
+    entry/exit rules with post-exit cooldown (C10).
     Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
     """
     ks = state["kill"]
@@ -119,10 +138,12 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
+    # Position sizing (canonical signature) + the COST callable
+    qty = size_shares(cfg.risk_R_usd, bar["stop_bps"] / 1e4,
+                      {"px": bar["close"]},
+                      cfg.adv_cap_pct / 100.0 * bar["adv_shares"],
+                      expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
+                                        cfg.side_exec, bar["urgency"], cfg))
     # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
@@ -130,7 +151,10 @@ def process_bar(state, bar, cfg):
     z = bar["signal_z"]
     pos = state.get("position", 0)
     if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
+        # C10: post-exit cooldown suppresses re-entry for one session
+        if bar["event_ts"] <= state.get("cooldown_until", 0):
+            return None, "OK", "cooldown"
+        if abs(z) >= cfg.entry_z and gate:
             side = cfg.default_side
             ticket = OrderTicket(
                 symbol=bar["symbol"], side=side, qty=qty,
@@ -140,7 +164,7 @@ def process_bar(state, bar, cfg):
                 intent_ts=bar["event_ts"], state="NEW")
             state["position"] = 1 if side == "BUY" else -1
             return ticket, "OK", "entry"
-        return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
+        return None, "OK", "gate-block" if abs(z) >= cfg.entry_z else "flat"
     # Position open: exit on z through the exit band (exits never cost-gated)
     if abs(z) <= cfg.z_exit:
         exit_side = "SELL" if pos > 0 else "BUY"
@@ -151,19 +175,20 @@ def process_bar(state, bar, cfg):
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
         state["position"] = 0
+        state["cooldown_until"] = bar["event_ts"] + ONE_SESSION_NS  # C10
         return ticket, "OK", "exit"
     return None, "OK", "hold"
 
 
 CFG = Config(
     sid="T047", primary_signal="S071",
-    z_entry=1.5, z_exit=0.5, cost_gate_k=0.5,
+    entry_z=1.5, z_exit=0.5, cost_gate_k=0.5,
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=8.0, taker_fee_bps=1.0,
     maker_rebate_bps=-0.2, side_exec="taker",
     borrow_bps=0.0, impact_k=20.0,
     daily_loss_stop_pct=2.0, venue="primary",
-    default_side="LONG")
+    default_side="BUY")
 
 
 # ---------------------------------------------------------------- fixtures
@@ -194,7 +219,7 @@ def expected():
 
 
 def fresh_state():
-    return {"position": 0, "kill": KillSwitch()}
+    return {"position": 0, "kill": KillSwitch(), "cooldown_until": 0}
 
 
 def run_tape():
@@ -239,7 +264,7 @@ def test_fixture_recomputes_to_expected():
                             rel_tol=TOL), b["bar"]
         if t is not None:
             assert t.qty > 0
-            assert t.side in ("BUY", "SELL", "SHORT", "LONG")
+            assert t.side in ("BUY", "SELL", "SHORT")  # Appendix C side enum
             assert t.intent_ts == b["event_ts"]
             assert t.ticket_id.startswith(CFG.sid)
             assert t.parent_signal == "%s@%d" % (CFG.primary_signal, b["event_ts"])
@@ -299,6 +324,32 @@ def test_kill_switch_trip_and_rearm():
     st["kill"].begin_recovery()
     assert st["kill"].rearm([True, True, False, True, True]) is False
     assert st["kill"].state == "RECOVERY"
+
+
+def test_post_exit_cooldown():
+    """C10: post-exit cooldown suppresses re-entry for one session, then lapses."""
+    st = fresh_state()
+    bars = tape()
+    for b in bars[:7]:
+        process_bar(st, b, CFG)  # entry at bar 3, exit at bar 6
+    assert st["cooldown_until"] == bars[6]["event_ts"] + ONE_SESSION_NS
+    # bar 7: entry conditions WOULD pass (big edge) but the cooldown blocks
+    b7 = dict(bars[7])
+    b7["edge_bps"] = 30.0
+    b7["signal_z"] = 1.8
+    t7, ms7, note7 = process_bar(st, b7, CFG)
+    assert t7 is None and ms7 == "OK" and note7 == "cooldown"
+    # one full session later the cooldown has lapsed: the entry fires
+    b8 = dict(bars[10])
+    b8["event_ts"] = bars[7]["event_ts"] + ONE_SESSION_NS
+    b8["asof_ts"] = b8["event_ts"] + 25_000_000
+    b8["edge_bps"] = 30.0
+    b8["signal_z"] = 1.8
+    b8["daily_pnl_pct"] = 0.05
+    b8["market_state"] = "CONTINUOUS_TRADING"
+    t8, ms8, note8 = process_bar(st, b8, CFG)
+    assert t8 is not None and ms8 == "OK" and note8 == "entry"
+    assert t8.intent_ts == b8["event_ts"]
 
 
 def test_invalid_input_unknown():

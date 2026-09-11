@@ -20,8 +20,10 @@ EXPECTED = FIX / "T080_expected.csv"
 GATE_CFG = [('>=', 90.0), ('>=', 95.0), ('>=', 1.0)]   # [(op, threshold)] for g1, g2, g3
 GATE_NAMES = ['asvi_pct', 'social_pct', 'stale_score']
 COST_GATE_K = 0.5                       # [default]
+BORROW_MAX_ANN_PCT = 5.0                # [default] g4
 PER_TRADE_R = 350        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 4  # in units of R [default]
+ADV_CAP = 0.10           # fraction of 30-day ADV [default]
 SYMBOL = 'CMP:XNAS'
 PARENT_SIGNAL = 'S099'
 INFRA = False  # normative emitter emits OrderTicket intents
@@ -75,6 +77,21 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost,
+           adv_shares_30d) -> int:
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    Normative fenced sizing (§T2.3b): stop_distance <= 0 is a caller error
+    (row -> UNKNOWN upstream); cost is informational.
+    """
+    import math
+    if stop_distance <= 0:
+        raise ValueError("stop_distance must be > 0 (row -> UNKNOWN upstream)")
+    eff_stop = max(stop_distance, 0.5 * vol_estimate)
+    qty = math.floor(risk_budget_R / eff_stop)
+    return int(min(qty, math.floor(ADV_cap * adv_shares_30d)))
+
+
 # ------------------------------------------------- normative pseudocode stub
 def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     """emit(state, signals, cfg) -> list[OrderTicket] — reference stub.
@@ -91,11 +108,24 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     def chain_hash(prev, payload):
         return hashlib.sha256((prev + payload).encode()).hexdigest()[:16]
 
-    def append(action, reason, payload, before, after):
+    def canon_hash(obj) -> str:
+        return hashlib.sha256(repr(sorted(obj.items())).encode()).hexdigest()[:16]
+
+    params_hash = canon_hash({"cost_gate_k": COST_GATE_K,
+                              "borrow_max_ann_pct": BORROW_MAX_ANN_PCT,
+                              "adv_cap": ADV_CAP,
+                              "per_trade_R": PER_TRADE_R})
+
+    def append(action, reason, sig_ts, row, before, after):
         prev = log[-1]["hash"] if log else "genesis"
-        log.append({"action": action, "reason": reason,
-                     "state_before": before, "state_after": after,
-                     "prev_hash": prev, "hash": chain_hash(prev, payload)})
+        payload = f"{action}|{reason}@{sig_ts}"
+        log.append({"ts_ns": sig_ts,
+                    "action": action, "reason": reason,
+                    "inputs_hash": canon_hash(row) if row else "n/a",
+                    "params_hash": params_hash,
+                    "state_before": before, "state_after": after,
+                    "prev_hash": prev,
+                    "hash": chain_hash(prev, payload)})
 
     for row in rows:
         sig_ts = row["signal_ts"]
@@ -109,7 +139,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if (not row["valid"] or row["price"] <= 0 or row["qty"] <= 0
                 or row["side"] not in ("LONG", "SHORT", "BUY", "SELL")):
             state["module_state"] = "UNKNOWN"
-            append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
+            append("COMPLIANCE_BLOCK", "invalid-input", sig_ts, row,
                    before, "UNKNOWN")
             continue
 
@@ -118,12 +148,22 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         for (op, th), v in zip(GATE_CFG, (row["g1"], row["g2"], row["g3"])):
             gates.append(v >= th if op == ">=" else (v <= th if op == "<=" else (v > th if op == ">" else v < th)))
         if not all(gates):
-            append("GATE_VETO", "entry-boolean", f"veto@{sig_ts}", before, before)
+            append("GATE_VETO", "entry-boolean", sig_ts, row, before, before)
+            continue
+        # g4: borrow cap (C11); g5: macro-day filter (C12); g6: scheduled-event veto
+        if not (row["borrow_ann"] <= BORROW_MAX_ANN_PCT):
+            append("GATE_VETO", "borrow-cap", sig_ts, row, before, before)
+            continue
+        if not (row["macro_day"] == 0):
+            append("GATE_VETO", "macro-day", sig_ts, row, before, before)
+            continue
+        if not (row["sched_event"] == 0):
+            append("GATE_VETO", "scheduled-event", sig_ts, row, before, before)
             continue
         # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
         cost = expected_cost_bps(row["qty"] * row["price"], 0.001, "venue", "taker", "normal")
         if not (cost <= COST_GATE_K * row["edge_bps"]):
-            append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
+            append("GATE_VETO", "cost-gate", sig_ts, row, before, before)
             continue
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
         t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
@@ -132,7 +172,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
                         intent_ts=sig_ts + 1000, state="NEW", stp=True)
         assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
         tickets.append(t)
-        append("EMIT_INTENT", "emit", t.ticket_id + t.parent_signal + str(t.intent_ts),
+        append("EMIT_INTENT", "emit", sig_ts, row,
                before, state["module_state"])
 
     return tickets
@@ -153,6 +193,9 @@ def tape_rows():
                       "edge_bps": float(r["edge_bps"]),
                       "g1": float(r["g1"]), "g2": float(r["g2"]), "g3": float(r["g3"]),
                       "price": float(r["price"]), "qty": int(r["qty"]),
+                      "borrow_ann": float(r["borrow_ann"]),
+                      "macro_day": int(r["macro_day"]),
+                      "sched_event": int(r["sched_event"]),
                       "valid": int(r["valid"]) == 1})
     return rows
 
@@ -217,13 +260,15 @@ def test_invalid_input_yields_unknown():
     state = {}
     bad = [{"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "LONG",
              "edge_bps": 50.0, "g1": 99.0, "g2": 99.0, "g3": 99.0,
-             "price": -1.0, "qty": 100, "valid": 1}]  # negative price
+             "price": -1.0, "qty": 100, "borrow_ann": 2.5, "macro_day": 0,
+             "sched_event": 0, "valid": 1}]  # negative price
     assert emit(state, bad, {}) == []
     assert state["module_state"] == "UNKNOWN"
     state2 = {}
     bad2 = [{"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "LONG",
               "edge_bps": 50.0, "g1": 99.0, "g2": 99.0, "g3": 99.0,
-              "price": 100.0, "qty": 100, "valid": 0}]  # valid flag false
+              "price": 100.0, "qty": 100, "borrow_ann": 2.5, "macro_day": 0,
+              "sched_event": 0, "valid": 0}]  # valid flag false
     assert emit(state2, bad2, {}) == []
     assert state2["module_state"] == "UNKNOWN"
 
@@ -247,4 +292,56 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_cost_stack_components():
+    """COST stack: four components sum to the 7.40 bps reference total."""
+    total = expected_cost_bps(305100.0, 0.001, "CMP:XNAS", "taker", "normal")
+    assert abs(total - 7.4) < 1e-9
+    # the gate-pass fixture row: 7.4 bps on $305,100 notional
+    assert abs(total * 305100.0 / 10000 - 225.77) < 0.01   # $225.77 [example]
+
+
+def test_entry_boolean_vetos():
+    """g4/g5/g6 vetoes: borrow cap (C11), macro day (C12), scheduled event."""
+    rows = tape_rows()
+    state = {}
+    tickets = emit(state, rows, {})
+    assert [t.intent_ts for t in tickets] == [1700000000000001000]  # bar 0 only
+    reasons = [r["reason"] for r in state["decision_log"]
+               if r["action"] == "GATE_VETO"]
+    assert "borrow-cap" in reasons      # bar 6: borrow_ann 6.0 > 5.0
+    assert "macro-day" in reasons       # bar 7: macro_day == 1
+    assert "scheduled-event" in reasons  # bar 8: sched_event == 1
+
+
+def test_sizing_function():
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    # risk sizing binds: 350 / max(0.05, 0.5*0.06=0.03) = 7000 shares
+    assert shares(350.0, 0.05, 0.06, 0.10, 7.4, 2_000_000) == 7000
+    # ADV cap binds: min(7000, 0.10 * 50_000) = 5000
+    assert shares(350.0, 0.05, 0.06, 0.10, 7.4, 50_000) == 5000
+    # vol floor binds: max(0.02, 0.5*0.10=0.05) = 0.05 -> 7000
+    assert shares(350.0, 0.02, 0.10, 0.10, 7.4, 2_000_000) == 7000
+    try:
+        shares(350.0, 0.0, 0.06, 0.10, 7.4, 2_000_000)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("stop_distance <= 0 must raise (row -> UNKNOWN)")
+
+
+def test_decision_log_schema():
+    """§T2.4b decision-log schema: every record carries the coded fields."""
+    state = {}
+    emit(state, tape_rows(), {})
+    required = {"ts_ns", "action", "reason", "inputs_hash", "params_hash",
+                "state_before", "state_after", "prev_hash", "hash"}
+    log = state["decision_log"]
+    assert len(log) == 9  # 1 emit + 8 vetos/blocks across 9 fixture rows
+    for rec in log:
+        assert required <= set(rec), rec
+        assert rec["action"] in ("GATE_VETO", "EMIT_INTENT", "COMPLIANCE_BLOCK",
+                                 "KILL_TRIP")
+        assert rec["params_hash"] and rec["inputs_hash"]
 

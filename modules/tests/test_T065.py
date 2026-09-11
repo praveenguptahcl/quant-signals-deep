@@ -9,7 +9,7 @@ import os
 
 SID = "T065"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': False, 'z_long': 2.0, 'z_short': -2.0, 'conf_scale': 1.0, 'edge_mult': 3.5, 'time_stop': 8, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 400.0, None), 'cooldown_bars': 390, 'bar_ns': 60000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 3.0, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 1.0}}
+CFG = {'mode': 'z', 'fade': False, 'z_long': 2.0, 'z_short': -2.0, 'conf_scale': 1.0, 'edge_mult': 3.5, 'time_stop': 8, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 400.0, None), 'absorb_frac': 0.10, 'adv_cap': None, 'cooldown_bars': 390, 'bar_ns': 60000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 3.0, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 1.0}}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -80,7 +80,11 @@ def size_qty(dec, r, cfg):
     if mode == "risk":
         R_usd, _ = cfg["sizing"][1], None
         sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
-        return max(1, int(R_usd // sd))
+        qty = max(1, int(R_usd // sd))
+        cap = cfg.get("adv_cap")  # ADV participation cap; None disables [example]
+        if cap:
+            qty = min(qty, int(cap))
+        return qty
     if mode == "conf":
         q_base, c_min = cfg["sizing"][1], cfg["sizing"][2]
         frac = max(0.0, dec["conf"] - c_min) / max(1.0 - c_min, 1e-9)
@@ -158,6 +162,9 @@ def decide(r, pos, cfg):
                 "edge_bps": abs(s) * cfg["edge_mult"], "conf": conf}
     if pos["bars_held"] + 1 >= cfg["time_stop"]:
         return {"action": "exit", "reason": "time_stop"}
+    entry_imb = pos.get("entry_imb") or 0.0
+    if entry_imb > 0 and abs(s) < cfg.get("absorb_frac", 0.10) * entry_imb:
+        return {"action": "exit", "reason": "absorbed"}  # early absorption exit
     if cfg["exit_flip"]:
         if pos["side"] == "BUY" and s < 0:
             return {"action": "exit", "reason": "sig_flip"}
@@ -169,6 +176,8 @@ def decide(r, pos, cfg):
 
 def emit_intents(rows, cfg, sid, sigsrc):
     """emit(state, signals, cfg) -> list[OrderTicket intent dicts]. Sketch."""
+    if not rows:
+        return [], "UNKNOWN"  # F1: empty signals -> UNKNOWN, never interpolate
     tickets = []
     pos = None
     cooldown_until = -1
@@ -222,7 +231,7 @@ def emit_intents(rows, cfg, sid, sigsrc):
                     continue  # second leg shares the position
                 pos = {"side": dd["side"], "bars_held": 0,
                        "sleeve": dd.get("sleeve", ""), "entry_ts": ts,
-                       "qty": qty}
+                       "qty": qty, "entry_imb": abs(r["sig"])}
                 if cfg["mode"] == "pair":
                     break
             elif dd["action"] == "exit" and pos is not None:
@@ -348,6 +357,8 @@ def test_5_invalid_input_yields_unknown():
     bad3[5]["event_ts"] = bad3[4]["event_ts"]  # non-monotonic: not a later event
     _, mstate3 = emit_intents(bad3, CFG, SID, "S033")
     assert mstate3 == "UNKNOWN"
+    _, mstate4 = emit_intents([], CFG, SID, "S033")  # F1: empty signals
+    assert mstate4 == "UNKNOWN"
 
 def test_6_handcheck_literals():
     rows, (tickets, mstate) = _replay()
@@ -357,3 +368,30 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 4.4)
     assert _close(float(t["cost_usd"]), 44.010067)
     assert _close(float(t["edge_bps"]), 9.8)
+
+def _mkrow(ts, sig, gate=1):
+    return {"event_ts": ts, "symbol": "AAA", "open": 250.0, "high": 250.2,
+            "low": 249.8, "close": 250.0, "volume": 100000,
+            "sig": sig, "gate": gate, "stop_dist": 1.0}
+
+def test_7_adv_cap_binds_qty():
+    rows, (tickets, mstate) = _replay()
+    assert tickets[0]["qty"] == 400
+    cfg2 = dict(CFG)
+    cfg2["adv_cap"] = 200  # [example]: ADV participation cap
+    rows2 = _load(SID + "_tape.csv")
+    tickets2, mstate2 = emit_intents(rows2, cfg2, SID, "S033")
+    assert mstate2 == "OK"
+    enters = [t for t in tickets2 if t["action"] == "enter"]
+    assert enters and all(t["qty"] == 200 for t in enters)
+
+def test_8_absorb_exit():
+    # entry on a large imbalance, then the imbalance is absorbed
+    rows = [_mkrow(100 + i, s) for i, s in enumerate([2.8, 0.1, 0.2])]
+    tickets, mstate = emit_intents(rows, CFG, SID, "S033")
+    assert mstate == "OK"
+    exits = [t for t in tickets if t["action"] == "exit"]
+    assert exits, tickets
+    assert exits[0]["reason"] == "absorbed"
+    for t in tickets:
+        assert t["fill_ts"] > t["signal_ts"]

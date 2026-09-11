@@ -75,6 +75,36 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+SIZING_CFG = {  # §T2.4 fenced sizing function defaults
+    "pace_sensitivity": 0.25,   # [default]
+    "pov_cap": 0.10,            # [default]
+    "risk_budget_R": 1.0,       # [default]
+    "R_dollars": 6153,          # [example]
+    "stop_distance": 0.5,       # $/share adverse [default]
+    "adv_cap_pct": 0.10,        # [default]
+    "cost_gate_k": 0.5,         # [default]
+}
+
+
+def size_slice(parent_remaining, slices_remaining, z, tape_vol, adv_shares,
+               edge_bps, cfg=SIZING_CFG) -> int:
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost) — §T2.4.
+
+    Reference implementation of the fenced sizing function. Cost gate veto
+    yields zero size; the tightest of the base-slice, POV, risk, and ADV caps
+    binds.
+    """
+    m = 1 + cfg["pace_sensitivity"] * z                       # demeaned [example]
+    base_slice = parent_remaining / slices_remaining * m
+    pov_cap_qty = cfg["pov_cap"] * tape_vol                   # [default]
+    risk_cap = cfg["risk_budget_R"] * cfg["R_dollars"] / cfg["stop_distance"]  # [default]
+    adv_cap_qty = cfg["adv_cap_pct"] * adv_shares             # [default]
+    cost = expected_cost_bps(base_slice, 0.001, "EXE:XNAS", "taker", "normal")
+    if cost > cfg["cost_gate_k"] * edge_bps:                  # cost gate -> zero size
+        return 0
+    return max(0, int(min(base_slice, pov_cap_qty, risk_cap, adv_cap_qty)))
+
+
 # ------------------------------------------------- normative pseudocode stub
 def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     """emit(state, signals, cfg) -> list[OrderTicket] — reference stub.
@@ -170,6 +200,26 @@ def test_fixture_recomputes_to_expected():
         assert t.intent_ts == int(e["intent_ts"]), e["ticket_idx"]
         assert t.tif == e["tif"], e["ticket_idx"]
         assert t.symbol == e["symbol"], e["ticket_idx"]
+        # §T4 tolerance: cost_bps abs <= 1e-4 against the expected CSV
+        row = next(r for r in rows if r["signal_ts"] == int(t.parent_signal.split("@")[1]))
+        cost = expected_cost_bps(row["qty"] * row["price"], 0.001, "EXE:XNAS", "taker", "normal")
+        assert abs(cost - float(e["cost_bps"])) <= 1e-4, e["ticket_idx"]
+
+
+def test_sizing_function_respects_caps():
+    """§T2.4: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    z = (0.7661 - 1) / 0.25  # implies fixture bar-0 multiplier m = 0.7661
+    # base slice binds: 100000/10 * 0.7661 = 7661
+    assert size_slice(100_000, 10, z, 100_000, 200_000, 30.0) == 7661
+    # POV cap binds: 0.10 * 50_000 = 5000 < 7661
+    assert size_slice(100_000, 10, z, 50_000, 200_000, 30.0) == 5000
+    # risk cap binds: 1R ($6153) / $2.00 adverse = 3076 < 7661
+    cfg = dict(SIZING_CFG, stop_distance=2.0)
+    assert size_slice(100_000, 10, z, 100_000, 200_000, 30.0, cfg) == 3076
+    # cost gate veto -> zero size
+    assert size_slice(100_000, 10, z, 100_000, 200_000, 0.2) == 0
+    # zero or negative parent -> zero size
+    assert size_slice(0, 10, z, 100_000, 200_000, 30.0) == 0
 
 
 def test_no_signal_bar_fills():

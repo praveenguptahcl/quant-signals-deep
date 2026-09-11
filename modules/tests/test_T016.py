@@ -15,11 +15,24 @@ CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T016 COST block (single source of truth)."""
-    spread_bps = 0.5   # [example] ~0.5c effective spread on SPY @ $500 at 15:30
-    fee_bps = 0.5      # [example] ~0.5c commission on SPY @ $500 at 15:30
+    spread_bps = 0.5   # [example] ~2.5c effective spread on SPY @ $500 at 15:30
+    fee_bps = 0.5      # [example] ~2.5c/share commission on SPY @ $500 at 15:30
     borrow_bps = 0.0   # [default] single-day ETF hold; borrow stubbed at zero
-    impact_bps = 0.0   # [example] conservative variant: MOC + 1c adverse
+    impact_bps = 0.0   # [example] base model; conservative variant: MOC + 1c adverse
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def sizing_fn(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Normative sizing_fn mirror (§T3): regime-scaled, risk-capped, ADV-capped.
+    px and base_notional are module context; test uses the §T3 worked values."""
+    scale = float(vol_estimate)              # HMM scale 1.0 / 0.5 / 0.0 [example]
+    px = 500.0                                # 15:30 touch [example]
+    base_notional = 100000.0                  # [default]
+    adv_cap_pct = 0.05                        # [default]
+    n_base = scale * base_notional / px
+    n_risk = risk_budget_R / max(stop_distance, 1e-9)
+    n_adv = ADV_cap * adv_cap_pct
+    return max(0, int(min(n_base, n_risk, n_adv)))
 
 def load_csv(path):
     with open(path) as f:
@@ -111,3 +124,28 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_cost_gate_with_modeled_edge():
+    # module §T1: edge_bps = 11.0 [example]; default k = 0.5 [default]
+    # gate: 1.0 <= 0.5 * 11.0 = 5.5 -> PASS
+    edge_bps = 11.0
+    k = 0.5
+    c = expected_cost_bps(100000.0, 0.01, "ARCX", "taker", "normal")
+    assert c <= k * edge_bps
+    # and the same stack fails a much smaller edge (gate is not vacuous)
+    assert not (c <= k * 0.5)
+
+
+def test_sizing_function_bounded():
+    # §T3 worked case: px=500 [example], R=$800 [example], stop=0.25% [default]
+    # min(200.0, 640.0, 50000.0) = 200
+    assert sizing_fn(800.0, 1.25, 1.0, 1_000_000, 1.0) == 200
+    # regime scale halves the position
+    assert sizing_fn(800.0, 1.25, 0.5, 1_000_000, 1.0) == 100
+    # suspended regime -> flat
+    assert sizing_fn(800.0, 1.25, 0.0, 1_000_000, 1.0) == 0
+    # ADV cap binds on thin names
+    assert sizing_fn(800.0, 1.25, 1.0, 2_000, 1.0) == 100
+    # risk cap binds on a small R budget
+    assert sizing_fn(80.0, 1.25, 1.0, 1_000_000, 1.0) == 64

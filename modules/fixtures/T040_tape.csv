@@ -1,4 +1,4 @@
-# TYPE: validation-run — synthetic 12-bar tape for T040; all numbers synthetic [example]
+# TYPE: validation-run — synthetic 12-bar tape for T040; all numbers synthetic [example]; stop_bps doubles as the vol-calibrated stop (vol_estimate_bps = stop_bps) [example]
 bar,event_ts,asof_ts,symbol,close,signal_z,edge_bps,notional,adv_pct,adv_shares,stop_bps,urgency,market_state,daily_pnl_pct
 0,1789045200000000000,1789045200000250000,XYZ,100.26,0.375,2.0,100000,0.5,2000000,25,normal,CONTINUOUS_TRADING,0.05
 1,1789131600000000000,1789131600000250000,XYZ,100.3,0.625,2.0,100000,0.5,2000000,25,normal,CONTINUOUS_TRADING,0.05

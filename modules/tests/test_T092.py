@@ -20,6 +20,8 @@ EXPECTED = FIX / "T092_expected.csv"
 GATE_CFG = [('<=', 2.0), ('<=', 75.0), ('>=', 0.55)]   # [(op, threshold)] for g1, g2, g3
 GATE_NAMES = ['vpin', 'pin_pctile', 'meta_p']
 COST_GATE_K = 0.5                       # [default]
+COOLDOWN_BARS = 5                       # [default]
+BAR_NS = 300_000_000_000                # 5-minute bars [example]
 PER_TRADE_R = 500        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 40  # in units of R [default]
 SYMBOL = 'GATE:MULTI'
@@ -111,6 +113,10 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             state["module_state"] = "UNKNOWN"
             append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
                    before, "UNKNOWN")
+            continue
+        # C19: post-recovery cooldown gate (g4) — a veto, not a fault.
+        if sig_ts < state.get("cooldown_until", 0):
+            append("GATE_VETO", "cooldown", f"cooldown@{sig_ts}", before, before)
             continue
 
         # Entry Boolean: three chapter gates (all must pass)
@@ -248,3 +254,32 @@ def test_ticket_schema_and_compliance():
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
 
+
+
+def fixture_tolerance(path):
+    """Read the # TOLERANCE: header from the expected fixture (machine contract)."""
+    with open(path) as f:
+        for ln in f:
+            if ln.startswith("# TOLERANCE:"):
+                return float(ln.split("cost_bps ±")[1].split(";")[0])
+    raise AssertionError("missing # TOLERANCE: header in expected fixture")
+
+
+def test_expected_cost_tolerance():
+    """cost_bps in the expected fixture recomputes within the TOLERANCE header."""
+    tol = fixture_tolerance(EXPECTED)
+    cost = expected_cost_bps(50000.0, 0.001, "GATE:MULTI", "taker", "normal")
+    for e in load_csv(EXPECTED):
+        assert abs(float(e["cost_bps"]) - cost) <= tol, e["ticket_idx"]
+
+
+def test_post_recovery_cooldown():
+    """C19: re-arm sets a cooldown window; intents resume only after it lifts."""
+    state = {}
+    rows = [r for r in tape_rows() if r["valid"]][:2]  # row 0 pass, row 1 vpin veto
+    state["cooldown_until"] = rows[-1]["signal_ts"] + 10 ** 15  # every row inside cooldown
+    assert emit(state, rows, {}) == []
+    assert state["module_state"] == "OK"   # cooldown is a gate veto, not a fault
+    assert any(r["reason"] == "cooldown" for r in state["decision_log"])
+    state["cooldown_until"] = 0           # cooldown lifted
+    assert len(emit(state, rows, {})) == 1

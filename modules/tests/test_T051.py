@@ -9,7 +9,7 @@ import os
 
 SID = "T051"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': False, 'z_long': 0.15, 'z_short': -0.15, 'conf_scale': 0.3, 'edge_mult': 15.0, 'time_stop': 6, 'exit_flip': True, 'k': 0.5, 'sizing': ('conf', 500, 0.0), 'cooldown_bars': 1, 'bar_ns': 300000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 0.8, 'fee_bps': 0.28, 'borrow_bps': 0.0, 'impact_bps': 0.0}, 'lot': 100, 'min_lot': 100}
+CFG = {'mode': 'z', 'fade': False, 'z_long': 0.15, 'z_short': -0.15, 'conf_scale': 0.3, 'edge_mult': 15.0, 'time_stop': 6, 'exit_flip': True, 'k': 0.5, 'cooldown_bars': 1, 'bar_ns': 300000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 0.8, 'fee_bps': 0.24, 'borrow_bps': 0.0, 'impact_bps': 0.0}, 'lot': 100, 'min_lot': 100, 'risk_budget_R': 300.0, 'vol_mult': 2.0, 'adv_cap_shares': 200000, 'P_ref': 0.14}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -74,20 +74,24 @@ def validate_row(r, prev_ts):
     return True
 
 def size_qty(dec, r, cfg):
-    mode = cfg["sizing"][0]
-    if mode == "fixed":
-        return int(cfg["sizing"][1])
-    if mode == "risk":
-        R_usd, _ = cfg["sizing"][1], None
-        sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
-        return max(1, int(R_usd // sd))
-    if mode == "conf":
-        q_base, c_min = cfg["sizing"][1], cfg["sizing"][2]
-        frac = max(0.0, dec["conf"] - c_min) / max(1.0 - c_min, 1e-9)
-        q = int(q_base * frac)
-        lot = cfg.get("lot", 1)
-        return max(lot, (q // lot) * lot)
-    raise ValueError("unknown sizing mode")
+    """Canonical sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+    T051 mapping: risk_budget_R <- per_trade_R; stop_distance <- stop_dist column;
+    vol_estimate <- stop_dist / vol_mult (fixture convention: stop = 2x trailing
+    mean abs range); ADV_cap <- adv_cap_shares; cost enters via the C2 cost gate,
+    not via qty. Kalman overlay scales by (P_ref / P_tt) ** 0.5.
+    Lots round DOWN (conservative default); 100-share minimum."""
+    R = cfg["risk_budget_R"]
+    sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
+    vol_mult = cfg.get("vol_mult", 2.0)
+    vol_est = sd / vol_mult
+    n_risk = R / sd
+    n_vol = R / max(vol_mult * vol_est, 1e-9)
+    n = min(n_risk, n_vol, cfg["adv_cap_shares"])
+    P_tt = float(r.get("P_tt", cfg["P_ref"]))
+    scale = (cfg["P_ref"] / max(P_tt, 1e-12)) ** 0.5
+    lot = cfg.get("lot", 100)
+    q = int(dec["conf"] * scale * n / lot) * lot
+    return max(lot, q)
 
 def decide(r, pos, cfg):
     """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
@@ -260,7 +264,7 @@ def _load(name):
         for r in rd:
             for k in ("event_ts","volume","gate"):
                 r[k] = int(float(r[k]))
-            for k in ("open","high","low","close","sig","stop_dist"):
+            for k in ("open","high","low","close","sig","stop_dist","P_tt"):
                 r[k] = float(r[k])
             rows.append(r)
     return rows
@@ -354,6 +358,6 @@ def test_6_handcheck_literals():
     t = tickets[0]
     assert t["ticket_id"] == "T-T051-3-0"
     assert int(t["qty"]) == 300
-    assert _close(float(t["cost_bps"]), 1.08)
-    assert _close(float(t["cost_usd"]), 8.099018)
+    assert _close(float(t["cost_bps"]), 1.04)
+    assert _close(float(t["cost_usd"]), 7.799055)
     assert _close(float(t["edge_bps"]), 3.3)

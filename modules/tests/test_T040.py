@@ -45,23 +45,26 @@ class OrderTicket:
 
 @dataclass
 class Config:
-    sid: str = "T000"
-    primary_signal: str = "S000"
-    z_entry: float = 2.0
+    sid: str = "T040"
+    primary_signal: str = "S080"
+    z_entry: float = 1.25
     z_exit: float = 0.5
     cost_gate_k: float = 0.5
-    risk_R_usd: float = 1000.0
-    stop_bps: float = 100.0
-    adv_cap_pct: float = 10.0
-    spread_full_bps: float = 10.0
+    risk_R_usd: float = 250.0
+    stop_bps: float = 25.0
+    adv_cap_pct: float = 1.0
+    spread_full_bps: float = 3.0
     taker_fee_bps: float = 0.30
-    maker_rebate_bps: float = 0.20
-    side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
-    impact_k: float = 0.5
-    daily_loss_stop_pct: float = -2.0
-    venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
+    maker_rebate_bps: float = -0.20
+    borrow_bps_per_day: float = 0.06   # GC easy-to-borrow, documented
+    expected_hold_days: float = 5.0    # residual half-life scale, example
+    short_leg_fraction: float = 0.5    # dollar-neutral residual book, example
+    impact_k: float = 15.0
+    side_exec: str = "taker"           # taker | maker
+    daily_loss_stop_pct: float = 1.5
+    venue: str = "primary"
+    cooldown_sessions: int = 1         # post-exit cooldown, C10
+    crowding_mult: float = 2.0         # crowding breaker multiple
 
 
 class KillSwitch:
@@ -89,14 +92,30 @@ class KillSwitch:
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
-    """4-component cost stack (COST-block callable). Example values."""
+    """4-component cost stack (COST-block callable).
+
+    side = taker|maker|mixed is the EXECUTION side. Borrow is the book-average
+    for the dollar-neutral residual book: borrow_bps_per_day x
+    expected_hold_days x short_leg_fraction.
+    """
     spread_bps = cfg.spread_full_bps / 2.0
     fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
-    borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
+    borrow_bps = (cfg.borrow_bps_per_day * cfg.expected_hold_days
+                  * cfg.short_leg_fraction)
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
         impact_bps *= 1.5
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def shares(risk_budget_R, stop_distance_bps, vol_estimate_bps, ADV_cap_shares,
+           cost_bps, px):
+    """Fenced sizing: shares = f(risk_budget_R, stop_distance, vol_estimate,
+    ADV_cap, cost). cost_bps is gate-consumed upstream (cost <= k*edge_bps);
+    shares are risk-capped, not cost-derated [default]."""
+    stop_bps = max(stop_distance_bps, vol_estimate_bps)  # wider of fixed/vol stop
+    raw = risk_budget_R / max(stop_bps / 1e4 * px, 1e-9)
+    return max(1, min(int(raw), int(ADV_cap_shares)))
 
 
 def process_bar(state, bar, cfg):
@@ -119,28 +138,35 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
-    # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
+    # Position sizing: shares(risk_budget_R, stop_distance, vol_estimate,
+    # ADV_cap, cost, px). In this fixture stop_bps doubles as the
+    # vol-calibrated stop (vol_estimate_bps = stop_bps) [example].
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
+    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
+    qty = shares(cfg.risk_R_usd, bar["stop_bps"], bar["stop_bps"],
+                 cap_qty, cost, bar["close"])
+    # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
     z = bar["signal_z"]
     pos = state.get("position", 0)
     if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
-            ticket = OrderTicket(
-                symbol=bar["symbol"], side=side, qty=qty,
-                limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
-                tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
-                parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
-                intent_ts=bar["event_ts"], state="NEW")
-            state["position"] = 1 if side == "BUY" else -1
-            return ticket, "OK", "entry"
-        return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
+        if abs(z) >= cfg.z_entry:
+            # C10 post-exit cooldown: suppress re-entry until it elapses
+            if bar["event_ts"] < state.get("cooldown_until", 0):
+                return None, "OK", "cooldown"
+            if gate:
+                side = "SHORT" if z > 0 else "BUY"  # fade the residual
+                ticket = OrderTicket(
+                    symbol=bar["symbol"], side=side, qty=qty,
+                    limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
+                    tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
+                    parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
+                    intent_ts=bar["event_ts"], state="NEW")
+                state["position"] = -1 if side == "SHORT" else 1
+                return ticket, "OK", "entry"
+            return None, "OK", "gate-block"
+        return None, "OK", "flat"
     # Position open: exit on z through the exit band (exits never cost-gated)
     if abs(z) <= cfg.z_exit:
         exit_side = "SELL" if pos > 0 else "BUY"
@@ -151,6 +177,9 @@ def process_bar(state, bar, cfg):
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
         state["position"] = 0
+        # C10: arm the post-exit cooldown
+        state["cooldown_until"] = (bar["event_ts"]
+                                   + cfg.cooldown_sessions * 86_400_000_000_000)
         return ticket, "OK", "exit"
     return None, "OK", "hold"
 
@@ -161,9 +190,10 @@ CFG = Config(
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=3.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=50.0, impact_k=15.0,
+    borrow_bps_per_day=0.06, expected_hold_days=5,
+    short_leg_fraction=0.5, impact_k=15.0,
     daily_loss_stop_pct=1.5, venue="primary",
-    default_side="LONG")
+    cooldown_sessions=1, crowding_mult=2.0)
 
 
 # ---------------------------------------------------------------- fixtures
@@ -311,3 +341,34 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+
+
+def test_post_exit_cooldown():
+    """C10: after an exit, re-entry is suppressed for cooldown_sessions."""
+    st = fresh_state()
+    base = tape()[3]
+    day_ns = 86_400_000_000_000
+
+    def synth(ts, z, edge):
+        b = dict(base)
+        b["event_ts"] = ts
+        b["asof_ts"] = ts + 25_000_000
+        b["signal_z"] = z
+        b["edge_bps"] = edge
+        b["daily_pnl_pct"] = 0.05
+        b["market_state"] = "CONTINUOUS_TRADING"
+        return b
+
+    t0 = base["event_ts"]
+    # entry (big edge clears the gate)
+    t, ms, note = process_bar(st, synth(t0, 1.5, 50.0), CFG)
+    assert t is not None and note == "entry"
+    # exit (|z| through the exit band)
+    t, ms, note = process_bar(st, synth(t0 + day_ns, 0.2, 50.0), CFG)
+    assert t is not None and note == "exit"
+    # 12h later: |z| >= entry with a huge edge -> cooldown veto, not gate
+    t, ms, note = process_bar(st, synth(t0 + day_ns + day_ns // 2, 1.6, 500.0), CFG)
+    assert t is None and ms == "OK" and note == "cooldown"
+    # 24h after the exit: cooldown elapsed -> entry allowed again
+    t, ms, note = process_bar(st, synth(t0 + 2 * day_ns, 1.6, 500.0), CFG)
+    assert t is not None and note == "entry"

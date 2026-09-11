@@ -45,10 +45,11 @@ class OrderTicket:
 
 @dataclass
 class Config:
-    sid: str = "T000"
-    primary_signal: str = "S000"
-    z_entry: float = 2.0
-    z_exit: float = 0.5
+    sid: str = "T038"
+    primary_signal: str = "S062"
+    z_entry: float = 1.25   # Avellaneda-Lee s-score convention [documented]
+    z_exit: float = 0.5     # Avellaneda-Lee exit convention [documented]
+    crowd_cap: float = 2.0  # crowding multiple over median [default]
     cost_gate_k: float = 0.5
     risk_R_usd: float = 1000.0
     stop_bps: float = 100.0
@@ -61,7 +62,7 @@ class Config:
     impact_k: float = 0.5
     daily_loss_stop_pct: float = -2.0
     venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
+    default_side: str = "BUY"      # BUY | SHORT (OrderTicket sides: BUY|SELL|SHORT)
 
 
 class KillSwitch:
@@ -157,13 +158,13 @@ def process_bar(state, bar, cfg):
 
 CFG = Config(
     sid="T038", primary_signal="S062",
-    z_entry=2.0, z_exit=0.5, cost_gate_k=0.5,
+    z_entry=1.25, z_exit=0.5, crowd_cap=2.0, cost_gate_k=0.5,
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=3.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="taker",
     borrow_bps=50.0, impact_k=15.0,
     daily_loss_stop_pct=1.5, venue="primary",
-    default_side="LONG")
+    default_side="BUY")
 
 
 # ---------------------------------------------------------------- fixtures
@@ -239,7 +240,7 @@ def test_fixture_recomputes_to_expected():
                             rel_tol=TOL), b["bar"]
         if t is not None:
             assert t.qty > 0
-            assert t.side in ("BUY", "SELL", "SHORT", "LONG")
+            assert t.side in ("BUY", "SELL", "SHORT")  # Appendix C v1.0.0
             assert t.intent_ts == b["event_ts"]
             assert t.ticket_id.startswith(CFG.sid)
             assert t.parent_signal == "%s@%d" % (CFG.primary_signal, b["event_ts"])
@@ -299,6 +300,20 @@ def test_kill_switch_trip_and_rearm():
     st["kill"].begin_recovery()
     assert st["kill"].rearm([True, True, False, True, True]) is False
     assert st["kill"].state == "RECOVERY"
+
+
+def test_entry_exit_conventions():
+    """Avellaneda-Lee conventions: entry |z| >= 1.25, exit |z| <= 0.50 [documented].
+
+    Bar 2 (|z|=1.6) is entry-candidate but the cost gate blocks it; bar 3
+    (|z|=2.4, big edge) is a live entry; bar 6 (|z|=0.25) exits the position.
+    """
+    bars = tape()
+    exp = {int(r["bar"]): r for r in expected()}
+    assert bars[2]["signal_z"] == 1.6 and abs(1.6) >= CFG.z_entry
+    assert exp[2]["note"] == "gate-block" and exp[2]["action"] == "HOLD"
+    assert bars[3]["signal_z"] == 2.4 and exp[3]["note"] == "entry"
+    assert abs(bars[6]["signal_z"]) <= CFG.z_exit and exp[6]["note"] == "exit"
 
 
 def test_invalid_input_unknown():

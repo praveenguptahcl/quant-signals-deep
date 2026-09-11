@@ -7,7 +7,7 @@ bar,event_ts,intent_ts,action,qty,limit,cost_call_bps,cost_call_usd,edge_bps,gat
 4,1789390800000000000,,HOLD,0,,2.3,23.0,4.0,False,OK,hold
 5,1789477200000000000,,HOLD,0,,2.3,23.0,3.0,False,OK,hold
 6,1789563600000000000,1789563600000000000,BUY,1010,,2.3,23.0,3.0,False,OK,exit
-7,1789650000000000000,,HOLD,0,,2.3,23.0,0.05,False,OK,gate-block
+7,1789650000000000000,,HOLD,0,,2.3,23.0,0.05,False,OK,veto-block
 8,1789736400000000000,,HOLD,0,,2.3,23.0,4.0,False,UNKNOWN,invalid-input
 9,1789822800000000000,,HOLD,0,,2.3,23.0,4.0,False,OFF,kill-trip
 10,1789909200000000000,,HOLD,0,,2.3,23.0,4.0,False,OFF,kill-tripped

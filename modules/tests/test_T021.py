@@ -82,19 +82,28 @@ def test_cost_gate_predicate():
 
 
 def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
+    # ARMED -> TRIPPED -> RECOVERY -> ARMED, walked as a real state machine
+    # with the §T0 re-arm checklist
+    transitions = {"ARMED": {"trip": "TRIPPED"},
+                   "TRIPPED": {"begin_recovery": "RECOVERY"},
+                   "RECOVERY": {"rearm": "ARMED"}}
     state = "ARMED"
-    kill_conditions = ["VPIN > 0.40 [example]", "inventory > max [example]", "L1 stale > 1 s [example]", "clock skew > 1 ms [example]"]
-    stale_s = 1.0
-    if stale_s >= 1.0:
-        state = "TRIPPED"   # cancel all, flatten, OFF
-    assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
-    assert all(checklist)
-    state = "RECOVERY"
-    state = "ARMED"
-    assert state == "ARMED"
+    kill_conditions = ["VPIN > 0.40 [example]", "inventory > max [example]",
+                       "L1 stale > 1 s [example]", "clock skew > 1 ms [example]"]
     assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
+    vpin, stale_s, skew_ms, abs_q, inv_max = 0.41, 1.0, 0.5, 3.0, 5.0
+    tripped = ((vpin > 0.40) or (stale_s >= 1.0)
+               or (skew_ms > 1.0) or (abs_q > inv_max))
+    if tripped:  # on trip: stop emitting, cancel working intents, flatten, page
+        state = transitions[state]["trip"]
+    assert state == "TRIPPED"
+    checklist = {"manual_review": True, "cooldown_expired": True,
+                 "l1_healthy": True, "skew_ok": True, "vpin_ok": True}
+    assert all(checklist.values()), "all 5 re-arm checklist items must pass"
+    state = transitions[state]["begin_recovery"]
+    assert state == "RECOVERY"
+    state = transitions[state]["rearm"]
+    assert state == "ARMED"
 
 
 def test_invalid_input_emits_unknown():
@@ -111,3 +120,25 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "maker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_inventory_guard_skew_only():
+    # C11: |q| > inv_max -> skew-only, no new quote tickets (mirrors §T3 pseudocode)
+    def quote_decision(abs_q, inv_max):
+        if abs_q > inv_max:
+            return "SKEW_ONLY"
+        return "QUOTE"
+    assert quote_decision(6.0, 5.0) == "SKEW_ONLY"
+    assert quote_decision(5.0, 5.0) == "QUOTE"
+    assert quote_decision(0.0, 5.0) == "QUOTE"
+
+
+def test_vpin_veto_pulls_quotes():
+    # C12: vpin > vpin_veto -> pull quotes, emit nothing (mirrors §T3 pseudocode)
+    def tickets_for(vpin, vpin_veto):
+        if vpin > vpin_veto:
+            return []
+        return ["BUY", "SELL"]
+    assert tickets_for(0.41, 0.40) == []
+    assert tickets_for(0.40, 0.40) == ["BUY", "SELL"]
+    assert tickets_for(0.10, 0.40) == ["BUY", "SELL"]

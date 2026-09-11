@@ -54,6 +54,12 @@ class KillSwitch:
             self.state = "TRIPPED"
             self.trip_reason = f"daily loss stop: {self.day_loss_R:.2f}R <= -{DAILY_LOSS_STOP_R}R"
 
+    def trip(self, reason: str) -> None:
+        """Manual trip (e.g. market halt, timestamp disagreement): ARMED -> TRIPPED."""
+        if self.state == "ARMED":
+            self.state = "TRIPPED"
+            self.trip_reason = reason
+
     def begin_recovery(self) -> None:
         assert self.state == "TRIPPED", "recovery only from TRIPPED"
         self.state = "RECOVERY"
@@ -87,6 +93,11 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
     log = state.setdefault("decision_log", [])
+    # now_ns: reference clock for the F5 staleness TTL (60 s [default]).
+    # Applied only when the harness supplies a clock; fixture replay omits it
+    # (the synthetic monotone tape spans 25 min [example] across independent cases).
+    now_ns = state.get("now_ns")
+    STALENESS_TTL_NS = 60_000_000_000
 
     def chain_hash(prev, payload):
         return hashlib.sha256((prev + payload).encode()).hexdigest()[:16]
@@ -105,12 +116,22 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if kill.state != "ARMED":
             state["module_state"] = "OFF"
             continue
+        # F5: staleness TTL -> UNKNOWN (never interpolate); only when harnessed
+        if now_ns is not None and now_ns - sig_ts > STALENESS_TTL_NS:
+            state["module_state"] = "UNKNOWN"
+            append("COMPLIANCE_BLOCK", "staleness-ttl", f"stale@{sig_ts}",
+                   before, "UNKNOWN")
+            continue
         # F1/F2: invalid input -> UNKNOWN
         if (not row["valid"] or row["price"] <= 0 or row["qty"] <= 0
                 or row["side"] not in ("LONG", "SHORT", "BUY", "SELL")):
             state["module_state"] = "UNKNOWN"
             append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
                    before, "UNKNOWN")
+            continue
+        # C10: post-exit cooldown -> veto, no state change
+        if sig_ts < state.get("cooldown_until", 0):
+            append("GATE_VETO", "cooldown", f"cooldown@{sig_ts}", before, before)
             continue
 
         # Entry Boolean: three chapter gates (all must pass)
@@ -120,12 +141,17 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if not all(gates):
             append("GATE_VETO", "entry-boolean", f"veto@{sig_ts}", before, before)
             continue
+        side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
+        # C7: SHORT requires locate_ok; missing locate -> gate veto (module stays OK)
+        if side == "SHORT" and not state.get("locate_ok", False):
+            append("GATE_VETO", "locate", f"no-locate@{sig_ts}", before, before)
+            continue
         # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
+        # (evaluated on the sized notional: qty * price)
         cost = expected_cost_bps(row["qty"] * row["price"], 0.001, "venue", "taker", "normal")
         if not (cost <= COST_GATE_K * row["edge_bps"]):
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
             continue
-        side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
         t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
                         tif="IOC", ticket_id=f"{uuid.uuid4()}",
                         parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
@@ -248,3 +274,55 @@ def test_ticket_schema_and_compliance():
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
 
+
+
+def test_cost_stack_decomposes():
+    """Callable mirrors the §T2.6 COST block: 3.0 + 1.0 + 0.0 + 15.0 = 19.0,
+    matching the fixture cost_bps=19.0000."""
+    cost = expected_cost_bps(1_020_000.00, 0.001, "XNAS", "taker", "normal")
+    assert cost == 3.0 + 1.0 + 0.0 + 15.0 == 19.0
+    exp = load_csv(EXPECTED)
+    assert float(exp[0]["cost_bps"]) == cost
+
+
+def test_post_exit_cooldown():
+    """C10: signal_ts inside cooldown_until -> veto, module stays OK."""
+    state = {"cooldown_until": 1_700_000_000_000_001_000}  # after every fixture ts
+    assert emit(state, tape_rows()[:5], {}) == []   # bars 0-4 only (bar 5 is the invalid-input case)
+    assert state["module_state"] == "OK"
+    assert any(r["action"] == "GATE_VETO" and r["reason"] == "cooldown"
+               for r in state["decision_log"])
+
+
+def test_short_requires_locate():
+    """C7: SHORT without locate_ok -> gate veto (module stays OK);
+    with locate_ok -> intent emitted."""
+    short_row = lambda: [{"bar": 0, "signal_ts": 1_700_000_000_000_000_000,
+                          "fill_ts": 1_700_000_003_000_000_000, "side": "SHORT",
+                          "edge_bps": 52.5, "g1": 2.1, "g2": 0.8, "g3": 1.0,
+                          "price": 40.8, "qty": 25000, "valid": 1}]
+    state = {}
+    assert emit(state, short_row(), {}) == []
+    assert state["module_state"] == "OK"          # veto, not invalid input
+    assert any(r["reason"] == "locate" for r in state["decision_log"])
+    state2 = {"locate_ok": True}
+    tickets = emit(state2, short_row(), {})
+    assert len(tickets) == 1 and tickets[0].side == "SHORT"
+
+
+def test_staleness_ttl():
+    """F5: signal older than the 60 s TTL -> UNKNOWN, no tickets."""
+    rows = tape_rows()
+    state = {"now_ns": rows[0]["signal_ts"] + 61_000_000_000}
+    assert emit(state, rows, {}) == []
+    assert state["module_state"] == "UNKNOWN"
+
+
+def test_halt_trips_kill():
+    """Market halt trips the switch manually; emit goes OFF until re-armed."""
+    kill = KillSwitch()
+    kill.trip("market halt")
+    assert kill.state == "TRIPPED"
+    state = {"kill": kill}
+    assert emit(state, tape_rows(), {}) == []
+    assert state["module_state"] == "OFF"

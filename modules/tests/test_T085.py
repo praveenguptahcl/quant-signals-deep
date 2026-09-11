@@ -82,11 +82,13 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     Intents only (Appendix c v1.0.0): never places orders. Invalid input ->
     module_state UNKNOWN, never interpolated (F1/F2). Infra publishers (T081)
     publish bar boundaries downstream and never emit OrderTickets.
+    Sizing: quote_qty = min(row qty, floor(adv_shares * participation_cap)).
     """
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
     log = state.setdefault("decision_log", [])
+    participation_cap = cfg.get("participation_cap", 0.01)  # [default]
 
     def chain_hash(prev, payload):
         return hashlib.sha256((prev + payload).encode()).hexdigest()[:16]
@@ -126,7 +128,9 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
             continue
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
-        t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
+        adv_cap = int(row.get("adv_shares", 10_000_000) * participation_cap)  # ADV cap [default]
+        qty = max(1, min(int(row["qty"]), adv_cap))
+        t = OrderTicket(symbol=SYMBOL, side=side, qty=qty, limit=None,
                         tif="IOC", ticket_id=f"{uuid.uuid4()}",
                         parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
                         intent_ts=sig_ts + 1000, state="NEW", stp=True)
@@ -153,6 +157,7 @@ def tape_rows():
                       "edge_bps": float(r["edge_bps"]),
                       "g1": float(r["g1"]), "g2": float(r["g2"]), "g3": float(r["g3"]),
                       "price": float(r["price"]), "qty": int(r["qty"]),
+                      "adv_shares": int(r["adv_shares"]),
                       "valid": int(r["valid"]) == 1})
     return rows
 
@@ -226,6 +231,19 @@ def test_invalid_input_yields_unknown():
               "price": 100.0, "qty": 100, "valid": 0}]  # valid flag false
     assert emit(state2, bad2, {}) == []
     assert state2["module_state"] == "UNKNOWN"
+
+
+def test_adv_participation_cap():
+    """ADV cap binds quote size: qty = min(quote_qty, floor(adv_shares * participation_cap))."""
+    row = {"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "BUY",
+           "edge_bps": 50.0, "g1": 99.0, "g2": 99.0, "g3": 99.0,
+           "price": 100.0, "qty": 100, "adv_shares": 500, "valid": 1}
+    tickets = emit({}, [row], {"participation_cap": 0.01})  # cap = floor(500*0.01) = 5
+    assert len(tickets) == 1
+    assert tickets[0].qty == 5
+    # Uncapped path: fixture ADV leaves the 100-share quote untouched.
+    tickets2 = emit({}, tape_rows(), {})
+    assert all(t.qty == 100 for t in tickets2)
 
 
 def test_ticket_schema_and_compliance():

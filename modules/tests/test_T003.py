@@ -1,6 +1,8 @@
 """Concrete sketch: T003 VPIN-Gated Breakout Trader.
 
 Run: python3 -m pytest modules/tests/test_T003.py -q
+
+5 acceptance tests (A1-A5) + 3 contract/unit checks (U1-U3). Stdlib only.
 """
 import csv
 import math
@@ -108,6 +110,42 @@ def test_invalid_input_emits_unknown():
     assert emit_state(50.00, 50.00) == "UNKNOWN"
     assert emit_state(50.01, 50.00) == "UNKNOWN"
     assert emit_state(50.00, 50.01) == "OK"
+
+
+def decide_entry(close, orh, orl, entry_offset, rvol, rvol_entry, vpin, vpin_veto,
+                 flat_today, edge_bps, cost_gate_k, locate_ok=True):
+    """Minimal mirror of the §T2 Boolean entry rule (test oracle, stdlib only).
+
+    Returns "BUY" / "SELL" / None. Cost gate uses the callable; fill is always
+    the next-bar open (t->t+1) so no fill timestamp is produced here.
+    """
+    cost = expected_cost_bps(100000.0, 0.1, "XNAS", "taker", "normal")
+    cost_ok = cost <= cost_gate_k * edge_bps          # C3 predicate
+    if not (flat_today and cost_ok):
+        return None
+    if vpin > vpin_veto:
+        return None                                  # C12 VPIN veto
+    if close >= orh + entry_offset and rvol >= rvol_entry:
+        return "BUY"
+    if close <= orl - entry_offset and rvol >= rvol_entry and locate_ok:
+        return "SELL"                                # C7 locate discipline
+    return None
+
+
+def test_entry_gate_boolean():
+    # U1: the §T2 Boolean entry rule — veto/confirm/gate branches
+    good = dict(close=50.70, orh=50.60, orl=50.00, entry_offset=0.05,
+                rvol=1.8, rvol_entry=1.5, vpin=0.20, vpin_veto=0.30,
+                flat_today=True, edge_bps=50.0, cost_gate_k=0.5)
+    assert decide_entry(**good) == "BUY"
+    assert decide_entry(**{**good, "vpin": 0.35}) is None, "VPIN veto must block"
+    assert decide_entry(**{**good, "rvol": 1.2}) is None, "unfunded break vetoed"
+    assert decide_entry(**{**good, "edge_bps": 0.05}) is None, "cost gate must block"
+    assert decide_entry(**{**good, "flat_today": False}) is None, "one-trade-per-day"
+    short = dict(good, close=49.80)
+    assert decide_entry(**short) == "SELL"
+    assert decide_entry(**{**short, "locate_ok": False}) is None, "C7 locate required"
+    assert decide_entry(**{**good, "close": 50.62}) is None, "no break, no ticket"
 
 
 def test_cost_callable_signature():

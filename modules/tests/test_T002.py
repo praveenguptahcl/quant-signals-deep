@@ -25,7 +25,28 @@ def load_csv(path):
     with open(path) as f:
         lines = f.readlines()
     assert lines[0].strip().startswith("# TYPE:"), "missing TYPE header"
-    return lines[0].strip(), list(csv.DictReader(lines[1:]))
+    data_lines = [ln for ln in lines[1:] if not ln.lstrip().startswith("#")]
+    return lines[0].strip(), list(csv.DictReader(data_lines))
+
+
+# §T0 Config dataclass mirror: (type, default, range_lo, range_hi, status)
+CONFIG = {
+    "kappa_mult":          ("float", 0.25,      0.1,      1.0,       "default"),
+    "z_delta_entry":       ("float", 1.0,       0.5,      3.0,       "default"),
+    "cost_mult":           ("float", 2.0,       1.0,      4.0,       "default"),
+    "time_stop_s":         ("float", 10.0,      1.0,      60.0,      "default"),
+    "stop_spreads":        ("float", 1.0,       0.5,      3.0,       "default"),
+    "cooldown_s":          ("float", 60.0,      0.0,      3600.0,    "default"),
+    "cost_gate_k":         ("float", 0.5,       0.1,      2.0,       "default"),
+    "per_trade_R":         ("float", 50.0,      10.0,     500.0,     "default"),
+    "daily_loss_stop":     ("float", -1000.0,   -10000.0, -100.0,    "default"),
+    "max_gross":           ("float", 500000.0,  100000.0, 2000000.0, "default"),
+    "max_adverse_per_trade": ("float", 2.0,     1.0,      5.0,       "default"),
+    "staleness_ttl_s":     ("float", 3.0,       1.0,      10.0,      "default"),
+}
+
+MODULE_STATES = ("OK", "DEGRADED", "UNKNOWN", "OFF")
+KILL_STATES = ("ARMED", "TRIPPED", "RECOVERY")
 
 
 def test_type_header():
@@ -111,3 +132,38 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_config_defaults_and_ranges():
+    # §T0 single Config dataclass: defaults sit inside ranges, statuses known
+    assert len(CONFIG) == 12, "Config surface must match §T0 table"
+    for name, (typ, default, lo, hi, status) in CONFIG.items():
+        assert typ == "float", name
+        assert lo <= default <= hi, f"{name} default {default} outside range"
+        assert status in ("fixed", "default", "calibrate", "example", "internal-est"), name
+    assert CONFIG["cost_gate_k"][1] == 0.5
+    assert CONFIG["kappa_mult"][1] == 0.25
+    assert CONFIG["staleness_ttl_s"][1] == 3.0
+
+
+def test_module_and_kill_state_enums():
+    # single canonical degradation token set; kill switch has exactly 3 states
+    assert set(MODULE_STATES) == {"OK", "DEGRADED", "UNKNOWN", "OFF"}
+    assert KILL_STATES == ("ARMED", "TRIPPED", "RECOVERY")
+
+
+def test_timing_box_per_event_causality():
+    # signal@t (per_event) -> earliest fill @open(t+1): every fill is strictly
+    # after its signal event and at least one nanosecond later (t+1 boundary)
+    _, tape = load_csv(TAPE)
+    for t in tape:
+        gap = int(t["fill_ts"]) - int(t["signal_ts"])
+        assert gap >= 1, "per-event timing box: fill must land on or after t+1"
+
+
+def test_fixture_labels_synthetic():
+    # worked examples must never conflate synthetic with real
+    type_line, _ = load_csv(TAPE)
+    assert "synthetic" in type_line, "tape must be labeled synthetic"
+    type_line2, _ = load_csv(EXPECTED)
+    assert "synthetic" in type_line2, "expected CSV must be labeled synthetic"

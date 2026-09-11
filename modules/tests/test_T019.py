@@ -1,4 +1,4 @@
-"""Concrete sketch: T019 Donchian/Keltner Breakout + Vol Sizing.
+"""T019 Donchian/Keltner Breakout + Vol Sizing — acceptance tests.
 
 Run: python3 -m pytest modules/tests/test_T019.py -q
 """
@@ -12,20 +12,35 @@ EXPECTED = os.path.join("modules", "fixtures", "T019_expected.csv")
 TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
+NS_PER_DAY = 86400e9
 
-def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
-    """Callable cost model - T019 COST block (single source of truth)."""
-    spread_bps = 4.0    # [example] 1c assumed spread @ $50: half/aggressive leg x 2
-    fee_bps = 2.0       # [example] $0.005/share each way @ $50 = 1 bps/leg
-    borrow_bps = 0.0    # [default] long-breakout reference; shorts add C7
-    impact_bps = 4.0    # [example] breakout chasing: 2c adverse @ $50
+
+def expected_cost_bps(notional, adv_pct, venue, side, urgency,
+                      order_side="BUY", hold_days=1.0) -> float:
+    """Callable cost model - T019 COST block (single source of truth).
+
+    Verbatim copy of the §T2 COST-block callable. Short (SELL/SHORT) legs
+    accrue stock-loan borrow at 50 bps/yr [example], pro-rated per calendar
+    day held; long legs borrow nothing (no borrow on longs [default reason]).
+    """
+    spread_bps = 4.0   # [example] 1c assumed spread @ $50: half/aggressive leg x 2
+    fee_bps = 2.0      # [example] $0.005/share each way @ $50 = 1 bps/leg
+    impact_bps = 4.0   # [example] breakout chasing: 2c adverse @ $50
+    borrow_annual_bps = 50.0  # [example] general-collateral stock-loan fee
+    if order_side in ("SELL", "SHORT"):
+        borrow_bps = borrow_annual_bps * hold_days / 365.0  # [example] pro-rata
+    else:
+        borrow_bps = 0.0  # [default] no borrow on long positions (reason)
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
 
 def load_csv(path):
     with open(path) as f:
-        lines = f.readlines()
-    assert lines[0].strip().startswith("# TYPE:"), "missing TYPE header"
-    return lines[0].strip(), list(csv.DictReader(lines[1:]))
+        lines = [ln for ln in f if ln.strip()]
+    type_line = next(ln for ln in lines if ln.startswith("# TYPE:"))
+    assert any(ln.startswith("# SYNTHETIC:") for ln in lines), "missing SYNTHETIC header"
+    data = [ln for ln in lines if not ln.startswith("#")]
+    return type_line.strip(), list(csv.DictReader(data))
 
 
 def test_type_header():
@@ -50,9 +65,11 @@ def test_fixture_arithmetic():
         notional = float(t["notional"])
         stack_bps = (float(t["spread_bps"]) + float(t["fee_bps"])
                      + float(t["borrow_bps"]) + float(t["impact_bps"]))
+        hold_days = (int(t["fill_ts"]) - int(t["signal_ts"])) / NS_PER_DAY
         cbps = expected_cost_bps(notional, float(t["adv_pct"]), t["venue"],
-                                 "taker", t["urgency"])
-        assert abs(cbps - stack_bps) <= TOL
+                                 t["exec_side"], t["urgency"],
+                                 order_side=t["side"], hold_days=hold_days)
+        assert abs(cbps - stack_bps) <= CSV_TOL_BPS  # tape rounds stack to 4 dp
         assert abs(cbps - float(e["expected_cost_bps"])) <= CSV_TOL_BPS
         sign = 1 if t["side"] in ("BUY", "LONG") else -1
         gross = sign * (exitp - entry) * qty
@@ -79,35 +96,66 @@ def test_cost_gate_predicate():
     else:
         assert c <= k * 50.0, "cost gate must pass when edge >> cost"
         assert not (c <= k * 0.05), "cost gate must block when edge << cost"
+    # borrow convention: short leg costs strictly more than the long reference
+    c_short = expected_cost_bps(100000.0, 0.1, "XNAS", "taker", "normal",
+                                order_side="SELL", hold_days=1.0)
+    c_long = expected_cost_bps(100000.0, 0.1, "XNAS", "taker", "normal",
+                               order_side="BUY", hold_days=1.0)
+    assert c_short > c_long, "short borrow must be priced into the cost stack"
+    assert math.isclose(c_long, 10.0, rel_tol=1e-12), "long reference stack is 10 bps"
 
 
 def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
-    state = "ARMED"
-    kill_conditions = ["4 units in one name [example]", "12 units portfolio [example]", "clock skew > 50 ms [example]"]
-    stale_s = 120.0
-    if stale_s >= 2.0:
-        state = "TRIPPED"   # cancel all, flatten, OFF
-    assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
-    assert all(checklist)
+    # ARMED -> TRIPPED -> RECOVERY -> ARMED with re-arm checklist
+    trip_conditions = [
+        "4 units in one name [example]",
+        "12 units portfolio [example]",
+        "clock skew > 50 ms [example]",
+    ]
+
+    def trip(units_name, units_portfolio, clock_skew_ms):
+        if units_name >= 4 or units_portfolio >= 12 or clock_skew_ms > 50:
+            return "TRIPPED"
+        return "ARMED"
+
+    assert trip(4, 0, 10) == "TRIPPED"
+    assert trip(0, 12, 10) == "TRIPPED"
+    assert trip(0, 0, 51) == "TRIPPED"
+    assert trip(3, 11, 10) == "ARMED"
+
+    # re-arm checklist: manual review + cooldown expiry + feed healthy +
+    # unit counts back inside limits + decision log reviewed
+    checklist = {
+        "manual_review": True,
+        "cooldown_expired": True,
+        "feed_healthy": True,
+        "units_within_limits": True,
+        "decision_log_reviewed": True,
+    }
     state = "RECOVERY"
-    state = "ARMED"
+    if all(checklist.values()):
+        state = "ARMED"
     assert state == "ARMED"
-    assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
+    assert isinstance(trip_conditions, list) and len(trip_conditions) >= 3
 
 
 def test_invalid_input_emits_unknown():
-    # crossed/locked/empty input -> UNKNOWN, never interpolated
-    def emit_state(bid_px, ask_px):
-        if bid_px <= 0 or ask_px <= bid_px:
+    # F1/F2: invalid input -> UNKNOWN, never interpolated
+    def module_state(bars, donch_hi, keltner_upper, p_vol):
+        if not bars:
+            return "UNKNOWN"
+        vals = [donch_hi, keltner_upper, p_vol]
+        if any(v is None or (isinstance(v, float) and math.isnan(v)) for v in vals):
             return "UNKNOWN"
         return "OK"
-    assert emit_state(50.00, 50.00) == "UNKNOWN"
-    assert emit_state(50.01, 50.00) == "UNKNOWN"
-    assert emit_state(50.00, 50.01) == "OK"
+    assert module_state([], 50.0, 51.0, 0.5) == "UNKNOWN"
+    assert module_state([1], float("nan"), 51.0, 0.5) == "UNKNOWN"
+    assert module_state([1], 50.0, 51.0, 0.5) == "OK"
 
 
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+    c2 = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal",
+                           order_side="SELL", hold_days=2.0)
+    assert isinstance(c2, float) and c2 > c

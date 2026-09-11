@@ -15,7 +15,7 @@ CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T014 COST block (single source of truth)."""
-    spread_bps = 8.0    # [example] $0.02 assumed spread @ $50: half/aggressive leg x 2
+    spread_bps = 8.0    # [example] $0.02 quoted spread @ $50: full spread crossed per leg x 2
     fee_bps = 2.0       # [example] $0.005/share each way @ $50 = 1 bps/leg
     borrow_bps = 0.0    # [default] long-reversal reference; shorts add C7
     impact_bps = 0.0    # [example] flagged; gap-through in conservative variant
@@ -111,3 +111,16 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_cost_stack_single_source():
+    # the 4-component tape stack must sum to the §T5 total (10.0 bps);
+    # the callable is the single source of truth, so it must agree too
+    _, tape = load_csv(TAPE)
+    for t in tape:
+        stack = (float(t["spread_bps"]) + float(t["fee_bps"])
+                 + float(t["borrow_bps"]) + float(t["impact_bps"]))
+        assert abs(stack - 10.0) <= TOL, "tape stack must equal §T5 total 10.0 bps"
+        cbps = expected_cost_bps(float(t["notional"]), float(t["adv_pct"]),
+                                 t["venue"], "taker", t["urgency"])
+        assert abs(cbps - stack) <= TOL, "callable must equal the tape stack"

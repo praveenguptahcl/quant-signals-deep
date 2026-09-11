@@ -112,11 +112,24 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
                    before, "UNKNOWN")
             continue
+        # C18: exit cooldown — re-entry blocked until cooldown_until.
+        if state.get("cooldown_until") is not None and sig_ts < state["cooldown_until"]:
+            append("GATE_VETO", "cooldown", f"cooldown@{sig_ts}", before, before)
+            continue
+        # C7/C12: SHORT intents require locate_ok; missing/0 -> veto.
+        if row["side"] == "SHORT" and not row.get("locate_ok", 0):
+            append("GATE_VETO", "locate", f"no-locate@{sig_ts}", before, before)
+            continue
 
-        # Entry Boolean: three chapter gates (all must pass)
+        # Entry Boolean: three chapter gates (all must pass). S_A gate is
+        # mirror-aware: ENTER_SHORT requires S_A <= -1.25 with matching sign.
         gates = []
-        for (op, th), v in zip(GATE_CFG, (row["g1"], row["g2"], row["g3"])):
+        for (op, th), v in zip(GATE_CFG, (abs(row["g1"]), row["g2"], row["g3"])):
             gates.append(v >= th if op == ">=" else (v <= th if op == "<=" else (v > th if op == ">" else v < th)))
+        if row["side"] in ("LONG", "BUY") and row["g1"] < 0:
+            gates.append(False)   # direction must match the score sign
+        if row["side"] in ("SHORT", "SELL") and row["g1"] > 0:
+            gates.append(False)   # direction must match the score sign
         if not all(gates):
             append("GATE_VETO", "entry-boolean", f"veto@{sig_ts}", before, before)
             continue
@@ -247,4 +260,33 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_cost_stack_sums_to_reference():
+    """COST block single source of truth: the 4-component stack sums to 5.5 bps."""
+    cost = expected_cost_bps(60000.00, 0.001, "BKP:XNAS", "taker", "normal")
+    assert abs(cost - 5.50) < 1e-4            # §T2.5 reference row [example]
+    assert cost == 1.5 + 1.0 + 0.0 + 3.0      # spread + fee + borrow + impact
+
+
+def test_short_requires_locate():
+    """C12: SHORT without locate_ok is vetoed; with locate_ok it emits."""
+    base = {"bar": 0, "signal_ts": 1700000000000000000, "fill_ts": 1700000300000000000,
+            "side": "SHORT", "edge_bps": 30.0, "g1": -1.4, "g2": 1.0, "g3": 6.0,
+            "price": 50.0, "qty": 1200, "valid": 1, "locate_ok": 0}
+    state = {}
+    assert emit(state, [dict(base)], {}) == []       # no locate -> veto
+    assert state["module_state"] == "OK"             # veto is not UNKNOWN
+    assert any(r["reason"] == "locate" for r in state["decision_log"])
+    ok = dict(base, locate_ok=1)
+    tickets = emit({}, [ok], {})
+    assert len(tickets) == 1 and tickets[0].side == "SHORT"
+
+
+def test_cooldown_blocks_reentry():
+    """C18: ON_EXIT cooldown — rows before cooldown_until are vetoed."""
+    rows = tape_rows()
+    state = {"cooldown_until": 2**63 - 1}     # far future: everything blocked
+    assert emit(state, rows, {}) == []
+    assert any(r["reason"] == "cooldown" for r in state["decision_log"])
 

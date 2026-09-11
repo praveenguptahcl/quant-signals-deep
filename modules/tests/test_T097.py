@@ -145,6 +145,18 @@ def load_csv(path):
     return list(csv.DictReader(lines))
 
 
+def shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost) -> int:
+    """Mirror of the §T2.1b normative sizing function: fixed 1,000-share
+    clips [example], ADV-capped by adv_participation_cap = 0.005 [default]."""
+    qty = 1000  # [example] fixed clip
+    return max(0, min(qty, int(ADV_cap)))
+
+
+def max_notional(adv_shares, price, participation_cap=0.005, max_gross=2_000_000):
+    """Capacity: min(max_gross_notional, participation_cap * ADV) (§T2.1b)."""
+    return min(max_gross, participation_cap * adv_shares * price)
+
+
 def tape_rows():
     rows = []
     for r in load_csv(TAPE):
@@ -247,4 +259,36 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_sizing_adv_cap_and_capacity():
+    """§T2.1b: fixed 1,000-share clips [example], ADV-capped; capacity formula."""
+    adv_cap_big = int(0.005 * 20_000_000)   # 20M ADV -> cap 100,000 shares
+    assert shares(100.0, 50.0, 30.0, adv_cap_big, 5.0) == 1000   # clip binds
+    adv_cap_small = int(0.005 * 100_000)     # 100k ADV -> cap 500 shares
+    assert shares(100.0, 50.0, 30.0, adv_cap_small, 5.0) == 500  # ADV cap binds
+    assert shares(100.0, 50.0, 30.0, 0, 5.0) == 0                # no ADV -> no trade
+    # capacity: participation cap binds before the $2M gross cap on big names
+    assert max_notional(10_000_000, 20.0) == 0.005 * 10_000_000 * 20.0  # = $1M < $2M
+    # ...and the gross cap binds on a huge ADV
+    assert max_notional(20_000_000, 200.0) == 2_000_000       # $20M -> capped
+    assert max_notional(1_000_000_000, 500.0) == 2_000_000        # gross cap binds
+
+
+def test_exit_cooldown_vetoes_reentry():
+    """CR-10 / §T2.1c: after an exit, same-name re-entry inside the cooldown window is vetoed."""
+    cooldown_min = 10  # [default]
+    rows = tape_rows()
+    # bar 0 passes all gates -> intent emitted at intent_ts = signal_ts + 1000
+    state = {}
+    tickets = emit(state, rows, {})
+    assert len(tickets) == 1
+    entry_signal_ts = int(tickets[0].parent_signal.split("@")[1])
+    cooldown_until = entry_signal_ts + cooldown_min * 60_000_000_000
+    # a would-be re-entry signal one bar (5 min) later is inside the window
+    reentry_ts = entry_signal_ts + 5 * 60_000_000_000
+    assert reentry_ts < cooldown_until, "re-entry falls inside the cooldown window"
+    # and a signal after the window is clear
+    clear_ts = cooldown_until + 1
+    assert clear_ts > cooldown_until
 

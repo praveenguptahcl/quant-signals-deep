@@ -24,6 +24,7 @@ PER_TRADE_R = 500        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 8  # in units of R [default]
 SYMBOL = 'BRK:XNAS'
 PARENT_SIGNAL = 'S030'
+MAX_TICKET_NOTIONAL = 1_000_000  # $ [default] = max_gross $3M / 3 concurrent (C14)
 INFRA = False  # normative emitter emits OrderTicket intents
 
 # ------------------------------------------------------------ schemas (App C/G)
@@ -126,8 +127,18 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
             continue
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
+        # C15: locate check — the reference build carries no locate source, so it
+        # is long-only; SHORT intents are vetoed here.
+        if side == "SHORT" and not state.get("locate_ok", False):
+            append("LOCATE_VETO", "locate-check", f"no-locate@{sig_ts}", before, before)
+            continue
+        # C14: fat-finger trio — notional cap (price/qty collars live in sizing).
+        if row["qty"] * row["price"] > MAX_TICKET_NOTIONAL:
+            append("COMPLIANCE_BLOCK", "fat-finger-notional", f"notional-cap@{sig_ts}",
+                   before, before)
+            continue
         t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
-                        tif="IOC", ticket_id=f"{uuid.uuid4()}",
+                        tif="OPG", ticket_id=f"{uuid.uuid4()}",
                         parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
                         intent_ts=sig_ts + 1000, state="NEW", stp=True)
         assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
@@ -247,4 +258,30 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_locate_veto_short():
+    """C15: SHORT intents need an affirmative locate; reference build is long-only."""
+    rows = [{"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "SHORT",
+             "edge_bps": 40.0, "g1": 1.0, "g2": 1.0, "g3": 1.0,
+             "price": 100.0, "qty": 500, "valid": 1}]
+    state = {}
+    assert emit(state, rows, {}) == []
+    assert any(r["action"] == "LOCATE_VETO" for r in state["decision_log"])
+    state2 = {"locate_ok": True}
+    tickets = emit(state2, rows, {})
+    assert len(tickets) == 1
+    assert tickets[0].side == "SHORT"
+    assert tickets[0].tif == "OPG"
+
+
+def test_fat_finger_notional_cap():
+    """C14: ticket notional beyond max_ticket_notional is blocked, never resized."""
+    rows = [{"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "LONG",
+             "edge_bps": 40.0, "g1": 1.0, "g2": 1.0, "g3": 1.0,
+             "price": 100.0, "qty": 100_000, "valid": 1}]  # $10M notional
+    state = {}
+    assert emit(state, rows, {}) == []
+    assert any(r["action"] == "COMPLIANCE_BLOCK" and r["reason"] == "fat-finger-notional"
+               for r in state["decision_log"])
 

@@ -16,8 +16,8 @@ CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T009 COST block (single source of truth)."""
     spread_bps = 3.0    # [example] ETF 0.5c + basket legs aggregation @ $50
-    fee_bps = 2.0       # [example] $0.005/share each way @ $50 = 1 bps/leg
-    borrow_bps = 2.0    # [example] short-side borrow (ETF or basket legs)
+    fee_bps = 2.0       # [example] taker stack incl. Nasdaq $0.0030/share remove fee [documented]
+    borrow_bps = 2.0    # [example] borrow_bps_per_day 2.0 x 1-day-equivalent holding
     impact_bps = 4.0    # [example] multi-leg aggregation
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
@@ -111,3 +111,20 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_doc_contract_consistency():
+    # the markdown is the module's contract: version, timing box, cost gate,
+    # borrow convention, and GROK-NEEDED block must be present and consistent
+    md_path = os.path.join("modules", "strategies", "T009.md")
+    with open(md_path) as f:
+        md = f.read()
+    assert 'version: "1.0.2"' in md
+    assert 'template_version: "1.0.0"' in md
+    assert "signal@t (1-min, America/New_York) → earliest fill @open(t+1)" in md
+    assert "expected_cost_bps(...) <= k * edge_bps" in md
+    assert "borrow_bps_per_day" in md
+    assert "GROK-NEEDED" in md
+    assert "ARMED" in md and "RECOVERY" in md
+    assert "73(6): 2471-2535" in md  # deep-review correction of the Ben-David issue
+    assert "9780190279394" in md     # deep-review correction of the Madhavan ISBN

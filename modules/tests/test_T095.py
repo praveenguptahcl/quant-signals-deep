@@ -24,7 +24,6 @@ PER_TRADE_R = 2000        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 10  # in units of R [default]
 SYMBOL = 'DSP:CBOE'
 PARENT_SIGNAL = 'S075'
-INFRA = False  # normative emitter emits OrderTicket intents
 
 # ------------------------------------------------------------ schemas (App C/G)
 @dataclass(frozen=True)
@@ -80,8 +79,9 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     """emit(state, signals, cfg) -> list[OrderTicket] — reference stub.
 
     Intents only (Appendix c v1.0.0): never places orders. Invalid input ->
-    module_state UNKNOWN, never interpolated (F1/F2). Infra publishers (T081)
-    publish bar boundaries downstream and never emit OrderTickets.
+    module_state UNKNOWN, never interpolated (F1/F2). Exit paths follow §T3:
+    GEX flip while positioned -> automatic 50% cut; backwardation while
+    positioned -> flatten; these run before the entry Boolean.
     """
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
@@ -104,6 +104,29 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         # input validation, so a tripped module reports OFF, never UNKNOWN.
         if kill.state != "ARMED":
             state["module_state"] = "OFF"
+            continue
+        # §T3 exit paths (position open only; checked before the entry Boolean)
+        pos = state.get("position_open", False)
+        gex_model = row.get("gex_model", row["g2"])   # modeled, close only (C11)
+        contango = row.get("vix_contango", row["g1"] > 0)
+        if pos and gex_model < 0:
+            t = OrderTicket(symbol=SYMBOL, side="SELL",
+                            qty=max(1, int(row["qty"]) // 2),  # 50% cut [example]
+                            limit=None, tif="IOC", ticket_id=f"{uuid.uuid4()}",
+                            parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
+                            intent_ts=sig_ts + 1000, state="NEW", stp=True)
+            assert row["fill_ts"] > sig_ts
+            tickets.append(t)
+            append("EXIT_50PCUT", "gex-flip", t.ticket_id, before, before)
+            continue
+        if pos and not contango:
+            t = OrderTicket(symbol=SYMBOL, side="SELL", qty=int(row["qty"]),
+                            limit=None, tif="IOC", ticket_id=f"{uuid.uuid4()}",
+                            parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
+                            intent_ts=sig_ts + 1000, state="NEW", stp=True)
+            assert row["fill_ts"] > sig_ts
+            tickets.append(t)
+            append("EXIT_FLATTEN", "backwardation", t.ticket_id, before, before)
             continue
         # F1/F2: invalid input -> UNKNOWN
         if (not row["valid"] or row["price"] <= 0 or row["qty"] <= 0
@@ -170,6 +193,7 @@ def test_fixture_recomputes_to_expected():
         assert t.intent_ts == int(e["intent_ts"]), e["ticket_idx"]
         assert t.tif == e["tif"], e["ticket_idx"]
         assert t.symbol == e["symbol"], e["ticket_idx"]
+        assert abs(float(e["cost_bps"]) - 16.0) <= 0.0001, e["ticket_idx"]  # tolerance
 
 
 def test_no_signal_bar_fills():
@@ -190,6 +214,37 @@ def test_cost_gate_predicate():
     assert cost > 0
     assert cost <= k * 100.0      # large edge -> gate passes
     assert not (cost <= k * 3.2)  # tiny edge -> gate blocks
+
+
+def test_exit_paths_gex_flip_and_backwardation():
+    """§T3 exit paths: GEX flip while positioned -> 50% cut; backwardation -> flatten."""
+    rows = tape_rows()
+    flip = [dict(rows[0], gex_model=-0.5)]        # g2 stays 1.0; modeled GEX negative
+    state = {"position_open": True}
+    t = emit(state, flip, {})
+    assert len(t) == 1, "GEX flip must emit the 50% cut"
+    assert t[0].qty == 4, "8 -> 4: automatic 50% cut [example]"
+    assert t[0].side == "SELL"
+    flat = [dict(rows[0], vix_contango=False)]    # g1 stays 1.0; curve flipped
+    state2 = {"position_open": True}
+    t2 = emit(state2, flat, {})
+    assert len(t2) == 1, "backwardation must emit the flatten"
+    assert t2[0].qty == 8, "full flatten [default]"
+    # no position open -> entry path, not exits
+    t3 = emit({}, flip, {})
+    assert len(t3) == 1 and t3[0].side == "BUY", "row 0 passes entry gates"
+
+
+def test_fixture_type_and_tolerance_headers():
+    """TYPE header present on both fixtures; TOLERANCE line; cost within tolerance."""
+    raw_tape = open(TAPE).read().splitlines()
+    raw_exp = open(EXPECTED).read().splitlines()
+    assert raw_tape[0].strip() == "# TYPE: validation-run"
+    assert raw_tape[1].startswith("# TOLERANCE:"), "tape needs a tolerance line"
+    assert raw_exp[0].strip() == "# TYPE: validation-run"
+    assert raw_exp[1].startswith("# TOLERANCE:"), "expected needs a tolerance line"
+    exp = load_csv(EXPECTED)
+    assert abs(float(exp[0]["cost_bps"]) - 16.0) <= 0.0001  # 16.0000 ± tolerance
 
 
 def test_kill_switch_trip():

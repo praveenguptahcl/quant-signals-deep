@@ -1,3 +1,4 @@
 # TYPE: validation-run
+# TOLERANCE: qty exact; intent_ts exact; cost_bps abs<=1e-4
 ticket_idx,bar,symbol,side,qty,limit,tif,intent_ts,parent_signal,fill_ts,cost_bps
 T086-0,0,EXE:XNAS,BUY,7661,,IOC,1700000000000001000,S001@1700000000000000000,1700000300000000000,12.0000

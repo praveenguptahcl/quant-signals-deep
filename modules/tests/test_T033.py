@@ -57,8 +57,8 @@ class Config:
     taker_fee_bps: float = 0.30
     maker_rebate_bps: float = 0.20
     side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
-    impact_k: float = 0.5
+    borrow_bps_per_day: float = 50.0  # per short leg; 0 when no short legs (reason: net-LONG reference basket)
+    impact_k: float = 20.0
     daily_loss_stop_pct: float = -2.0
     venue: str = "XNAS"
     default_side: str = "BUY"      # BUY | SHORT
@@ -92,7 +92,7 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
     """4-component cost stack (COST-block callable). Example values."""
     spread_bps = cfg.spread_full_bps / 2.0
     fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
-    borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
+    borrow_bps = cfg.borrow_bps_per_day if cfg.default_side == "SHORT" else 0.0
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
         impact_bps *= 1.5
@@ -127,9 +127,12 @@ def process_bar(state, bar, cfg):
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
+    cost_usd = cost / 1e4 * bar["notional"]
     z = bar["signal_z"]
     pos = state.get("position", 0)
     if pos == 0:
+        if cost_usd >= cfg.risk_R_usd:
+            return None, "OK", "cost-exceeds-R"  # cost alone eats the budget: no trade
         if abs(z) >= cfg.z_entry and gate:
             side = cfg.default_side
             ticket = OrderTicket(
@@ -138,7 +141,7 @@ def process_bar(state, bar, cfg):
                 tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
                 parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
                 intent_ts=bar["event_ts"], state="NEW")
-            state["position"] = 1 if side == "BUY" else -1
+            state["position"] = 1 if side in ("BUY", "LONG") else -1
             return ticket, "OK", "entry"
         return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
     # Position open: exit on z through the exit band (exits never cost-gated)
@@ -161,7 +164,7 @@ CFG = Config(
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=3.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=50.0, impact_k=20.0,
+    borrow_bps_per_day=50.0, impact_k=20.0,
     daily_loss_stop_pct=1.0, venue="primary",
     default_side="LONG")
 

@@ -49,6 +49,7 @@ class Config:
     primary_signal: str = "S000"
     z_entry: float = 2.0
     z_exit: float = 0.5
+    max_hold_d: int = 20
     cost_gate_k: float = 0.5
     risk_R_usd: float = 1000.0
     stop_bps: float = 100.0
@@ -91,7 +92,12 @@ class KillSwitch:
 def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
     """4-component cost stack (COST-block callable). Example values."""
     spread_bps = cfg.spread_full_bps / 2.0
-    fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
+    if side == "maker":
+        fee_bps = cfg.maker_rebate_bps
+    elif side == "mixed":
+        fee_bps = (cfg.taker_fee_bps + cfg.maker_rebate_bps) / 2.0
+    else:
+        fee_bps = cfg.taker_fee_bps
     borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
@@ -104,7 +110,11 @@ def process_bar(state, bar, cfg):
 
     Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
     switch -> size -> normative cost-gate predicate -> entry/exit rules.
-    Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
+    Entry requires |z| >= z_entry, no informed flag (S097 veto), S045
+    confirm_ok, cost gate pass, and no active post-exit cooldown (C10).
+    Exits on z through the exit band, informed arrival, or max-hold expiry
+    (exits are never cost-gated). Earliest fill for a bar-t intent is bar
+    t+1's open (t -> t+1).
     """
     ks = state["kill"]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
@@ -130,19 +140,29 @@ def process_bar(state, bar, cfg):
     z = bar["signal_z"]
     pos = state.get("position", 0)
     if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
+        # C10: post-exit cooldown - no entries on the session after an exit
+        if bar["bar"] <= state.get("cooldown_until_bar", -1):
+            return None, "OK", "cooldown"
+        if (abs(z) >= cfg.z_entry and not bar["informed"]
+                and bar["confirm_ok"] and gate):
+            # fade the crowd: fear extreme -> LONG (buy calls);
+            # greed extreme -> SHORT (buy puts)
+            side = "LONG" if z > 0 else "SHORT"
             ticket = OrderTicket(
                 symbol=bar["symbol"], side=side, qty=qty,
                 limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
                 tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
                 parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
                 intent_ts=bar["event_ts"], state="NEW")
-            state["position"] = 1 if side == "BUY" else -1
+            state["position"] = 1 if side in ("BUY", "LONG") else -1
+            state["age"] = 0
             return ticket, "OK", "entry"
         return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
-    # Position open: exit on z through the exit band (exits never cost-gated)
-    if abs(z) <= cfg.z_exit:
+    # Position open: exit on z through the exit band, informed arrival, or
+    # max-hold expiry (exits never cost-gated)
+    state["age"] = state.get("age", 0) + 1
+    if (abs(z) <= cfg.z_exit or bar["informed"]
+            or state["age"] > cfg.max_hold_d):
         exit_side = "SELL" if pos > 0 else "BUY"
         ticket = OrderTicket(
             symbol=bar["symbol"], side=exit_side, qty=qty,
@@ -151,6 +171,7 @@ def process_bar(state, bar, cfg):
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
         state["position"] = 0
+        state["cooldown_until_bar"] = int(bar["bar"]) + 1
         return ticket, "OK", "exit"
     return None, "OK", "hold"
 
@@ -180,6 +201,7 @@ def tape():
             "bar": int(r["bar"]), "event_ts": int(r["event_ts"]),
             "asof_ts": int(r["asof_ts"]), "symbol": r["symbol"],
             "close": float(r["close"]), "signal_z": float(r["signal_z"]),
+            "informed": int(r["informed"]), "confirm_ok": int(r["confirm_ok"]),
             "edge_bps": float(r["edge_bps"]), "notional": float(r["notional"]),
             "adv_pct": float(r["adv_pct"]), "adv_shares": float(r["adv_shares"]),
             "stop_bps": float(r["stop_bps"]), "urgency": r["urgency"],

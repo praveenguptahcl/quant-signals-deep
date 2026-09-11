@@ -2,15 +2,17 @@
 
 Template v1.0.0 (strategy). Concrete sketch: loads the fixture tape, runs a
 reference implementation of the chapter's normative pseudocode (entry Boolean +
-cost gate + kill switch), and asserts causality, ticket schema, the cost gate,
-kill-switch behavior, and invalid-input handling.
+cost gate + kill switch + earnings blackout + exit trigger + sizing), and
+asserts causality, ticket schema, the cost gate, kill-switch behavior,
+invalid-input handling, and the S_B composite.
 
 Run: python3 -m pytest modules/tests/test_T093.py -q   (from repo root)
 """
 import csv
 import hashlib
+import math
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -22,6 +24,8 @@ GATE_NAMES = ['S_B', 'call_ratio', 'spread_ok']
 COST_GATE_K = 0.5                       # [default]
 PER_TRADE_R = 400        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 8  # in units of R [default]
+BLACKOUT_SESSIONS = 2  # earnings blackout [default]
+MAX_GROSS_NOTIONAL = 5_000_000  # $ [example]
 SYMBOL = 'OPT:XNAS'
 PARENT_SIGNAL = 'S071'
 INFRA = False  # normative emitter emits OrderTicket intents
@@ -70,16 +74,37 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model — reference constant stack (§T2 COST block)."""
     spread_bps = 2.0   # [example]
     fee_bps = 1.0         # [example]
-    borrow_bps = 0.0   # [example]
+    borrow_bps = 0.0   # [default] borrow_bps_per_day=0.0: long-only reference build
     impact_bps = 2.0   # [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
+
+def composite_SB(z_skew25, z_flow, z_leadlag) -> float:
+    """S_B = 0.45*z_skew25 + 0.35*z_flow + 0.20*z_leadlag [example]."""
+    return 0.45 * z_skew25 + 0.35 * z_flow + 0.20 * z_leadlag
+
+
+def size(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost) -> int:
+    """Normative sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    q = risk_budget_R / max(stop_distance, 1e-9)
+    q = min(q, ADV_cap)
+    return int(q)
+
+
+def exit_trigger(d: dict, pos: dict, cfg: dict) -> bool:
+    """Normative exit rule (§T3): skew revert | stop | target | time stop."""
+    skew_reverted = abs(d["skew_25d"] - d["skew_25d_mean20"]) <= cfg["skew_revert_tol"]
+    stopped = d["last_price"] <= pos["entry_px"] - cfg["stop_mult"] * d["sigma_20d"]
+    targeted = d["last_price"] >= pos["entry_px"] + cfg["target_mult"] * d["sigma_20d"]
+    timed_out = d["sessions_held"] >= cfg["time_stop_d"]
+    return skew_reverted or stopped or targeted or timed_out
 
 
 # ------------------------------------------------- normative pseudocode stub
 def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     """emit(state, signals, cfg) -> list[OrderTicket] — reference stub.
 
-    Intents only (Appendix c v1.0.0): never places orders. Invalid input ->
+    Intents only (Appendix C v1.0.0): never places orders. Invalid input ->
     module_state UNKNOWN, never interpolated (F1/F2). Infra publishers (T081)
     publish bar boundaries downstream and never emit OrderTickets.
     """
@@ -112,6 +137,10 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
                    before, "UNKNOWN")
             continue
+        # C11: earnings blackout veto (logged, module stays OK)
+        if row["sessions_to_earnings"] <= BLACKOUT_SESSIONS:
+            append("GATE_VETO", "earnings-blackout", f"blackout@{sig_ts}", before, before)
+            continue
 
         # Entry Boolean: three chapter gates (all must pass)
         gates = []
@@ -124,6 +153,11 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         cost = expected_cost_bps(row["qty"] * row["price"], 0.001, "venue", "taker", "normal")
         if not (cost <= COST_GATE_K * row["edge_bps"]):
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
+            continue
+        # C14: pre-trade fat-finger trio
+        notional = row["qty"] * row["price"]
+        if not (row["qty"] > 0 and notional <= MAX_GROSS_NOTIONAL):
+            append("COMPLIANCE_BLOCK", "fat-finger", f"size-block@{sig_ts}", before, before)
             continue
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
         t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
@@ -153,7 +187,8 @@ def tape_rows():
                       "edge_bps": float(r["edge_bps"]),
                       "g1": float(r["g1"]), "g2": float(r["g2"]), "g3": float(r["g3"]),
                       "price": float(r["price"]), "qty": int(r["qty"]),
-                      "valid": int(r["valid"]) == 1})
+                      "valid": int(r["valid"]) == 1,
+                      "sessions_to_earnings": int(r["sessions_to_earnings"])})
     return rows
 
 
@@ -170,6 +205,8 @@ def test_fixture_recomputes_to_expected():
         assert t.intent_ts == int(e["intent_ts"]), e["ticket_idx"]
         assert t.tif == e["tif"], e["ticket_idx"]
         assert t.symbol == e["symbol"], e["ticket_idx"]
+        assert abs(float(e["cost_bps"]) - expected_cost_bps(
+            t.qty * 150.0, 0.001, "OPT:XNAS", "taker", "normal")) <= 1e-4, e["ticket_idx"]
 
 
 def test_no_signal_bar_fills():
@@ -190,6 +227,11 @@ def test_cost_gate_predicate():
     assert cost > 0
     assert cost <= k * 100.0      # large edge -> gate passes
     assert not (cost <= k * 1.0)  # tiny edge -> gate blocks
+
+
+def test_cost_stack_single_source():
+    """The callable sums to the §T2 COST block reference total (5.00 bps [example])."""
+    assert abs(expected_cost_bps(39900.0, 0.001, "OPT:XNAS", "taker", "normal") - 5.0) < 1e-9
 
 
 def test_kill_switch_trip():
@@ -217,19 +259,55 @@ def test_invalid_input_yields_unknown():
     state = {}
     bad = [{"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "LONG",
              "edge_bps": 50.0, "g1": 99.0, "g2": 99.0, "g3": 99.0,
-             "price": -1.0, "qty": 100, "valid": 1}]  # negative price
+             "price": -1.0, "qty": 100, "valid": 1, "sessions_to_earnings": 10}]  # negative price
     assert emit(state, bad, {}) == []
     assert state["module_state"] == "UNKNOWN"
     state2 = {}
     bad2 = [{"bar": 0, "signal_ts": 1, "fill_ts": 2, "side": "LONG",
               "edge_bps": 50.0, "g1": 99.0, "g2": 99.0, "g3": 99.0,
-              "price": 100.0, "qty": 100, "valid": 0}]  # valid flag false
+              "price": 100.0, "qty": 100, "valid": 0, "sessions_to_earnings": 10}]  # valid flag false
     assert emit(state2, bad2, {}) == []
     assert state2["module_state"] == "UNKNOWN"
 
 
+def test_earnings_blackout_veto():
+    """C11: sessions_to_earnings <= 2 vetoes the entry; module stays OK."""
+    rows = tape_rows()
+    blackout = [r for r in rows if r["bar"] == 6]
+    assert len(blackout) == 1
+    state = {}
+    assert emit(state, blackout, {}) == []
+    assert state["module_state"] == "OK"
+    assert any(r["action"] == "GATE_VETO" and r["reason"] == "earnings-blackout"
+               for r in state["decision_log"])
+
+
+def test_composite_SB_weights():
+    """S_B = 0.45*z_skew25 + 0.35*z_flow + 0.20*z_leadlag [example]; weights sum to 1.0."""
+    assert math.isclose(composite_SB(1.0, 1.0, 1.0), 1.0, rel_tol=1e-12)
+    assert math.isclose(composite_SB(2.0, 1.0, 0.0), 0.45 * 2.0 + 0.35 * 1.0, rel_tol=1e-12)
+
+
+def test_sizing_and_exit_trigger():
+    """Normative size() and exit_trigger() behave per §T3."""
+    q = size(risk_budget_R=0.0040 * 1_000_000, stop_distance=1.1 * 2.0,
+             vol_estimate=2.0, ADV_cap=0.05 * 10_000_000, cost=5.0)
+    assert q == int(min(0.0040 * 1_000_000 / (1.1 * 2.0), 0.05 * 10_000_000))
+    cfg = {"skew_revert_tol": 0.5, "stop_mult": 1.1, "target_mult": 2.2, "time_stop_d": 8}
+    base = {"skew_25d": 3.0, "skew_25d_mean20": 3.0, "last_price": 150.0,
+            "sigma_20d": 2.0, "sessions_held": 3}
+    pos = {"entry_px": 150.0}
+    assert exit_trigger(base, pos, cfg) is True      # skew reverted to mean
+    d2 = dict(base, skew_25d=5.0)
+    assert exit_trigger(d2, pos, cfg) is False        # nothing fires
+    d3 = dict(d2, last_price=150.0 - 1.1 * 2.0 - 0.01)
+    assert exit_trigger(d3, pos, cfg) is True         # hard stop
+    d4 = dict(d2, sessions_held=8)
+    assert exit_trigger(d4, pos, cfg) is True         # time stop
+
+
 def test_ticket_schema_and_compliance():
-    """Appendix c schema fields + C1 self-trade prevention + C5 decision log."""
+    """Appendix C schema fields + C1 self-trade prevention + C5 decision log."""
     state = {}
     tickets = emit(state, tape_rows(), {})
     assert tickets, "fixture must produce at least one intent"
@@ -247,4 +325,3 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
-

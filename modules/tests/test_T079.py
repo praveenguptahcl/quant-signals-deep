@@ -20,11 +20,13 @@ EXPECTED = FIX / "T079_expected.csv"
 GATE_CFG = [('>=', 1.4), ('>=', 1.0), ('>=', 1.0)]   # [(op, threshold)] for g1, g2, g3
 GATE_NAMES = ['premium_ratio', 'two_sided_ok', 'borrow_ok']
 COST_GATE_K = 0.5                       # [default]
+COOLDOWN_NS = 5 * 24 * 3600 * 1_000_000_000   # 5 days [default]
 PER_TRADE_R = 300        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 3  # in units of R [default]
 SYMBOL = 'VOL:OPRA'
 PARENT_SIGNAL = 'S070'
 INFRA = False  # normative emitter emits OrderTicket intents
+MODULE_MD = Path(__file__).resolve().parent.parent / "strategies" / "T079.md"
 
 # ------------------------------------------------------------ schemas (App C/G)
 @dataclass(frozen=True)
@@ -86,6 +88,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
+    state.setdefault("cooldown_until", 0)   # CMP-10 post-exit cooldown
     log = state.setdefault("decision_log", [])
 
     def chain_hash(prev, payload):
@@ -120,6 +123,10 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if not all(gates):
             append("GATE_VETO", "entry-boolean", f"veto@{sig_ts}", before, before)
             continue
+        # CMP-10: post-exit cooldown blocks re-entry even if gates re-pass
+        if sig_ts < state["cooldown_until"]:
+            append("GATE_VETO", "cooldown", f"cooldown@{sig_ts}", before, before)
+            continue
         # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
         cost = expected_cost_bps(row["qty"] * row["price"], 0.001, "venue", "taker", "normal")
         if not (cost <= COST_GATE_K * row["edge_bps"]):
@@ -132,6 +139,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
                         intent_ts=sig_ts + 1000, state="NEW", stp=True)
         assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
         tickets.append(t)
+        state["cooldown_until"] = sig_ts + COOLDOWN_NS   # CMP-10: 5-day post-intent cooldown
         append("EMIT_INTENT", "emit", t.ticket_id + t.parent_signal + str(t.intent_ts),
                before, state["module_state"])
 
@@ -247,4 +255,67 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def _passing_row(sig_ts, fill_ts):
+    return {"bar": 0, "signal_ts": sig_ts, "fill_ts": fill_ts, "side": "SELL",
+            "edge_bps": 256.0, "g1": 1.64, "g2": 1.0, "g3": 1.0,
+            "price": 3.2, "qty": 100, "valid": 1}
+
+
+def test_exit_cooldown_blocks_reentry():
+    """CMP-10: an intent sets cooldown_until; a re-passing case inside the
+    window is vetoed; one past the window emits again."""
+    t0 = 1700000000000000000
+    state = {}
+    rows = [_passing_row(t0, t0 + 300_000_000_000),
+            _passing_row(t0 + 300_000_000_000, t0 + 600_000_000_000),   # inside cooldown
+            _passing_row(t0 + COOLDOWN_NS + 1, t0 + COOLDOWN_NS + 300_000_000_000)]  # past cooldown
+    tickets = emit(state, rows, {})
+    assert len(tickets) == 2, [t.intent_ts for t in tickets]
+    assert state["cooldown_until"] == t0 + COOLDOWN_NS + 1 + COOLDOWN_NS
+    vetoes = [r for r in state["decision_log"] if r["reason"] == "cooldown"]
+    assert len(vetoes) == 1
+
+
+def _module_text():
+    assert MODULE_MD.exists(), "module file missing"
+    return MODULE_MD.read_text()
+
+
+def test_compliance_ten_coded_rules():
+    """§T2.9 carries the 10 mandatory coded compliance rules."""
+    text = _module_text()
+    for n in range(1, 11):
+        assert f"CMP-{n}" in text, f"CMP-{n} missing"
+    for keyword in ("self-match", "bona-fide", "cancel-to-trade", "fat-finger",
+                    "decision-log schema", "halt/auction", "locate check",
+                    "public-dissemination", "data-entitlement", "exit cooldown"):
+        assert keyword in text, keyword
+
+
+def test_timing_box_fixed_wording():
+    """Fixed-wording timing box: signal@t (<cadence>, <TZ>) -> earliest fill @open(t+1)."""
+    text = _module_text()
+    assert "signal@t (5-minute, America/New_York) → earliest fill @open(t+1)" in text
+
+
+def test_regime_machine_records():
+    """§T9 machine records carry all 7 fields."""
+    text = _module_text()
+    for field in ("regime_id", "direction", "mechanism", "condition",
+                  "action", "min_lag", "unknown_behavior"):
+        assert field in text, field
+    assert "R001" in text and "R005" in text
+
+
+def test_front_matter_machine_fields():
+    """§0 YAML carries the v1.0.0 machine fields + semver bump + changelog."""
+    text = _module_text()
+    assert text.startswith("---")
+    fm = text.split("---")[1]
+    for field in ("id: T079", "version: 1.1.0", "template_version: 1.0.0",
+                  "status: deep-reviewed", "test_cmd:", "changelog:",
+                  "consumes:", "regime_ids:", "datasets:", "sources:"):
+        assert field in fm, field
 

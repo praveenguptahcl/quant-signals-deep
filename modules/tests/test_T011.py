@@ -13,13 +13,15 @@ TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
 
+
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T011 COST block (single source of truth)."""
-    spread_bps = 8.0    # [example] $0.02 assumed spread @ $50: half/aggressive leg x 2
+    spread_bps = 8.0    # [example] $0.02 spread crossed/aggressive leg x 2 @ $50
     fee_bps = 2.0       # [example] $0.005/share each way @ $50 = 1 bps/leg
     borrow_bps = 0.0    # [default] long-bounce reference; shorts add C7
     impact_bps = 0.0    # [example] flagged; gap-through in conservative variant
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
 
 def load_csv(path):
     with open(path) as f:
@@ -69,8 +71,23 @@ def test_no_signal_bar_fills():
         assert fill_event > signal_event, "fill_event > signal_event (t->t+1 causality)"
 
 
+def test_intent_schema():
+    # C19: the strategy emits OrderTicket intents only; every tape row must
+    # carry the intent-schema fields, and causality must hold through the
+    # intent: signal < intent <= fill
+    _, tape = load_csv(TAPE)
+    for t in tape:
+        assert t["parent_signal"].startswith("S036@"), "parent_signal provenance"
+        assert t["tif"] == "DAY", "time-in-force present"
+        signal_event = int(t["signal_ts"])
+        intent_event = int(t["intent_ts"])
+        fill_event = int(t["fill_ts"])
+        assert fill_event >= intent_event > signal_event, \
+            "signal < intent <= fill (intentions only, t->t+1)"
+
+
 def test_cost_gate_predicate():
-    # the normative C3 predicate: expected_cost_bps(...) <= k * edge_bps
+    # the normative C12 predicate: expected_cost_bps(...) <= k * edge_bps
     k = 0.5
     c = expected_cost_bps(100000.0, 0.1, "XNAS", "taker", "normal")
     if c <= 0:
@@ -81,20 +98,47 @@ def test_cost_gate_predicate():
         assert not (c <= k * 0.05), "cost gate must block when edge << cost"
 
 
-def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
-    state = "ARMED"
-    kill_conditions = ["3 consecutive adverse bounces [example]", "feed heartbeat missed > 2 s [example]", "clock skew > 50 ms [example]", "4 concurrent reversals [example]"]
-    stale_s = 90.0
-    if stale_s >= 2.0:
-        state = "TRIPPED"   # cancel all, flatten, OFF
-    assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
-    assert all(checklist)
-    state = "RECOVERY"
-    state = "ARMED"
-    assert state == "ARMED"
-    assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
+class KillSwitch:
+    """Minimal ARMED -> TRIPPED -> RECOVERY -> ARMED machine (C11)."""
+
+    def __init__(self, trip_conditions):
+        assert len(trip_conditions) >= 3, "need >=3 kill conditions"
+        self.state = "ARMED"
+        self.trip_conditions = trip_conditions
+
+    def trip(self, condition):
+        assert self.state == "ARMED", "can only trip from ARMED"
+        assert condition in self.trip_conditions
+        self.state = "TRIPPED"  # stop emits, flatten per exit rule, page
+        return self.state
+
+    def rearm(self, checklist):
+        # the six-item §T0.7 re-arm checklist, in order
+        assert self.state == "TRIPPED", "can only re-arm from TRIPPED"
+        assert len(checklist) == 6 and all(checklist), "checklist incomplete"
+        self.state = "RECOVERY"
+        self.state = "ARMED"
+        return self.state
+
+
+def test_kill_switch_cycle():
+    ks = KillSwitch([
+        "3 consecutive adverse bounces [example]",
+        "feed heartbeat missed > 2 s [example]",
+        "clock skew > 50 ms [example]",
+        "4 concurrent reversals [example]",
+    ])
+    assert ks.state == "ARMED"
+    assert ks.trip("3 consecutive adverse bounces [example]") == "TRIPPED"
+    checklist = [
+        True,  # 1. root cause identified and logged
+        True,  # 2. post-exit cooldown expired
+        True,  # 3. feed heartbeat healthy 5 min
+        True,  # 4. clock skew within 50 ms
+        True,  # 5. manual reviewer sign-off logged
+        True,  # 6. all managed positions flat
+    ]
+    assert ks.rearm(checklist) == "ARMED"
 
 
 def test_invalid_input_emits_unknown():

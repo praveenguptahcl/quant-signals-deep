@@ -25,6 +25,10 @@ Implements the module's normative emit() contract:
     emit(state, signals, cfg) -> list[OrderTicket]
 at one-bar granularity via process_bar(). Strategies emit ORDER INTENTS
 ONLY (Appendix C v1.0.0); execution/broker layers create orders.
+Sizing implements the normative half-size rule (§T2): qty = int(raw * 0.5),
+ADV-capped. The tape's signal_z folds the S068 contango/VRP output into a
+z-equivalent (see §T3 tape-encoding note); live code gates on the real
+SignalVector fields.
 """
 import math
 from dataclasses import dataclass
@@ -119,10 +123,10 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
+    # Position sizing: risk_R / (stop_frac * price), ADV-capped, HALF-SIZE [default] per §T2
     raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
     cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
+    qty = max(1, min(int(raw_qty * 0.5), cap_qty))  # tail-risk half-size rule, normative (§T2 sizing)
     # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
@@ -162,7 +166,7 @@ CFG = Config(
     spread_full_bps=5.0, taker_fee_bps=0.8,
     maker_rebate_bps=-0.2, side_exec="taker",
     borrow_bps=0.0, impact_k=10.0,
-    daily_loss_stop_pct=2.0, venue="primary",
+    daily_loss_stop_pct=2.0, venue="CFE",
     default_side="SHORT")
 
 

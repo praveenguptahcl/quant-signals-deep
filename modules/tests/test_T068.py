@@ -61,6 +61,26 @@ def cost_gate_pass(cost_bps, k, edge_bps):
     """Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps."""
     return cost_bps <= k * edge_bps
 
+VEGA_BUDGET = 3000.0      # [example] calibrate
+VEGA_PER_CONTRACT = 60.0  # [example] calibrate
+ADV_CAP_FRAC = 0.10       # [default] participation cap on the tenor-bucket ADV
+COST_HAIRCUT_BPS = 12.5   # [example] halve size when cost exceeds this
+PER_TRADE_R = 1500.0      # [example] per-trade dollar risk
+MAX_TICKET_NOTIONAL = 2000000.0  # [default] C4 fat-finger cap
+
+def size_contracts(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Canonical sizing (§T2, single fenced source of truth).
+
+    vega-budget is primary [example]; dollar-stop, participation cap and a
+    cost haircut gate it. vol_estimate is recorded but unused in vega-budget
+    mode [example] — the fixture pins the expected output.
+    """
+    base = int(VEGA_BUDGET // max(VEGA_PER_CONTRACT, 1e-9))
+    by_risk = max(1, int(risk_budget_R // max(stop_distance, 1e-9)))
+    adv_cap_qty = int(ADV_CAP_FRAC * ADV_cap)
+    cost_haircut = 0.5 if cost > COST_HAIRCUT_BPS else 1.0
+    return max(1, int(min(base, by_risk, adv_cap_qty) * cost_haircut))
+
 def validate_row(r, prev_ts):
     """F1/F2: invalid input -> UNKNOWN, never interpolate."""
     for f in ("open", "high", "low", "close", "volume", "sig", "gate"):
@@ -357,3 +377,25 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 10.0)
     assert _close(float(t["cost_usd"]), 5.001145)
     assert _close(float(t["edge_bps"]), 25.0)
+
+def test_7_canonical_sizing_pin():
+    # §T2 fenced size_contracts pinned on the fixture's calibration point:
+    # base = 3000//60 = 50; by_risk = 1500//30.0 = 50; ADV cap = 0.10*2000 = 200;
+    # cost 10.0 bps <= 12.5 bps haircut threshold -> no haircut -> 50.
+    assert size_contracts(1500.0, 30.0, 0.25, 2000, 10.0) == 50
+    # cost haircut path: cost above the threshold halves the ticket
+    assert size_contracts(1500.0, 30.0, 0.25, 2000, 20.0) == 25
+    # risk-stop path binds before the vega budget
+    assert size_contracts(300.0, 30.0, 0.25, 2000, 10.0) == 10
+
+def test_8_risk_limit_ci_gate():
+    # max_adverse_per_trade = 100% of premium [example] (C4 §T2 risk limits);
+    # every replayed ticket's cost_usd <= per_trade_R ($1,500 [example]) and
+    # notional <= the $2,000,000 [default] fat-finger cap.
+    rows, (tickets, mstate) = _replay()
+    assert tickets, "fixture must emit at least one ticket"
+    by_ts = {r["event_ts"]: r for r in rows}
+    for t in tickets:
+        notional = int(t["qty"]) * by_ts[int(t["intent_ts"])]["close"]
+        assert notional <= MAX_TICKET_NOTIONAL, t
+        assert float(t["cost_usd"]) <= PER_TRADE_R, t

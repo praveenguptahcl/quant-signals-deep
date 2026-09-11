@@ -10,6 +10,7 @@ import os
 SID = "T056"
 TOL = 1e-6
 CFG = {'mode': 'z', 'fade': False, 'z_long': 0.75, 'z_short': -0.75, 'conf_scale': 2.0, 'edge_mult': 20.0, 'time_stop': 3, 'exit_flip': False, 'k': 0.5, 'sizing': ('fixed', 500), 'cooldown_bars': 2, 'bar_ns': 1000000000, 'tif': 'IOC', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 3.33, 'fee_bps': 3.33, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
+# NOTE: 'cooldown_bars': 2 is a fixture-harness override; the module default is 5 [default] (§T0.2).
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -88,6 +89,19 @@ def size_qty(dec, r, cfg):
         lot = cfg.get("lot", 1)
         return max(lot, (q // lot) * lot)
     raise ValueError("unknown sizing mode")
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost_bps,
+                fixed_qty=500, sizing_mode="fixed", qty_cap=2000):
+    """Normative sizing per §T2: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    Fixed mode is the operating default. Risk mode: N = floor(R / stop_dist),
+    bounded by the ADV participation cap and the qty cap. cost_bps is consumed
+    by the §T2 entry cost gate (C2 bona-fide intent), not by sizing directly.
+    """
+    if sizing_mode == "fixed":
+        return min(int(fixed_qty), int(qty_cap))
+    risk_shares = int(risk_budget_R // max(stop_distance, 1e-9))
+    return max(min(risk_shares, int(ADV_cap), int(qty_cap)), 0)
 
 def decide(r, pos, cfg):
     """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
@@ -357,3 +371,11 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 6.66)
     assert _close(float(t["cost_usd"]), 9.992298)
     assert _close(float(t["edge_bps"]), 18.0)
+
+def test_7_risk_sizing_respects_budget():
+    # normative §T2 sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)
+    assert size_shares(8.0, 0.015, 0.015, 10_000, 6.66) == 500  # fixed default governs
+    assert size_shares(8.0, 0.015, 0.015, 10_000, 6.66, sizing_mode="risk") == 533  # floor(8/0.015)
+    assert size_shares(8.0, 0.015, 0.015, 100, 6.66, sizing_mode="risk") == 100  # ADV cap binds
+    assert size_shares(8.0, 0.015, 0.015, 10_000, 6.66, sizing_mode="risk", qty_cap=500) == 500  # qty cap binds
+    assert size_shares(8.0, 0.015, 0.015, 0, 6.66, sizing_mode="risk") == 0  # no ADV: stand down

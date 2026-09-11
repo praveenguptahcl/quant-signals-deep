@@ -2,15 +2,16 @@
 
 Template v1.0.0 (strategy). Concrete sketch: loads the fixture tape, runs a
 reference implementation of the chapter's normative pseudocode (entry Boolean +
-cost gate + kill switch), and asserts causality, ticket schema, the cost gate,
-kill-switch behavior, and invalid-input handling.
+cost gate + kill switch + UNKNOWN handling + exit boolean), and asserts
+causality, ticket schema, the cost gate, kill-switch behavior, exit/cooldown
+logic, fixture TYPE headers, and invalid-input handling.
 
 Run: python3 -m pytest modules/tests/test_T077.py -q   (from repo root)
 """
 import csv
 import hashlib
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -22,9 +23,15 @@ GATE_NAMES = ['attainable_ann', 'funding_cover', 'book_depth_ok']
 COST_GATE_K = 0.5                       # [default]
 PER_TRADE_R = 250        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 4  # in units of R [default]
+MAX_GROSS_NOTIONAL = 20_000_000  # [example] §T0 risk contract
+MAX_TICKETS_PER_HOUR = 4  # [default] CR3 message-rate cap
+COOLDOWN_NS = int(24 * 3600 * 1_000_000_000)  # 24 h [default] CR10
+EXIT_ATTAINABLE_ANN = 2.0    # [default] §T2.3
+EXIT_FUNDING_ANN = -5.0      # [default] §T2.3
+EXIT_DIVERGENCE_X = 3.0      # [default] §T2.3 (ratio vs entry basis)
+COST_TOLERANCE_BPS = 1e-6    # [default] §T4 tolerance
 SYMBOL = 'BTC-SPOT:VENUE'
 PARENT_SIGNAL = 'S057'
-INFRA = False  # normative emitter emits OrderTicket intents
 
 # ------------------------------------------------------------ schemas (App C/G)
 @dataclass(frozen=True)
@@ -38,7 +45,7 @@ class OrderTicket:
     parent_signal: str   # "S<nnn>@<computed_at_ns>"
     intent_ts: int       # int64 ns UTC
     state: str           # NEW | WORKING | ...
-    stp: bool = True     # self-trade prevention flag (C1)
+    stp: bool = True     # self-trade prevention flag (C1/CR1)
 
 
 @dataclass
@@ -75,17 +82,33 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def evaluate_exit(position: dict, bar: dict, cfg: dict) -> bool:
+    """§T2.3 / §T3 EXIT boolean for an open pair.
+
+    bar: {attainable_ann, funding_ann, divergence_ratio, hold_days}.
+    divergence_ratio = intraday divergence / entry basis.
+    """
+    max_hold = cfg.get("max_hold_days", 30)
+    return (bar["attainable_ann"] < EXIT_ATTAINABLE_ANN
+            or bar["funding_ann"] < EXIT_FUNDING_ANN
+            or bar["hold_days"] >= max_hold
+            or bar["divergence_ratio"] > EXIT_DIVERGENCE_X)
+
+
 # ------------------------------------------------- normative pseudocode stub
 def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
-    """emit(state, signals, cfg) -> list[OrderTicket] — reference stub.
+    """emit(state, events, cfg) -> list[OrderTicket] — reference stub.
 
-    Intents only (Appendix c v1.0.0): never places orders. Invalid input ->
-    module_state UNKNOWN, never interpolated (F1/F2). Infra publishers (T081)
-    publish bar boundaries downstream and never emit OrderTickets.
+    Intents only (Appendix C v1.0.0): never places orders. Invalid input ->
+    module_state UNKNOWN, never interpolated (F1/F2). Kill check precedes
+    validation: tripped module reports OFF, never UNKNOWN. The reference stub
+    uses each row's signal_ts as the evaluation clock (deterministic replay).
     """
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
+    state.setdefault("cooldown_until", 0)          # CR10: post-exit cooldown
+    state.setdefault("ticket_count_by_hour", {})
     log = state.setdefault("decision_log", [])
 
     def chain_hash(prev, payload):
@@ -112,8 +135,11 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
             append("COMPLIANCE_BLOCK", "invalid-input", f"bad-input@{sig_ts}",
                    before, "UNKNOWN")
             continue
-
-        # Entry Boolean: three chapter gates (all must pass)
+        # CR10: post-exit cooldown blocks entries
+        if sig_ts < state["cooldown_until"]:
+            append("GATE_VETO", "cooldown", f"cooldown@{sig_ts}", before, before)
+            continue
+        # Entry Boolean: three chapter gates (all must pass), fixed order
         gates = []
         for (op, th), v in zip(GATE_CFG, (row["g1"], row["g2"], row["g3"])):
             gates.append(v >= th if op == ">=" else (v <= th if op == "<=" else (v > th if op == ">" else v < th)))
@@ -125,6 +151,17 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if not (cost <= COST_GATE_K * row["edge_bps"]):
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
             continue
+        # CR3: message-rate cap (hourly buckets on the evaluation clock)
+        hour = sig_ts // 3_600_000_000_000
+        counts = state["ticket_count_by_hour"]
+        if counts.get(hour, 0) >= MAX_TICKETS_PER_HOUR:
+            append("GATE_VETO", "message-rate", f"rate-cap@{sig_ts}", before, before)
+            continue
+        # CR4: pre-trade fat-finger trio (qty>0; notional<=gross cap; ADV cap)
+        notional = int(row["qty"]) * row["price"]
+        if not (int(row["qty"]) > 0 and notional <= MAX_GROSS_NOTIONAL):
+            append("GATE_VETO", "fat-finger", f"size-reject@{sig_ts}", before, before)
+            continue
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
         t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
                         tif="IOC", ticket_id=f"{uuid.uuid4()}",
@@ -132,6 +169,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
                         intent_ts=sig_ts + 1000, state="NEW", stp=True)
         assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
         tickets.append(t)
+        counts[hour] = counts.get(hour, 0) + 1
         append("EMIT_INTENT", "emit", t.ticket_id + t.parent_signal + str(t.intent_ts),
                before, state["module_state"])
 
@@ -192,6 +230,23 @@ def test_cost_gate_predicate():
     assert not (cost <= k * 6.68)  # tiny edge -> gate blocks
 
 
+def test_cost_column_matches_expected_within_tolerance():
+    """§T4: the expected.csv cost_bps equals the callable's output within ±1e-6."""
+    row0 = tape_rows()[0]
+    cost = expected_cost_bps(row0["qty"] * row0["price"], 0.001, "venue",
+                             "taker", "normal")
+    exp = load_csv(EXPECTED)[0]
+    assert abs(cost - float(exp["cost_bps"])) <= COST_TOLERANCE_BPS, exp["ticket_idx"]
+
+
+def test_fixture_type_header():
+    """§T4: both fixtures carry the '# TYPE: validation-run' header."""
+    for p in (TAPE, EXPECTED):
+        with open(p) as f:
+            first = f.readline().strip()
+        assert first == "# TYPE: validation-run", p
+
+
 def test_kill_switch_trip():
     """Daily loss beyond the stop trips the switch; emit goes OFF until re-armed."""
     kill = KillSwitch()
@@ -228,8 +283,26 @@ def test_invalid_input_yields_unknown():
     assert state2["module_state"] == "UNKNOWN"
 
 
+def test_exits_and_cooldown():
+    """§T2.3/§T3: EXIT boolean fires on all four triggers; cooldown blocks re-entry."""
+    cfg = {"max_hold_days": 30}
+    pos = {"entry_basis_ann": 13.1}
+    healthy = {"attainable_ann": 13.1, "funding_ann": 10.0,
+               "divergence_ratio": 1.0, "hold_days": 5}
+    assert not evaluate_exit(pos, healthy, cfg)
+    assert evaluate_exit(pos, {**healthy, "attainable_ann": 1.5}, cfg)   # basis decay
+    assert evaluate_exit(pos, {**healthy, "funding_ann": -6.0}, cfg)     # funding flip
+    assert evaluate_exit(pos, {**healthy, "hold_days": 30}, cfg)         # max hold
+    assert evaluate_exit(pos, {**healthy, "divergence_ratio": 3.5}, cfg)  # >3x entry
+    # CR10: cooldown blocks entries for 24 h after an exit
+    # (rows 0-4 are input-valid; row 5's invalid-input path is covered elsewhere)
+    state = {"cooldown_until": tape_rows()[0]["signal_ts"] + COOLDOWN_NS}
+    assert emit(state, tape_rows()[:5], {}) == []
+    assert state["module_state"] == "OK"
+
+
 def test_ticket_schema_and_compliance():
-    """Appendix c schema fields + C1 self-trade prevention + C5 decision log."""
+    """Appendix C schema fields + C1/CR1 self-trade prevention + C5/CR5 decision log."""
     state = {}
     tickets = emit(state, tape_rows(), {})
     assert tickets, "fixture must produce at least one intent"
@@ -240,11 +313,10 @@ def test_ticket_schema_and_compliance():
         assert t.tif in ("DAY", "IOC", "FOK", "GTC", "OPG", "CLS")
         assert t.limit is None or t.limit > 0
         assert t.ticket_id not in seen; seen.add(t.ticket_id)
-        assert t.stp is True                      # C1 self-trade prevention
+        assert t.stp is True                      # C1/CR1 self-trade prevention
         assert "@" in t.parent_signal              # provenance
     log = state["decision_log"]
     assert any(r["action"] == "EMIT_INTENT" for r in log)
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
-        assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
+        assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5/CR5)
         assert rec["hash"]
-

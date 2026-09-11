@@ -1,8 +1,11 @@
 # TYPE: validation-run
-trade_id,side,qty,entry_px,exit_px,signal_ts,fill_ts,notional,adv_pct,venue,order_side,urgency,spread_bps,fee_bps,borrow_bps,impact_bps,exit_reason
+# SYNTHETIC: true
+# SEED: 119
+# NOTE: hand-checkable synthetic trades; borrow accrues 1 day on short (SELL) legs at 50 bps/yr [example]
+trade_id,side,qty,entry_px,exit_px,signal_ts,fill_ts,notional,adv_pct,venue,exec_side,urgency,spread_bps,fee_bps,borrow_bps,impact_bps,exit_reason
 1,BUY,500,50.2,54.8,1788960600000000000,1789047000000000000,25100.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,10-day Donchian exit
-2,SELL,500,49.8,45.2,1789047000000000000,1789133400000000000,24900.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,10-day Donchian exit
-3,BUY,500,50.2,48.2,1789133400000000000,1789219800000000000,25100.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,2×ATR stop
+2,SELL,500,49.8,45.2,1789047000000000000,1789133400000000000,24900.0,0.02,XNAS,taker,normal,4.0,2.0,0.1370,4.0,10-day Donchian exit
+3,BUY,500,50.2,48.2,1789133400000000000,1789219800000000000,25100.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,2xATR stop
 4,BUY,500,50.3,52.1,1789219800000000000,1789306200000000000,25150.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,10-day Donchian exit
-5,SELL,500,49.7,49.7,1789306200000000000,1789392600000000000,24850.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,regime unwind
+5,SELL,500,49.7,49.7,1789306200000000000,1789392600000000000,24850.0,0.02,XNAS,taker,normal,4.0,2.0,0.1370,4.0,regime unwind
 6,BUY,500,50.25,53.4,1789392600000000000,1789479000000000000,25125.0,0.02,XNAS,taker,normal,4.0,2.0,0.0,4.0,10-day Donchian exit

@@ -1,4 +1,4 @@
-"""Concrete sketch: T005 RVOL-Filtered Opening-Range Breakout.
+"""Acceptance tests: T005 RVOL-Filtered Opening-Range Breakout.
 
 Run: python3 -m pytest modules/tests/test_T005.py -q
 """
@@ -13,6 +13,7 @@ TOL = 1e-9
 CSV_TOL_BPS = max(TOL, 1e-4)  # expected CSV rounds bps to 4 dp
 CSV_TOL_USD = max(TOL, 0.01)  # expected CSV rounds dollars to 2 dp
 
+
 def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     """Callable cost model - T005 COST block (single source of truth)."""
     spread_bps = 8.0    # [example] $0.02 assumed spread @ $50: half/aggressive leg x 2
@@ -20,6 +21,7 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency) -> float:
     borrow_bps = 0.0    # [default] intraday; shorts C7-gated
     impact_bps = 12.0   # [example] 6c gap-through above trigger close on $50 name
     return spread_bps + fee_bps + borrow_bps + impact_bps
+
 
 def load_csv(path):
     with open(path) as f:
@@ -51,7 +53,7 @@ def test_fixture_arithmetic():
         stack_bps = (float(t["spread_bps"]) + float(t["fee_bps"])
                      + float(t["borrow_bps"]) + float(t["impact_bps"]))
         cbps = expected_cost_bps(notional, float(t["adv_pct"]), t["venue"],
-                                 "taker", t["urgency"])
+                                 t["order_side"], t["urgency"])
         assert abs(cbps - stack_bps) <= TOL
         assert abs(cbps - float(e["expected_cost_bps"])) <= CSV_TOL_BPS
         sign = 1 if t["side"] in ("BUY", "LONG") else -1
@@ -59,6 +61,8 @@ def test_fixture_arithmetic():
         net = gross - notional * cbps / 10000.0
         assert abs(gross - float(e["gross_pnl"])) <= CSV_TOL_USD
         assert abs(net - float(e["net_pnl"])) <= CSV_TOL_USD
+        # the fixture stores the tape's own side column; callable uses it too
+        assert t["order_side"] == "taker"
 
 
 def test_no_signal_bar_fills():
@@ -81,20 +85,39 @@ def test_cost_gate_predicate():
         assert not (c <= k * 0.05), "cost gate must block when edge << cost"
 
 
-def test_kill_switch_trips_and_rearms():
-    # ARMED -> TRIPPED -> RECOVERY -> ARMED
+def test_kill_switch_cycle():
+    # ARMED -> TRIPPED -> RECOVERY -> ARMED, with a re-arm checklist gate
+    kill_conditions = [
+        "3 consecutive stops before 11:00 [example]",
+        "daily loss stop hit [example]",
+        "no 5-min bar within 30 s of expected close [example]",
+        "clock skew > 50 ms [default]",
+        "5 concurrent positions reached [example]",
+    ]
+    assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
+
+    def trip(state, condition):
+        assert condition in kill_conditions
+        return "TRIPPED"
+
+    def rearm(checklist):
+        return "RECOVERY" if all(checklist.values()) else "TRIPPED"
+
     state = "ARMED"
-    kill_conditions = ["3 consecutive stops before 11:00 [example]", "no 5-min bar within 30 s of expected close [example]", "clock skew > 50 ms [example]", "5 concurrent positions reached [example]"]
-    stale_s = 60.0
-    if stale_s >= 2.0:
-        state = "TRIPPED"   # cancel all, flatten, OFF
+    state = trip(state, "3 consecutive stops before 11:00 [example]")
     assert state == "TRIPPED"
-    checklist = [True, True, True, True, True]
-    assert all(checklist)
-    state = "RECOVERY"
+    # incomplete checklist: manual review missing -> stays TRIPPED
+    bad = {"manual_review": False, "cooldown_expired": True, "feed_healthy": True,
+           "log_reconciled": True}
+    assert rearm(bad) == "TRIPPED"
+    # complete checklist -> RECOVERY
+    good = {"manual_review": True, "cooldown_expired": True, "feed_healthy": True,
+            "log_reconciled": True}
+    state = rearm(good)
+    assert state == "RECOVERY"
+    # re-verification in RECOVERY -> ARMED
     state = "ARMED"
     assert state == "ARMED"
-    assert isinstance(kill_conditions, list) and len(kill_conditions) >= 3
 
 
 def test_invalid_input_emits_unknown():
@@ -111,3 +134,26 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_order_ticket_intent_schema():
+    # T005 emits OrderTicket INTENTIONS only; the broker owns wire order ids.
+    # Strategy-generated ticket (idempotency key, provenance, STP flag):
+    ticket = {
+        "ticket_id": "int-0001",          # module-generated UUID, idempotency key
+        "symbol": "XYZ",
+        "side": "BUY",
+        "qty": 405,
+        "limit": 50.54,
+        "tif": "DAY",
+        "parent_signal": "S021@1788960600000000000",
+        "intent_ts": 1788960600000000000,
+        "state": "NEW",
+        "self_trade_prevention": True,
+    }
+    required = {"ticket_id", "symbol", "side", "qty", "limit", "tif",
+                "parent_signal", "intent_ts", "state", "self_trade_prevention"}
+    assert required.issubset(ticket.keys())
+    assert ticket["qty"] > 0
+    assert ticket["state"] in ("NEW", "WORKING", "FILLED", "PARTIAL", "CANCELLED")
+    assert "order_id" not in ticket, "strategies never assign wire order ids"

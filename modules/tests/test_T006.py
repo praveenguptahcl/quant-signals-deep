@@ -111,3 +111,47 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def test_expected_summary_consistent():
+    # the SUMMARY row must equal hand-recomputed sums from the tape
+    _, tape = load_csv(TAPE)
+    _, exp = load_csv(EXPECTED)
+    gross_sum = 0.0
+    net_sum = 0.0
+    for t in tape:
+        qty = float(t["qty"])
+        entry = float(t["entry_px"])
+        exitp = float(t["exit_px"])
+        notional = float(t["notional"])
+        stack_bps = (float(t["spread_bps"]) + float(t["fee_bps"])
+                     + float(t["borrow_bps"]) + float(t["impact_bps"]))
+        sign = 1 if t["side"] in ("BUY", "LONG") else -1
+        gross_sum += sign * (exitp - entry) * qty
+        net_sum += sign * (exitp - entry) * qty - notional * stack_bps / 10000.0
+    summary = {e["trade_id"]: e for e in exp}["SUMMARY"]
+    assert abs(gross_sum - float(summary["gross_pnl"])) <= CSV_TOL_USD
+    assert abs(net_sum - float(summary["net_pnl"])) <= CSV_TOL_USD
+
+
+def test_moc_exit_discipline():
+    # every trade exits at the 16:00 close: fill exactly 1800 s after signal,
+    # exit reason is the MOC print
+    _, tape = load_csv(TAPE)
+    for t in tape:
+        assert int(t["fill_ts"]) - int(t["signal_ts"]) == 1_800_000_000_000
+        assert "MOC" in t["exit_reason"], "exit must be the 16:00 MOC print"
+
+
+def test_cost_gate_k_matches_config():
+    # fixture cost_gate_k must equal the §T0 Config default (0.5), and the
+    # §T1 modeled edge must clear the C3 gate: 1.0 bps <= 0.5 * 13.75 bps
+    _, exp = load_csv(EXPECTED)
+    edge_bps = 0.0025 * 1e4 * 0.55  # [example] modeled edge from §T1
+    for e in exp:
+        if e["trade_id"] == "SUMMARY":
+            continue
+        k = float(e["cost_gate_k"])
+        assert k == 0.5
+        c = float(e["expected_cost_bps"])
+        assert c <= k * edge_bps, "C3 gate must pass on the fixture tape"

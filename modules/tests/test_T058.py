@@ -77,24 +77,26 @@ def size_qty(dec, r, cfg):
     mode = cfg["sizing"][0]
     if mode == "fixed":
         return int(cfg["sizing"][1])
-    if mode == "risk":
-        R_usd, _ = cfg["sizing"][1], None
-        sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
-        return max(1, int(R_usd // sd))
-    if mode == "conf":
-        q_base, c_min = cfg["sizing"][1], cfg["sizing"][2]
-        frac = max(0.0, dec["conf"] - c_min) / max(1.0 - c_min, 1e-9)
-        q = int(q_base * frac)
-        lot = cfg.get("lot", 1)
-        return max(lot, (q // lot) * lot)
     raise ValueError("unknown sizing mode")
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Normative sizing — mirrors the fenced §T2 function exactly.
+    shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    ADV_CONTRACTS_PER_DAY = 10_000  # [example] — pin per-name from ORATS volume history
+    risk_size = risk_budget_R / max(stop_distance, 1e-9)          # [default] R-based size
+    vol_size = (risk_budget_R * 2.0) / max(vol_estimate, 1e-9)    # [default] vol-normalized cap
+    adv_size = ADV_cap * ADV_CONTRACTS_PER_DAY                    # [example] participation cap
+    base = min(risk_size, vol_size, adv_size)                     # [default] tightest cap binds
+    edge_bps = max(float(cost["edge_bps"]), 1e-9)
+    haircut = 1.0 - min(0.5, float(cost["cost_bps"]) / edge_bps)  # [default] cost haircut, capped at 50%
+    return max(0, int(base * haircut))
 
 def decide(r, pos, cfg):
     """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
     mode = cfg["mode"]
     s = r["sig"]
     if mode == "allocator":
-        # T053-style: regime tilt on the proxy; dead zone holds.
+        # Regime-tilt allocator on the proxy; dead zone holds.
         cur = pos["sleeve"] if pos else None
         if s >= 0.65 and cur != "MOM":
             return {"action": "enter", "side": "BUY", "sleeve": "MOM",
@@ -106,7 +108,7 @@ def decide(r, pos, cfg):
             return {"action": "exit", "reason": "dead_zone"}
         return None
     if mode == "toggle":
-        # T054-style: Hurst toggle; dead zone [0.45, 0.55] is dark.
+        # Hurst-style toggle; dead zone [0.45, 0.55] is dark.
         if pos is None:
             if r["gate"] != 1:
                 return None
@@ -357,3 +359,17 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 10.0)
     assert _close(float(t["cost_usd"]), 4.000916)
     assert _close(float(t["edge_bps"]), 22.5)
+
+def test_7_normative_size_shares():
+    # Worked call from the §T2 fenced function (mirrors it exactly).
+    n = size_shares(2000.0, 250.0, 100.0, 0.05, {"cost_bps": 10.0, "edge_bps": 22.5})
+    assert n == 4, n  # min(8, 40, 500)=8; haircut 1-10/22.5 -> 4 contracts
+    # risk_size binds: larger stop_distance -> smaller size
+    assert size_shares(2000.0, 500.0, 100.0, 0.05, {"cost_bps": 10.0, "edge_bps": 22.5}) < n
+    # vol cap binds when vol_estimate is extreme
+    assert size_shares(2000.0, 250.0, 1e6, 0.05, {"cost_bps": 10.0, "edge_bps": 22.5}) == 0
+    # cost at the gate edge haircuts to half of the tightest cap
+    assert size_shares(2000.0, 250.0, 100.0, 0.05, {"cost_bps": 22.5, "edge_bps": 22.5}) == 4
+    # never negative, ADV cap is a real ceiling
+    s_big = size_shares(1e9, 0.01, 0.01, 0.05, {"cost_bps": 0.0, "edge_bps": 1e6})
+    assert 0 <= s_big <= int(0.05 * 10_000)

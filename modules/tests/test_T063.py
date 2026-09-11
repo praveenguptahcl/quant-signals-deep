@@ -9,7 +9,13 @@ import os
 
 SID = "T063"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': True, 'z_long': 2.5, 'z_short': -2.5, 'conf_scale': 1.0, 'edge_mult': 2.5, 'time_stop': 24, 'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 300.0, None), 'cooldown_bars': 6, 'bar_ns': 300000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05, 'cost': {'spread_bps': 2.5, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
+CFG = {'mode': 'z', 'fade': True, 'z_long': 2.5, 'z_short': -2.5, 'conf_scale': 1.0, 'edge_mult': 2.5,
+       'time_stop': 24,  # time_stop_bars (T0.2 Config)
+       'stop_z': 3.5, 'news_lookback_min': 30,
+       'exit_flip': False, 'k': 0.5, 'sizing': ('risk', 300.0, None),
+       'adv_cap_shares': None, 'cooldown_bars': 6, 'bar_ns': 300000000000,
+       'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'taker', 'adv_pct': 0.05,
+       'cost': {'spread_bps': 2.5, 'fee_bps': 0.24, 'borrow_bps': 0.0, 'impact_bps': 0.0}}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -73,14 +79,30 @@ def validate_row(r, prev_ts):
         return False
     return True
 
+def size_shares(risk_budget_R, stop_distance, vol_estimate, adv_cap_shares, cost_bps):
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    Cheapest build (T2 sizing block): dollar-risk N = floor(R/stop_distance).
+    vol_estimate is validated finite-positive here (F2) but otherwise
+    informational; adv_cap_shares caps participation; cost_bps is recorded on
+    the ticket, not netted (intent-only doctrine).
+    """
+    if stop_distance <= 0 or vol_estimate <= 0:
+        raise ValueError("invalid sizing input -> UNKNOWN")
+    qty = int(risk_budget_R // max(stop_distance, 1e-9))
+    if adv_cap_shares is not None:
+        qty = min(qty, int(adv_cap_shares))
+    return max(1, qty)
+
 def size_qty(dec, r, cfg):
     mode = cfg["sizing"][0]
     if mode == "fixed":
         return int(cfg["sizing"][1])
     if mode == "risk":
-        R_usd, _ = cfg["sizing"][1], None
+        R_usd = cfg["sizing"][1]
         sd = max(float(r.get("stop_dist", 0.0)), 1e-9)
-        return max(1, int(R_usd // sd))
+        # cheapest-build proxy: 5-min-bar stop distance stands in for vol_estimate
+        return size_shares(R_usd, sd, sd, cfg.get("adv_cap_shares"), 0.0)
     if mode == "conf":
         q_base, c_min = cfg["sizing"][1], cfg["sizing"][2]
         frac = max(0.0, dec["conf"] - c_min) / max(1.0 - c_min, 1e-9)
@@ -138,7 +160,7 @@ def decide(r, pos, cfg):
         return None
     # mode == "z": signed-score trigger, fade or trend.
     if pos is None:
-        if r["gate"] != 1:
+        if r["gate"] != 1:  # gate==1 <=> no news in trailing news_lookback_min (§T0.3 proxy)
             return None
         side = None
         if not cfg["fade"]:
@@ -156,6 +178,11 @@ def decide(r, pos, cfg):
         conf = min(1.0, abs(s) / cfg["conf_scale"])
         return {"action": "enter", "side": side,
                 "edge_bps": abs(s) * cfg["edge_mult"], "conf": conf}
+    # exits, fail-safe priority: stop-z first, then snap-back band, then time stop
+    if pos["side"] in ("SELL", "SHORT") and s >= cfg["stop_z"]:
+        return {"action": "exit", "reason": "stop_z"}
+    if pos["side"] == "BUY" and s <= -cfg["stop_z"]:
+        return {"action": "exit", "reason": "stop_z"}
     if pos["bars_held"] + 1 >= cfg["time_stop"]:
         return {"action": "exit", "reason": "time_stop"}
     if cfg["exit_flip"]:
@@ -163,7 +190,7 @@ def decide(r, pos, cfg):
             return {"action": "exit", "reason": "sig_flip"}
         if pos["side"] in ("SELL", "SHORT") and s > 0:
             return {"action": "exit", "reason": "sig_flip"}
-    if abs(s) < 0.1 * cfg["z_long"]:
+    if abs(s) < 0.1 * cfg["z_long"]:  # snap-back band: proxy for "z crosses 0"
         return {"action": "exit", "reason": "exit_signal"}
     return None
 
@@ -354,6 +381,38 @@ def test_6_handcheck_literals():
     t = tickets[0]
     assert t["ticket_id"] == "T-T063-2-0"
     assert int(t["qty"]) == 400
-    assert _close(float(t["cost_bps"]), 2.9)
-    assert _close(float(t["cost_usd"]), 29.006635)
+    assert _close(float(t["cost_bps"]), 2.74)
+    assert _close(float(t["cost_usd"]), 27.406269)
     assert _close(float(t["edge_bps"]), 7.0)
+
+def test_7_stop_z_exit_fires():
+    """The |z| >= stop_z stop (stretch stretched further) exits a live fade."""
+    rows = _load(SID + "_tape.csv")
+    rows = [dict(r) for r in rows]
+    rows[3]["sig"] = 3.6  # SHORT fade from bar 2, stretch stretches further at bar 3
+    tickets, mstate = emit_intents(rows, CFG, SID, "S045")
+    assert mstate == "OK"
+    assert len(tickets) == 2, [t["ticket_id"] for t in tickets]
+    x = tickets[1]
+    assert x["action"] == "exit" and x["reason"] == "stop_z", x
+    assert x["side"] == "BUY"  # covers the SHORT fade
+    assert x["fill_ts"] > x["signal_ts"]
+
+def _synth_row(ts, sig, close=250.0):
+    return {"event_ts": ts, "symbol": "AAA", "open": close, "high": close + 0.2,
+            "low": close - 0.2, "close": close, "volume": 100000, "sig": sig,
+            "gate": 1, "stop_dist": 0.75}
+
+def test_8_cooldown_suppresses_reentry():
+    """After an exit, a fresh stretch inside cooldown_bars emits no new ticket (C10)."""
+    t0 = 1788874200000000000
+    bar = CFG["bar_ns"]
+    rows = [_synth_row(t0, 2.8),          # enter SHORT fade
+            _synth_row(t0 + bar, 0.1),    # snap-back -> exit, cooldown arms
+            _synth_row(t0 + 2 * bar, 2.8)]  # fresh stretch, still inside cooldown
+    tickets, mstate = emit_intents(rows, CFG, SID, "S045")
+    assert mstate == "OK"
+    enters = [t for t in tickets if t["action"] == "enter"]
+    exits = [t for t in tickets if t["action"] == "exit"]
+    assert len(enters) == 1 and len(exits) == 1, [(t["action"], t["ticket_id"]) for t in tickets]
+    assert int(rows[2]["event_ts"]) < int(tickets[1]["signal_ts"]) + CFG["cooldown_bars"] * bar

@@ -111,3 +111,35 @@ def test_invalid_input_emits_unknown():
 def test_cost_callable_signature():
     c = expected_cost_bps(250000.0, 0.5, "XNAS", "taker", "normal")
     assert isinstance(c, float) and math.isfinite(c)
+
+
+def _enter(vrp, ts, pj, cost_ok, vrp_entry=3.0, ts_slope_min=0.0,
+           p_jump_max=0.30):
+    # mirrors the §T2 Boolean entry rule: all four must hold
+    return ((vrp >= vrp_entry) and (ts >= ts_slope_min)
+            and (pj <= p_jump_max) and cost_ok)
+
+
+def _exit(vrp, ts, pj, realized, implied, vrp_exit=1.0, stop_vrp=-1.0,
+          ts_slope_min=0.0, p_jump_max=0.30):
+    # mirrors the §T2 exit rule: any one unwinds
+    return ((vrp <= vrp_exit) or (vrp <= stop_vrp) or (ts < ts_slope_min)
+            or (pj > p_jump_max) or (realized > 2.0 * implied))
+
+
+def test_entry_exit_boolean_rules():
+    # enter fires only when premium wide + contango + jump gate clear + cost gate
+    assert _enter(4.0, 0.5, 0.2, True)
+    assert not _enter(2.0, 0.5, 0.2, True), "vrp below entry -> FLAT"
+    assert not _enter(4.0, -0.5, 0.2, True), "backwardation vetoes"
+    assert not _enter(4.0, 0.5, 0.35, True), "jump gate vetoes"
+    assert not _enter(4.0, 0.5, 0.2, False), "cost gate blocks"
+    # boundary: exactly at thresholds enters
+    assert _enter(3.0, 0.0, 0.30, True)
+    # exits
+    assert _exit(0.5, 0.3, 0.2, 15.0, 12.0), "premium harvested"
+    assert _exit(-1.5, 0.3, 0.2, 15.0, 12.0), "stop: premium inverts"
+    assert _exit(2.0, -0.1, 0.2, 15.0, 12.0), "term-structure inversion"
+    assert _exit(2.0, 0.3, 0.35, 15.0, 12.0), "jump gate"
+    assert _exit(2.0, 0.3, 0.2, 30.0, 12.0), "vol-spike kill"
+    assert not _exit(2.0, 0.3, 0.2, 15.0, 12.0), "no exit condition -> hold"

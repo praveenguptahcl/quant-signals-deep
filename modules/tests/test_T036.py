@@ -60,6 +60,7 @@ class Config:
     borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
     impact_k: float = 0.5
     daily_loss_stop_pct: float = -2.0
+    cooldown_min: int = 5          # post-exit re-entry cooldown, minutes [default]
     venue: str = "XNAS"
     default_side: str = "BUY"      # BUY | SHORT
 
@@ -119,6 +120,11 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
+    # Post-exit cooldown: no re-entry while inside the cooldown window
+    if (state.get("position", 0) == 0
+            and state.get("cooldown_until", 0) > 0
+            and bar["event_ts"] < state["cooldown_until"]):
+        return None, "OK", "cooldown"
     # Position sizing: risk_R / (stop_frac * price), ADV-capped
     raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
     cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
@@ -151,6 +157,7 @@ def process_bar(state, bar, cfg):
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
         state["position"] = 0
+        state["cooldown_until"] = bar["event_ts"] + cfg.cooldown_min * 60 * 1_000_000_000
         return ticket, "OK", "exit"
     return None, "OK", "hold"
 
@@ -194,7 +201,7 @@ def expected():
 
 
 def fresh_state():
-    return {"position": 0, "kill": KillSwitch()}
+    return {"position": 0, "cooldown_until": 0, "kill": KillSwitch()}
 
 
 def run_tape():

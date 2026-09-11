@@ -1,4 +1,4 @@
-# TYPE: expected-output
+# TYPE: validation-run
 ticket_id,symbol,side,qty,limit,tif,parent_signal,intent_ts,signal_ts,fill_ts,leg,edge_bps,cost_bps,cost_usd,gate,action,reason
 T-T072-2-0,AAA,BUY,400,,DAY,S097@1788874800000000000,1788874800000000000,1788874800000000000,1788875100000000000,,10.5,4.4,44.010067,PASS,enter,
 T-T072-8-X,AAA,SELL,400,,DAY,S097@1788876600000000000,1788876600000000000,1788876600000000000,1788876900000000000,,0.0,4.4,44.006072,N/A,exit,time_stop

@@ -1,14 +1,22 @@
-"""Acceptance tests for T032 - Copula Tail-Dependence Pairs.
+"""Acceptance tests for T032 - Copula Tail-Dependence Pairs (v1.1.0).
 
-Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
-reference emit() (normative pseudocode via process_bar), and asserts the
-TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
-the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
+Template v1.0.0. Loads the fixture tape, runs the module's reference
+emit() (normative pseudocode via process_bar), and asserts the TYPE
+header, fixture-vs-expected agreement, causality (no-signal-bar fills),
+the cost-gate predicate, kill-switch trip/re-arm, invalid-input handling,
+the canonical sizing function, the pair-leg mirror invariant, the
+borrow-day convention, and the post-exit cooldown.
+
+The fixture tape is a SINGLE-LEG synthetic tape: expected.csv records the
+primary (long) leg ticket only. Production emits the mirrored pair via
+pair_tickets(); the mirror invariant is tested in
+test_pair_mirror_legs.
 
 Run: python3 -m pytest modules/tests/test_T032.py -q   (from repo root)
 """
 import csv
 import math
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -16,7 +24,7 @@ TAPE = FIX / "T032_tape.csv"
 EXPECTED = FIX / "T032_expected.csv"
 
 TOL = 1e-9  # tolerance on float comparisons
-
+ONE_SESSION_NS = 86_400_000_000_000  # 1 session = 1 day (C10 cooldown) [default]
 
 
 """Reference implementation for T-module acceptance tests (shared sketch).
@@ -33,7 +41,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class OrderTicket:
     symbol: str
-    side: str            # BUY | SELL | SHORT - intent, not a wire order
+    side: str            # BUY | SELL | SHORT | LONG - intent, not a wire order
     qty: int             # shares, integer, > 0
     limit: float | None  # limit price; None = marketable intent
     tif: str             # DAY | IOC | FOK | GTC | OPG | CLS
@@ -54,10 +62,12 @@ class Config:
     stop_bps: float = 100.0
     adv_cap_pct: float = 10.0
     spread_full_bps: float = 10.0
-    taker_fee_bps: float = 0.30
-    maker_rebate_bps: float = 0.20
+    taker_fee_bps: float = 0.3
+    maker_rebate_bps: float = 0.2
     side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
+    borrow_bps: float = 0.0         # folded round-trip short-leg charge [example]
+    borrow_bps_per_day: float = 5.0  # convention: borrow_bps = per_day x hold_days [example]
+    expected_hold_days: float = 10.0  # expected pair holding period [example]
     impact_k: float = 0.5
     daily_loss_stop_pct: float = -2.0
     venue: str = "XNAS"
@@ -89,7 +99,13 @@ class KillSwitch:
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
-    """4-component cost stack (COST-block callable). Example values."""
+    """4-component cost stack (COST-block callable). Per-leg cost.
+
+    borrow_bps is the FOLDED round-trip short-leg charge; the convention
+    borrow_bps == borrow_bps_per_day * expected_hold_days is asserted in
+    test_borrow_convention (the callable keeps the mandated 5-arg signature
+    and reads the folded value from cfg).
+    """
     spread_bps = cfg.spread_full_bps / 2.0
     fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
     borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
@@ -99,12 +115,46 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def size_copula(risk_budget_R, stop_distance_bps, vol_estimate, px,
+                adv_cap_pct, adv_shares, cost_gate_ok):
+    """Canonical position sizing: shares = f(risk_budget_R, stop_distance,
+    vol_estimate, ADV_cap, cost). vol_estimate is carried for the typed
+    contract but unused in the reference build [default]; the cost term
+    enters as the cost-gate predicate (False -> no position), per the §T3
+    normative pseudocode.
+    """
+    del vol_estimate  # retained for the typed contract only
+    raw_qty = risk_budget_R / max(stop_distance_bps / 1e4 * px, 1e-9)
+    cap_qty = int(adv_cap_pct / 100.0 * adv_shares)
+    qty = max(1, min(int(raw_qty), cap_qty))
+    return qty if cost_gate_ok else 0
+
+
+def pair_tickets(primary):
+    """Mirror the primary leg ticket into the production pair.
+
+    leg-B = same qty, opposite side (LONG <-> SHORT), fresh ticket id, same
+    provenance/parent signal/intent_ts. Short leg requires locate_ok (C7);
+    both legs must fill or neither does (leg-risk, §T8 #3).
+    """
+    opposite = {"LONG": "SHORT", "SHORT": "LONG",
+                "BUY": "SELL", "SELL": "BUY"}[primary.side]
+    leg_b = OrderTicket(
+        symbol=primary.symbol, side=opposite, qty=primary.qty,
+        limit=primary.limit, tif=primary.tif,
+        ticket_id=primary.ticket_id + "-B",
+        parent_signal=primary.parent_signal,
+        intent_ts=primary.intent_ts, state="NEW")
+    return primary, leg_b
+
+
 def process_bar(state, bar, cfg):
     """One bar through the strategy. Returns (ticket|None, module_state, note).
 
     Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
-    switch -> size -> normative cost-gate predicate -> entry/exit rules.
-    Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
+    switch -> size via size_copula -> normative cost-gate predicate ->
+    entry/exit rules -> C10 post-exit cooldown. Earliest fill for a bar-t
+    intent is bar t+1's open (t -> t+1).
     """
     ks = state["kill"]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
@@ -119,17 +169,21 @@ def process_bar(state, bar, cfg):
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
     # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
+    # Position sizing (canonical): shares = f(risk_budget_R, stop_distance,
+    # vol_estimate, ADV_cap, cost). The cost term vetoes ENTRY via the gate
+    # predicate; exits are never cost-gated, so size them with cost_ok=True.
+    qty = size_copula(cfg.risk_R_usd, bar["stop_bps"], 0.0, bar["close"],
+                     cfg.adv_cap_pct, bar["adv_shares"], True)
     z = bar["signal_z"]
     pos = state.get("position", 0)
     if pos == 0:
+        # C10 post-exit cooldown: suppress re-entry until it elapses
+        if bar["event_ts"] < state.get("cooldown_until", 0):
+            return None, "OK", "cooldown"
         if abs(z) >= cfg.z_entry and gate:
             side = cfg.default_side
             ticket = OrderTicket(
@@ -151,6 +205,7 @@ def process_bar(state, bar, cfg):
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
         state["position"] = 0
+        state["cooldown_until"] = bar["event_ts"] + ONE_SESSION_NS
         return ticket, "OK", "exit"
     return None, "OK", "hold"
 
@@ -161,7 +216,8 @@ CFG = Config(
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=3.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=50.0, impact_k=25.0,
+    borrow_bps=50.0, borrow_bps_per_day=5.0, expected_hold_days=10.0,
+    impact_k=25.0,
     daily_loss_stop_pct=1.0, venue="primary",
     default_side="LONG")
 
@@ -204,6 +260,17 @@ def run_tape():
         t, ms, note = process_bar(st, b, CFG)
         out.append((b, t, ms, note))
     return out
+
+
+def _bar(**kw):
+    base = {"bar": 99, "event_ts": 1790000000000000000,
+            "asof_ts": 1790000000000000000, "symbol": "XYZ", "close": 100.0,
+            "signal_z": 2.4, "edge_bps": 14.0, "notional": 100000,
+            "adv_pct": 0.5, "adv_shares": 2000000, "stop_bps": 25,
+            "urgency": "normal", "market_state": "CONTINUOUS_TRADING",
+            "daily_pnl_pct": 0.05}
+    base.update(kw)
+    return base
 
 
 # ------------------------------------------------------------------- tests
@@ -268,7 +335,8 @@ def test_cost_gate_predicate():
     if cost_bps > 0:
         blocked = bars[7]
         cost7 = expected_cost_bps(blocked["notional"], blocked["adv_pct"], CFG.venue,
-                                  CFG.side_exec, blocked["urgency"], CFG)
+                                  blocked["side_exec"] if "side_exec" in blocked else CFG.side_exec,
+                                  blocked["urgency"], CFG)
         assert not (cost7 <= CFG.cost_gate_k * blocked["edge_bps"])  # tiny edge blocks
     else:
         # zero-cost overlay/filter/normalizer: the predicate holds vacuously
@@ -311,3 +379,90 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+
+
+def test_sizing_canonical():
+    """§T2 canonical sizing: shares = f(risk_budget_R, stop_distance,
+    vol_estimate, ADV_cap, cost). Bar-3 reference: 996 shares; ADV cap
+    binds on thin books; failed cost gate -> 0."""
+    assert size_copula(250, 25, 0.0, 100.33, 1.0, 2_000_000, True) == 996
+    assert size_copula(250, 25, 0.0, 100.33, 1.0, 2_000_000, False) == 0
+    assert size_copula(250, 25, 0.0, 100.33, 1.0, 500, True) == 5  # ADV cap binds
+    assert size_copula(500, 25, 0.0, 100.33, 1.0, 2_000_000, True) == 1993  # linear in R
+    assert size_copula(250, 25, 0.0, 100.33, 1.0, 2_000_000, True) >= 1
+
+
+def test_pair_mirror_legs():
+    """Production pair invariant: two legs, opposite sides, equal qty,
+    shared provenance; short leg carries the locate requirement (C7)."""
+    st = fresh_state()
+    t3, ms3, note3 = process_bar(st, dict(tape()[3]), CFG)
+    assert t3 is not None and note3 == "entry"
+    leg_a, leg_b = pair_tickets(t3)
+    assert leg_a.qty == leg_b.qty == 996
+    assert {leg_a.side, leg_b.side} == {"LONG", "SHORT"}
+    assert leg_b.ticket_id == t3.ticket_id + "-B"
+    assert leg_b.parent_signal == t3.parent_signal
+    assert leg_b.intent_ts == t3.intent_ts
+    assert leg_b.state == "NEW"
+    # the fixture records only the primary leg; the mirror is the production
+    # contract tested here, not in expected.csv
+
+
+def test_borrow_convention():
+    """Borrow convention: folded round-trip bps == per-day x hold days."""
+    assert math.isclose(CFG.borrow_bps,
+                        CFG.borrow_bps_per_day * CFG.expected_hold_days,
+                        rel_tol=TOL)
+    # short-leg stack includes the folded borrow charge
+    short_cfg = replace(CFG, default_side="SHORT")
+    leg = expected_cost_bps(100000, 0.5, CFG.venue, "taker", "normal", CFG)
+    short_leg = expected_cost_bps(100000, 0.5, CFG.venue, "taker", "normal",
+                                  short_cfg)
+    assert math.isclose(short_leg - leg, CFG.borrow_bps, rel_tol=TOL)
+
+
+def test_pair_level_cost_stack():
+    """Honesty test: the tape gates the recorded (long) leg only; the true
+    pair stack = 2 x (spread + fee + impact) + borrow_roundtrip."""
+    leg = expected_cost_bps(100000, 0.5, CFG.venue, "taker", "normal", CFG)
+    short_cfg = replace(CFG, default_side="SHORT")
+    short_leg = expected_cost_bps(100000, 0.5, CFG.venue, "taker", "normal",
+                                  short_cfg)
+    pair_one_way = leg + short_leg
+    assert math.isclose(pair_one_way,
+                        2 * (CFG.spread_full_bps / 2.0 + CFG.taker_fee_bps
+                             + CFG.impact_k * math.sqrt(0.5 / 100.0))
+                        + CFG.borrow_bps,
+                        rel_tol=TOL)
+    assert math.isclose(pair_one_way, 57.13553390693274, rel_tol=1e-6)
+    assert math.isclose(2 * pair_one_way, 114.27106781386548, rel_tol=1e-6)  # round-trip
+    # with the full pair stack the bar-3 edge would NOT clear the gate:
+    # the fixture's single-leg gate is documented optimism, not production
+    assert not (pair_one_way <= CFG.cost_gate_k * 14.271067811865475)
+
+
+def test_exit_cooldown():
+    """C10: after an exit, re-entry is suppressed for one session."""
+    st = fresh_state()
+    ts0 = 1790000000000000000
+    entry_bar = _bar(bar=0, event_ts=ts0, asof_ts=ts0)
+    t, ms, note = process_bar(st, entry_bar, CFG)
+    assert t is not None and note == "entry"
+    ts1 = ts0 + ONE_SESSION_NS
+    exit_bar = _bar(bar=1, event_ts=ts1, asof_ts=ts1, signal_z=0.25)
+    t1, ms1, note1 = process_bar(st, exit_bar, CFG)
+    assert t1 is not None and note1 == "exit"
+    # re-entry one session later (cooldown satisfied) is allowed
+    ts2 = ts1 + ONE_SESSION_NS
+    again = _bar(bar=2, event_ts=ts2, asof_ts=ts2)
+    t2, ms2, note2 = process_bar(st, again, CFG)
+    assert t2 is not None and note2 == "entry"
+    # but an entry signal inside the cooldown window is suppressed
+    st2 = fresh_state()
+    process_bar(st2, entry_bar, CFG)
+    process_bar(st2, exit_bar, CFG)
+    mid = _bar(bar=2, event_ts=ts1 + ONE_SESSION_NS // 2,
+               asof_ts=ts1 + ONE_SESSION_NS // 2)
+    t3, ms3, note3 = process_bar(st2, mid, CFG)
+    assert t3 is None and note3 == "cooldown" and ms3 == "OK"

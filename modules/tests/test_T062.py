@@ -357,3 +357,74 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 2.9)
     assert _close(float(t["cost_usd"]), 29.006635)
     assert _close(float(t["edge_bps"]), 7.5)
+
+# --- §T3 normative detectors (reference implementations; unit-tested here) ---
+
+def streak_count(closes):
+    """Signed streak length of consecutive same-sign closes; zero-move resets."""
+    run = 0
+    for i in range(1, len(closes)):
+        m = (closes[i] > closes[i - 1]) - (closes[i] < closes[i - 1])
+        if m == 0:
+            run = 0
+        elif (run > 0 and m > 0) or (run < 0 and m < 0):
+            run += m
+        else:
+            run = m
+    return run
+
+def atr_expanding(atr14):
+    """§T2 rule: ATR_14(t) > ATR_14(t-5)."""
+    return atr14[-1] > atr14[-6]
+
+def exhaustion_print(bar, direction, wick_mult):
+    """§T2 rule: counter-trend wick >= wick_mult * body; False on zero body."""
+    body = abs(bar["close"] - bar["open"])
+    if body <= 0:
+        return False  # cheapest stack cannot measure it -> not exhaustion
+    if direction > 0:
+        wick = bar["high"] - max(bar["open"], bar["close"])
+    else:
+        wick = min(bar["open"], bar["close"]) - bar["low"]
+    return wick >= wick_mult * body
+
+def entry_allowed(n_t, atr_ok, gate, streak_min=3, late_cap=5):
+    """§T2 Boolean entry guard: streak formed, ATR expanding, gate on, late cap."""
+    return abs(n_t) >= streak_min and atr_ok and gate == 1 and abs(n_t) <= late_cap
+
+def shares_5(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """Normative 5-arg sizing: dollar-risk base, 5% ADV participation cap."""
+    base = int(risk_budget_R // max(stop_distance, 1e-9))
+    adv_limited = int(ADV_cap * 0.05)
+    return int(max(0, min(base, adv_limited)))
+
+def test_7_normative_detectors():
+    # streak_count: 3 same-sign closes -> signed run of 3
+    assert streak_count([250.0, 250.1, 250.2, 250.3]) == 3
+    assert streak_count([250.3, 250.2, 250.1, 250.0]) == -3
+    assert streak_count([250.0, 250.1, 250.1, 250.2]) == 1  # zero-move resets
+    assert streak_count([250.0, 250.1, 250.0, 250.1]) == 1  # direction flips reset
+    # atr_expanding
+    assert atr_expanding([0.5, 0.5, 0.5, 0.5, 0.5, 0.6]) is True
+    assert atr_expanding([0.6, 0.6, 0.6, 0.6, 0.6, 0.5]) is False
+    # exhaustion_print: wick exactly 2.0x body fires, 1.9x does not
+    up = {"open": 250.0, "high": 251.2, "low": 249.9, "close": 250.5}   # wick 0.7, body 0.5
+    assert exhaustion_print(up, 1, 2.0) is False                        # 1.4x < 2.0x
+    up2 = {"open": 250.0, "high": 251.5, "low": 249.9, "close": 250.5}   # wick 1.0, body 0.5
+    assert exhaustion_print(up2, 1, 2.0) is True                         # 2.0x >= 2.0x
+    up3 = {"open": 250.0, "high": 251.45, "low": 249.9, "close": 250.5}  # wick 0.95
+    assert exhaustion_print(up3, 1, 2.0) is False                       # 1.9x < 2.0x
+    dn = {"open": 250.0, "high": 250.1, "low": 249.0, "close": 249.5}    # lower wick 0.5, body 0.5
+    assert exhaustion_print(dn, -1, 1.0) is True
+    flat = {"open": 250.0, "high": 250.1, "low": 249.9, "close": 250.0}  # zero body
+    assert exhaustion_print(flat, 1, 2.0) is False
+    # entry_allowed: late-entry cap
+    assert entry_allowed(3, True, 1) is True
+    assert entry_allowed(6, True, 1) is False   # |n_t| > 5 -> C11 veto
+    assert entry_allowed(3, False, 1) is False  # ATR not expanding
+    assert entry_allowed(3, True, 0) is False   # confirmation gate off
+    assert entry_allowed(2, True, 1) is False   # streak too short
+    # shares_5: dollar-risk base and ADV cap
+    assert shares_5(300.0, 0.75, 0.75, 4_000_000, None) == 400     # base binds
+    assert shares_5(300.0, 0.75, 0.75, 1_000, None) == 50         # ADV cap binds: 5% of 1000
+    assert shares_5(300.0, 0.75, 0.75, 0, None) == 0               # no ADV -> no size

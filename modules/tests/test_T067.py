@@ -9,7 +9,7 @@ import os
 
 SID = "T067"
 TOL = 1e-6
-CFG = {'mode': 'z', 'fade': False, 'z_long': 0.3, 'z_short': -0.3, 'conf_scale': 1.0, 'edge_mult': 14.0, 'time_stop': 120, 'exit_flip': True, 'k': 0.5, 'sizing': ('risk', 400.0, None), 'cooldown_bars': 30, 'bar_ns': 60000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 2.0, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 0.5}}
+CFG = {'mode': 'z', 'fade': False, 'z_long': 0.3, 'z_short': -0.3, 'conf_scale': 1.0, 'edge_mult': 14.0, 'time_stop': 120, 'exit_flip': True, 'k': 0.5, 'reclaim_bars': 2, 'sizing': ('risk', 400.0, None), 'cooldown_bars': 30, 'bar_ns': 60000000000, 'tif': 'DAY', 'venue': 'XNAS', 'side_class': 'mixed', 'adv_pct': 0.02, 'cost': {'spread_bps': 2.0, 'fee_bps': 0.4, 'borrow_bps': 0.0, 'impact_bps': 0.5}}
 K = 0.5
 FIX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -63,7 +63,7 @@ def cost_gate_pass(cost_bps, k, edge_bps):
 
 def validate_row(r, prev_ts):
     """F1/F2: invalid input -> UNKNOWN, never interpolate."""
-    for f in ("open", "high", "low", "close", "volume", "sig", "gate"):
+    for f in ("open", "high", "low", "close", "volume", "sig", "gate", "news"):
         v = r.get(f)
         if v is None or (isinstance(v, float) and not math.isfinite(v)):
             return False
@@ -89,8 +89,9 @@ def size_qty(dec, r, cfg):
         return max(lot, (q // lot) * lot)
     raise ValueError("unknown sizing mode")
 
-def decide(r, pos, cfg):
-    """Per-module entry/exit logic. Returns None, a decision dict, or a list."""
+def decide(r, pos, cfg, ctx):
+    """Per-module entry/exit logic. ctx carries anchor_ts + reclaim counters (normative §T3).
+    Returns None, a decision dict, or a list."""
     mode = cfg["mode"]
     s = r["sig"]
     if mode == "allocator":
@@ -140,16 +141,19 @@ def decide(r, pos, cfg):
     if pos is None:
         if r["gate"] != 1:
             return None
+        if ctx["anchor_ts"] <= 0:
+            return None  # rulebook anchor required: no novel news -> no entry (§T3)
         side = None
+        rb = cfg["reclaim_bars"]  # [default] 2
         if not cfg["fade"]:
-            if s >= cfg["z_long"]:
+            if s >= cfg["z_long"] and ctx["reclaim_long"] >= rb:
                 side = "BUY"
-            elif s <= cfg["z_short"]:
+            elif s <= cfg["z_short"] and ctx["reclaim_short"] >= rb:
                 side = "SELL"
         else:
-            if s >= cfg["z_long"]:
+            if s >= cfg["z_long"] and ctx["reclaim_long"] >= rb:
                 side = "SHORT"
-            elif s <= cfg["z_short"]:
+            elif s <= cfg["z_short"] and ctx["reclaim_short"] >= rb:
                 side = "BUY"
         if side is None:
             return None
@@ -175,6 +179,9 @@ def emit_intents(rows, cfg, sid, sigsrc):
     prev_ts = -1
     module_state = "OK"
     comp = cfg["cost"]
+    anchor_ts = -1       # rulebook anchor: most recent novel-news print bar
+    reclaim_long = 0     # consecutive bars with sig >= z_long since the anchor
+    reclaim_short = 0    # consecutive bars with sig <= z_short since the anchor
     for i, r in enumerate(rows):
         ts = r["event_ts"]
         if not validate_row(r, prev_ts):
@@ -187,7 +194,24 @@ def emit_intents(rows, cfg, sid, sigsrc):
         # fall back to the bar grid so the normative assert below always holds.
         nxt = nxt_ts if nxt_ts > ts else ts + cfg["bar_ns"]
         assert nxt > ts, "causality: fill_event > signal_event"
-        d = decide(r, pos, cfg)
+        # rulebook anchor + reclaim counters (normative §T3): counted on valid rows only
+        if int(r.get("news", 0)) == 1:
+            anchor_ts = ts
+            reclaim_long = 0
+            reclaim_short = 0
+        if anchor_ts > 0:
+            if r["sig"] >= cfg["z_long"]:
+                reclaim_long += 1
+                reclaim_short = 0
+            elif r["sig"] <= cfg["z_short"]:
+                reclaim_short += 1
+                reclaim_long = 0
+            else:
+                reclaim_long = 0
+                reclaim_short = 0
+        ctx = {"anchor_ts": anchor_ts, "reclaim_long": reclaim_long,
+               "reclaim_short": reclaim_short}
+        d = decide(r, pos, cfg, ctx)
         if d is None:
             if pos is not None:
                 pos["bars_held"] += 1
@@ -258,7 +282,7 @@ def _load(name):
         rd = csv.DictReader(f)
         rows = []
         for r in rd:
-            for k in ("event_ts","volume","gate"):
+            for k in ("event_ts","volume","gate","news"):
                 r[k] = int(float(r[k]))
             for k in ("open","high","low","close","sig","stop_dist"):
                 r[k] = float(r[k])
@@ -357,3 +381,31 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 2.9)
     assert _close(float(t["cost_usd"]), 29.006635)
     assert _close(float(t["edge_bps"]), 7.0)
+
+def test_7_reclaim_rule_blocks_single_bar_trigger():
+    rows = _load(SID + "_tape.csv")
+    # single-bar spike: only bar 2 exceeds z_long -> reclaim < 2 -> no entry
+    solo = [dict(r) for r in rows]
+    for r in solo:
+        r["sig"] = 0.0
+    solo[2]["sig"] = 0.9
+    tickets, mstate = emit_intents(solo, CFG, SID, "S024")
+    assert tickets == [] and mstate == "OK"
+    # two consecutive bars above z_long -> reclaim satisfied -> exactly one entry
+    pair = [dict(r) for r in rows]
+    for r in pair:
+        r["sig"] = 0.0
+    pair[1]["sig"] = 0.5
+    pair[2]["sig"] = 0.9
+    tickets2, mstate2 = emit_intents(pair, CFG, SID, "S024")
+    enters = [t for t in tickets2 if t["action"] == "enter"]
+    assert len(enters) == 1 and enters[0]["ticket_id"] == "T-T067-2-0"
+    assert mstate2 == "OK"
+
+def test_8_novel_news_absence_blocks_entry():
+    rows = _load(SID + "_tape.csv")
+    nonews = [dict(r) for r in rows]
+    for r in nonews:
+        r["news"] = 0
+    tickets, mstate = emit_intents(nonews, CFG, SID, "S024")
+    assert tickets == [] and mstate == "OK"

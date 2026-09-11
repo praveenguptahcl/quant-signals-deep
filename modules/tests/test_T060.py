@@ -357,3 +357,31 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 2.7)
     assert _close(float(t["cost_usd"]), 6.751544)
     assert _close(float(t["edge_bps"]), 6.24)
+
+def shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost):
+    """shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost).
+
+    Mirrors the §T2 fenced sizing function: cost is recorded and checked by
+    the cost-gate predicate, not by the sizer.
+    """
+    base = int(risk_budget_R // max(stop_distance, 1e-9))
+    cap = int(ADV_cap) if ADV_cap else base
+    return max(1, min(base, cap))
+
+def test_7_gate_zero_blocks_entry():
+    rows = _load(SID + "_tape.csv")
+    gated = [dict(r) for r in rows]
+    for r in gated:
+        r["gate"] = 0
+    tickets, mstate = emit_intents(gated, CFG, SID, "S092")
+    assert mstate == "OK"
+    assert tickets == [], "gate == 0 bars must emit no tickets"
+
+def test_8_sizing_five_arg_contract():
+    # dollar-risk base: floor(1000 / 10) = 100, matches fixture qty
+    assert shares(1000.0, 10.0, None, None, None) == 100
+    # ADV participation cap binds when tighter
+    assert shares(1000.0, 10.0, None, 40, 2.7) == 40
+    # no cap -> base quantity, floor of 1 share minimum
+    assert shares(1000.0, 10.0, None, 0, None) == 100
+    assert shares(1.0, 10.0, None, None, None) >= 1

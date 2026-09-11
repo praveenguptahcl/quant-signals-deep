@@ -357,3 +357,22 @@ def test_6_handcheck_literals():
     assert _close(float(t["cost_bps"]), 2.7)
     assert _close(float(t["cost_usd"]), 27.006178)
     assert _close(float(t["edge_bps"]), 6.0)
+
+def test_7_gate_zero_suppresses_entry():
+    """Guard-fold semantics: H, ADF, and cost gates fold into the canonical
+    `gate` flag; gate=0 on the fixture's entry bar must suppress the entry."""
+    rows = _load(SID + "_tape.csv")
+    entry_ts = 1789047000000000000  # fixture entry bar (sig=0.6 >= z_long)
+    assert rows[2]["event_ts"] == entry_ts
+    g0 = [dict(r) for r in rows]
+    g0[2]["gate"] = 0
+    tickets, mstate = emit_intents(g0, CFG, SID, "S087")
+    assert mstate == "OK"
+    assert not [t for t in tickets
+                if t["action"] == "enter"
+                and int(t["parent_signal"].split("@")[1]) == entry_ts]
+    # sanity: unmodified tape does emit on that bar
+    tickets_ok, _ = emit_intents(rows, CFG, SID, "S087")
+    assert [t for t in tickets_ok
+            if t["action"] == "enter"
+            and int(t["parent_signal"].split("@")[1]) == entry_ts]

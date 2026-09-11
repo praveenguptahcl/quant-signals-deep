@@ -172,6 +172,21 @@ def test_fixture_recomputes_to_expected():
         assert t.symbol == e["symbol"], e["ticket_idx"]
 
 
+def test_fixture_tolerance_header():
+    """Fixtures carry TYPE + TOLERANCE headers; cost_bps matches within tolerance."""
+    for path in (TAPE, EXPECTED):
+        raw = Path(path).read_text().splitlines()
+        assert raw[0].startswith("# TYPE:"), path
+        tol = [ln for ln in raw if ln.startswith("# TOLERANCE:")]
+        assert tol, f"missing TOLERANCE header in {path}"
+    rows = tape_rows()
+    exp = {int(x["bar"]): float(x["cost_bps"]) for x in load_csv(EXPECTED)}
+    # bar 0 is the gate-pass row: cost call must match expected within 1e-6 rel
+    r0 = rows[0]
+    cost = expected_cost_bps(r0["qty"] * r0["price"], 0.001, "venue", "taker", "normal")
+    assert abs(cost - exp[0]) / max(abs(exp[0]), 1e-12) <= 1e-6
+
+
 def test_no_signal_bar_fills():
     """Causality: every fill/boundary event is strictly after its signal event."""
     rows = tape_rows()

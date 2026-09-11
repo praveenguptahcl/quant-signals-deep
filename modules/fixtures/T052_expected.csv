@@ -1,4 +1,4 @@
-# TYPE: expected-output
+# TYPE: validation-run
 ticket_id,symbol,side,qty,limit,tif,parent_signal,intent_ts,signal_ts,fill_ts,leg,edge_bps,cost_bps,cost_usd,gate,action,reason
 T-T052-3-0,AAA,BUY,800,,IOC,S078@1788874380000000000,1788874380000000000,1788874380000000000,1788874440000000000,,3.9,1.08,21.597382,PASS,enter,
 T-T052-4-X,AAA,SELL,800,,DAY,S078@1788874440000000000,1788874440000000000,1788874440000000000,1788874500000000000,,0.0,1.08,21.60286,N/A,exit,sig_flip

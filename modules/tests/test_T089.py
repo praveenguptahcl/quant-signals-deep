@@ -13,6 +13,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pytest
+
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "T089_tape.csv"
 EXPECTED = FIX / "T089_expected.csv"
@@ -22,9 +24,34 @@ GATE_NAMES = ['disloc_cents', 'futures_ok', 'not_news']
 COST_GATE_K = 0.5                       # [default]
 PER_TRADE_R = 25        # $ risk per trade [example]
 DAILY_LOSS_STOP_R = 12  # in units of R [default]
+ADV_CAP_SHARES = 600    # participation cap per event [default]
+MAX_GROSS_NOTIONAL = 120_000  # $ [example]
 SYMBOL = 'LGX:XNAS'
 PARENT_SIGNAL = 'S016'
 INFRA = False  # normative emitter emits OrderTicket intents
+
+
+@dataclass(frozen=True)
+class Config:
+    """§T0 T0.1 Config dataclass — single source of module parameters."""
+    gate_cents: float = 0.9
+    abort_cents: float = 5.0
+    feed_gap_max_ms: float = 5.0
+    max_events_day: int = 8
+    qty_default: int = 400          # [example]
+    adv_cap_shares: int = 600       # [default]
+    cost_gate_k: float = 0.5        # [default]
+    per_trade_R: float = 25.0       # [example]
+    daily_loss_stop_R: float = 12.0  # [default]
+    cooldown_s: float = 1.0         # [default]
+
+
+def size_shares(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost) -> int:
+    """§T2.3b normative sizing: shares = f(risk_budget_R, stop_distance,
+    vol_estimate, ADV_cap, cost). cost gates entry upstream; it does not
+    resize here. Reference: size_shares(25.0, 0.05, 200.0, 600, 2.3) == 500."""
+    risk_shares = risk_budget_R / max(stop_distance, 1e-9)  # 1e-9 floor [default]
+    return max(0, int(min(risk_shares, ADV_cap)))
 
 # ------------------------------------------------------------ schemas (App C/G)
 @dataclass(frozen=True)
@@ -86,6 +113,7 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
     tickets = []
     kill = state.setdefault("kill", KillSwitch())
     state.setdefault("module_state", "OK")
+    state.setdefault("cooldown_until", 0)   # CR-10 post-exit cooldown (int64 ns)
     log = state.setdefault("decision_log", [])
 
     def chain_hash(prev, payload):
@@ -125,13 +153,22 @@ def emit(state: dict, rows: list[dict], cfg: dict) -> list[OrderTicket]:
         if not (cost <= COST_GATE_K * row["edge_bps"]):
             append("GATE_VETO", "cost-gate", f"cost-veto@{sig_ts}", before, before)
             continue
+        # CR-10: post-exit cooldown
+        if sig_ts < state["cooldown_until"]:
+            append("GATE_VETO", "cooldown", f"cooldown@{sig_ts}", before, before)
+            continue
+        # CR-04: pre-trade fat-finger trio (validation run: qty is a measured case input)
+        qty = int(row["qty"])
+        assert 0 < qty <= ADV_CAP_SHARES, "CR-04 size check"
+        assert row["price"] * qty <= MAX_GROSS_NOTIONAL, "CR-04 value check"
         side = {'LONG': 'BUY', 'SHORT': 'SHORT', 'BUY': 'BUY', 'SELL': 'SELL'}[row["side"]]
-        t = OrderTicket(symbol=SYMBOL, side=side, qty=int(row["qty"]), limit=None,
+        t = OrderTicket(symbol=SYMBOL, side=side, qty=qty, limit=None,
                         tif="IOC", ticket_id=f"{uuid.uuid4()}",
                         parent_signal=f"{PARENT_SIGNAL}@{sig_ts}",
                         intent_ts=sig_ts + 1000, state="NEW", stp=True)
         assert row["fill_ts"] > sig_ts, "causality: fill must be after signal (t->t+1)"
         tickets.append(t)
+        state["cooldown_until"] = sig_ts + int(1.0 * 1e9)  # CR-10: 1 s [default]
         append("EMIT_INTENT", "emit", t.ticket_id + t.parent_signal + str(t.intent_ts),
                before, state["module_state"])
 
@@ -187,6 +224,7 @@ def test_cost_gate_predicate():
     """expected_cost_bps(...) <= k * edge_bps gates intents."""
     k = COST_GATE_K  # [default]
     cost = expected_cost_bps(1.0, 0.001, "venue", "taker", "normal")
+    assert cost == pytest.approx(2.30, abs=1e-4)   # §T4 tolerance on cost_bps
     assert cost > 0
     assert cost <= k * 100.0      # large edge -> gate passes
     assert not (cost <= k * 0.45999999999999996)  # tiny edge -> gate blocks
@@ -247,4 +285,53 @@ def test_ticket_schema_and_compliance():
     for prev, rec in zip([{"hash": "genesis"}] + log, log):
         assert rec["prev_hash"] == prev["hash"]    # hash chain intact (C5)
         assert rec["hash"]
+
+
+def test_config_defaults():
+    """§T0 T0.1: the Config dataclass defaults match the documented contract."""
+    cfg = Config()
+    assert cfg.gate_cents == 0.9
+    assert cfg.abort_cents == 5.0
+    assert cfg.feed_gap_max_ms == 5.0
+    assert cfg.max_events_day == 8
+    assert cfg.qty_default == 400
+    assert cfg.adv_cap_shares == 600
+    assert cfg.cost_gate_k == 0.5
+    assert cfg.per_trade_R == 25.0
+    assert cfg.daily_loss_stop_R == 12.0
+    assert cfg.cooldown_s == 1.0
+
+
+def test_size_shares_contract():
+    """§T2.3b: shares = min(risk_budget_R / stop_distance, ADV_cap), floored at 0."""
+    assert size_shares(25.0, 0.05, 200.0, 600, 2.3) == 500   # reference: fixture bar-1 qty
+    assert size_shares(25.0, 0.01, 200.0, 600, 2.3) == 600    # ADV cap binds
+    assert size_shares(50.0, 0.05, 200.0, 10_000, 2.3) == 1000  # risk budget scales
+    assert size_shares(25.0, 0.0, 200.0, 600, 2.3) == 600     # degenerate stop -> cap
+    assert size_shares(25.0, -1.0, 200.0, 600, 2.3) == 600    # negative stop -> cap
+    assert isinstance(size_shares(25.0, 0.05, 200.0, 600, 2.3), int)
+
+
+def test_regime_record_schema():
+    """§T9: regime gates are machine records with the mandated keys and enums."""
+    rec = {"regime_id": "R001", "direction": "degrades",
+           "mechanism": "vol spike -> dislocations are news, not staleness -> abort",
+           "condition": "disloc_cents > 5", "action": "veto",
+           "min_lag": "1 event", "unknown_behavior": "veto"}
+    assert set(rec) == {"regime_id", "direction", "mechanism", "condition",
+                        "action", "min_lag", "unknown_behavior"}
+    assert rec["direction"] in ("amplifies", "degrades", "inverts")
+    assert rec["action"] in ("veto", "halve", "double", "widen_stops", "pause_entry")
+
+
+def test_timing_box_ordering():
+    """§T2 timing box: signal_ts < intent_ts < fill_ts on every emitted ticket."""
+    rows = tape_rows()
+    tickets = emit({}, rows, {})
+    exp_fill = {int(x["intent_ts"]): int(x["fill_ts"]) for x in load_csv(EXPECTED)}
+    assert tickets, "fixture must produce at least one intent"
+    for t in tickets:
+        signal_ts = int(t.parent_signal.split("@")[1])
+        assert t.intent_ts > signal_ts, "intent must be after signal"
+        assert exp_fill[t.intent_ts] > t.intent_ts, "fill must be after intent"
 

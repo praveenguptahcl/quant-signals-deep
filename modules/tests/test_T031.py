@@ -49,19 +49,27 @@ class Config:
     primary_signal: str = "S000"
     z_entry: float = 2.0
     z_exit: float = 0.5
+    z_stop: float = 4.0            # divergence stop: broken-thesis guard
+    timeout_sessions: int = 60     # exit if no convergence within N sessions
+    cooldown_ns: int = 86_400_000_000_000  # post-exit re-entry cooldown: 1 session
     cost_gate_k: float = 0.5
     risk_R_usd: float = 1000.0
     stop_bps: float = 100.0
     adv_cap_pct: float = 10.0
-    spread_full_bps: float = 10.0
-    taker_fee_bps: float = 0.30
-    maker_rebate_bps: float = 0.20
+    spread_full_bps: float = 3.0
+    # taker fee 3.0 bps = Nasdaq $0.0030/share remove-liquidity fee
+    # (nasdaqtrader.com price list, 2026) / $100 reference price
+    taker_fee_bps: float = 3.0
+    maker_rebate_bps: float = -0.2
     side_exec: str = "taker"        # taker | maker
-    borrow_bps: float = 0.0         # per-round-trip example borrow charge (SHORT)
-    impact_k: float = 0.5
+    borrow_bps_per_day: float = 0.1984  # 50 annualized bps / 252, short leg only
+    assumed_hold_days: int = 10
+    impact_k: float = 25.0
     daily_loss_stop_pct: float = -2.0
-    venue: str = "XNAS"
-    default_side: str = "BUY"      # BUY | SHORT
+    venue: str = "primary"
+    # LONG = collapsed single-leg fixture convention (spread instrument XYZ);
+    # production emits BUY loser + SHORT winner per the module's normative §T3
+    default_side: str = "BUY"      # BUY | SHORT | LONG
 
 
 class KillSwitch:
@@ -89,21 +97,39 @@ class KillSwitch:
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
-    """4-component cost stack (COST-block callable). Example values."""
+    """4-component cost stack (COST-block callable). Per-leg one-way bps.
+
+    Borrow applies to the SHORT leg only: borrow_bps_per_day * assumed_hold_days.
+    The fixture's collapsed leg is the long leg (default_side LONG) -> 0.0,
+    with the reason documented in the module COST block.
+    """
     spread_bps = cfg.spread_full_bps / 2.0
     fee_bps = cfg.maker_rebate_bps if side == "maker" else cfg.taker_fee_bps
-    borrow_bps = cfg.borrow_bps if cfg.default_side == "SHORT" else 0.0
+    borrow_bps = (cfg.borrow_bps_per_day * cfg.assumed_hold_days
+                  if cfg.default_side == "SHORT" else 0.0)
     impact_bps = cfg.impact_k * math.sqrt(max(adv_pct, 0.0) / 100.0)
     if urgency == "high":
         impact_bps *= 1.5
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def _exit_ticket(bar, qty, pos, cfg):
+    """Flatten the open leg. Exits are never cost-gated."""
+    exit_side = "SELL" if pos > 0 else "BUY"
+    return OrderTicket(
+        symbol=bar["symbol"], side=exit_side, qty=qty,
+        limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
+        tif="DAY", ticket_id="%s-%04dx" % (cfg.sid, int(bar["bar"])),
+        parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
+        intent_ts=bar["event_ts"], state="NEW")
+
+
 def process_bar(state, bar, cfg):
     """One bar through the strategy. Returns (ticket|None, module_state, note).
 
     Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
-    switch -> size -> normative cost-gate predicate -> entry/exit rules.
+    switch -> size -> normative cost-gate predicate -> entry/exit rules
+    (converge / divergence stop / timeout, then post-exit cooldown).
     Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
     """
     ks = state["kill"]
@@ -129,39 +155,52 @@ def process_bar(state, bar, cfg):
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
     z = bar["signal_z"]
     pos = state.get("position", 0)
-    if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
-            ticket = OrderTicket(
-                symbol=bar["symbol"], side=side, qty=qty,
-                limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
-                tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
-                parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
-                intent_ts=bar["event_ts"], state="NEW")
-            state["position"] = 1 if side == "BUY" else -1
-            return ticket, "OK", "entry"
-        return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
-    # Position open: exit on z through the exit band (exits never cost-gated)
-    if abs(z) <= cfg.z_exit:
-        exit_side = "SELL" if pos > 0 else "BUY"
+    if pos != 0:
+        state["sessions_open"] = state.get("sessions_open", 0) + 1
+        # exits never cost-gated; every exit starts the post-exit cooldown
+        if abs(z) <= cfg.z_exit:
+            note = "exit"
+        elif abs(z) >= cfg.z_stop:
+            note = "stop"      # broken thesis: retire the pair
+        elif state["sessions_open"] >= cfg.timeout_sessions:
+            note = "timeout"   # no convergence in time
+        else:
+            return None, "OK", "hold"
+        state["position"] = 0
+        state["cooldown_until"] = bar["event_ts"] + cfg.cooldown_ns
+        if note == "stop":
+            state["retired"] = True
+        return _exit_ticket(bar, qty, pos, cfg), "OK", note
+    if state.get("retired"):
+        return None, "OK", "retired"   # stopped pairs never re-enter
+    if abs(z) >= cfg.z_entry:
+        if not gate:
+            return None, "OK", "gate-block"
+        if bar["event_ts"] < state.get("cooldown_until", 0):
+            return None, "OK", "cooldown"   # C10: post-exit re-entry veto
+        side = cfg.default_side
         ticket = OrderTicket(
-            symbol=bar["symbol"], side=exit_side, qty=qty,
+            symbol=bar["symbol"], side=side, qty=qty,
             limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
-            tif="DAY", ticket_id="%s-%04dx" % (cfg.sid, int(bar["bar"])),
+            tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
-        state["position"] = 0
-        return ticket, "OK", "exit"
-    return None, "OK", "hold"
+        state["position"] = 1 if side == "BUY" else -1
+        state["sessions_open"] = 0
+        return ticket, "OK", "entry"
+    return None, "OK", "flat"
 
 
 CFG = Config(
     sid="T031", primary_signal="S049",
-    z_entry=2.0, z_exit=0.5, cost_gate_k=0.5,
+    z_entry=2.0, z_exit=0.5, z_stop=4.0,
+    timeout_sessions=60, cooldown_ns=86_400_000_000_000,
+    cost_gate_k=0.5,
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
-    spread_full_bps=3.0, taker_fee_bps=0.3,
+    spread_full_bps=3.0, taker_fee_bps=3.0,
     maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=50.0, impact_k=25.0,
+    borrow_bps_per_day=0.1984, assumed_hold_days=10,
+    impact_k=25.0,
     daily_loss_stop_pct=1.0, venue="primary",
     default_side="LONG")
 
@@ -194,7 +233,8 @@ def expected():
 
 
 def fresh_state():
-    return {"position": 0, "kill": KillSwitch()}
+    return {"position": 0, "kill": KillSwitch(),
+            "sessions_open": 0, "cooldown_until": 0, "retired": False}
 
 
 def run_tape():
@@ -311,3 +351,66 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+
+
+def test_divergence_stop_exits_and_retires():
+    """Divergence stop: |z| >= z_stop flattens and retires the pair."""
+    st = fresh_state()
+    bars = tape()
+    for b in bars[:4]:
+        process_bar(st, b, CFG)   # entry at bar 3
+    assert st["position"] != 0
+    stop_bar = dict(bars[4])
+    stop_bar["signal_z"] = 4.2    # through the divergence stop
+    stop_bar["edge_bps"] = 4.0
+    t, ms, note = process_bar(st, stop_bar, CFG)
+    assert t is not None and ms == "OK" and note == "stop"
+    assert t.side == "BUY" and t.qty > 0  # flatten the collapsed long leg
+    assert st["position"] == 0 and st["retired"] is True
+    # a retired pair takes no new entries, even with a huge passing edge
+    reentry = dict(bars[3])
+    reentry["bar"] = 99
+    reentry["event_ts"] = stop_bar["event_ts"] + 2 * CFG.cooldown_ns
+    reentry["asof_ts"] = reentry["event_ts"] + 25000
+    reentry["edge_bps"] = 50.0
+    t2, ms2, note2 = process_bar(st, reentry, CFG)
+    assert t2 is None and ms2 == "OK" and note2 == "retired"
+
+
+def test_post_exit_cooldown_blocks_reentry():
+    """C10: after an exit, re-entry is vetoed until the cooldown elapses."""
+    st = fresh_state()
+    bars = tape()
+    for b in bars[:7]:
+        process_bar(st, b, CFG)   # entry bar 3, converge-exit bar 6
+    assert st["position"] == 0 and st["cooldown_until"] > 0
+    # passing gate (edge 14.27 bps >> cost) but inside the cooldown window
+    hot = dict(bars[3])
+    hot["bar"] = 99
+    hot["event_ts"] = bars[6]["event_ts"] + 3_600_000_000_000
+    hot["asof_ts"] = hot["event_ts"] + 25000
+    t, ms, note = process_bar(st, hot, CFG)
+    assert t is None and ms == "OK" and note == "cooldown"
+    # after the cooldown elapses the same bar enters cleanly
+    later = dict(hot)
+    later["bar"] = 100
+    later["event_ts"] = st["cooldown_until"] + 1
+    later["asof_ts"] = later["event_ts"] + 25000
+    t2, ms2, note2 = process_bar(st, later, CFG)
+    assert t2 is not None and ms2 == "OK" and note2 == "entry"
+
+
+def test_timeout_exits_stale_pair():
+    """Timeout: no convergence within timeout_sessions flattens the pair."""
+    st = fresh_state()
+    bars = tape()
+    for b in bars[:4]:
+        process_bar(st, b, CFG)   # entry at bar 3
+    assert st["position"] != 0
+    st["sessions_open"] = CFG.timeout_sessions - 1
+    stale = dict(bars[4])
+    stale["signal_z"] = 1.0       # neither converge (<=0.5) nor stop (>=4.0)
+    stale["edge_bps"] = 4.0
+    t, ms, note = process_bar(st, stale, CFG)
+    assert t is not None and ms == "OK" and note == "timeout"
+    assert st["position"] == 0 and st["cooldown_until"] > 0

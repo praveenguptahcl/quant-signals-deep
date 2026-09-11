@@ -3,7 +3,8 @@
 Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
 reference emit() (normative pseudocode via process_bar), and asserts the
 TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
-the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
+the cost-gate predicate, entry vetoes (hedge/confirm/urgency),
+kill-switch trip/re-arm, and invalid-input handling.
 
 Run: python3 -m pytest modules/tests/test_T049.py -q   (from repo root)
 """
@@ -49,10 +50,13 @@ class Config:
     primary_signal: str = "S000"
     z_entry: float = 2.0
     z_exit: float = 0.5
+    urgency_min: float = 0.70
     cost_gate_k: float = 0.5
+    cost_scale_bps: float = 10.0
     risk_R_usd: float = 1000.0
     stop_bps: float = 100.0
     adv_cap_pct: float = 10.0
+    vol_mult: float = 2.0
     spread_full_bps: float = 10.0
     taker_fee_bps: float = 0.30
     maker_rebate_bps: float = 0.20
@@ -99,11 +103,23 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency, cfg):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def size_shares(risk_budget_R, stop_bps, vol_estimate, ADV_cap, cost_bps,
+                px, urgency_score, cfg):
+    """Normative sizing: shares = f(risk_budget_R, stop_distance, vol_estimate, ADV_cap, cost)."""
+    raw = risk_budget_R / max(stop_bps / 1e4 * px, 1e-9)
+    adv_cap = ADV_cap * cfg.adv_cap_pct / 100.0
+    vol_cap = (vol_estimate * cfg.vol_mult) if vol_estimate else float("inf")
+    urgency_scale = 0.5 + 0.5 * urgency_score
+    cost_scale = 0.5 if cost_bps >= cfg.cost_scale_bps else 1.0
+    return max(1, int(min(raw, adv_cap, vol_cap) * urgency_scale * cost_scale))
+
+
 def process_bar(state, bar, cfg):
     """One bar through the strategy. Returns (ticket|None, module_state, note).
 
     Mirrors the module's normative pseudocode: validate (F1/F2) -> kill
-    switch -> size -> normative cost-gate predicate -> entry/exit rules.
+    switch -> normative cost-gate predicate -> normative entry rule
+    (uoa_z, urgency_score, S091 hedge veto, S094 confirm) -> exit rules.
     Earliest fill for a bar-t intent is bar t+1's open (t -> t+1).
     """
     ks = state["kill"]
@@ -111,6 +127,7 @@ def process_bar(state, bar, cfg):
     if (bar["close"] <= 0 or bar["market_state"] != "CONTINUOUS_TRADING"
             or bar["asof_ts"] < bar["event_ts"]):
         state["position"] = 0
+        state["qty"] = 0
         return None, "UNKNOWN", "invalid-input"
     # Kill switch: TRIPPED blocks everything; breach trips it
     if ks.state != "ARMED":
@@ -118,48 +135,60 @@ def process_bar(state, bar, cfg):
     if bar["daily_pnl_pct"] <= -cfg.daily_loss_stop_pct:
         ks.trip(bar["event_ts"], "daily-loss-stop")
         state["position"] = 0
+        state["qty"] = 0
         return None, "OFF", "kill-trip"
-    # Position sizing: risk_R / (stop_frac * price), ADV-capped
-    raw_qty = cfg.risk_R_usd / max(bar["stop_bps"] / 1e4 * bar["close"], 1e-9)
-    cap_qty = int(cfg.adv_cap_pct / 100.0 * bar["adv_shares"])
-    qty = max(1, min(int(raw_qty), cap_qty))
     # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps
     cost = expected_cost_bps(bar["notional"], bar["adv_pct"], cfg.venue,
                              cfg.side_exec, bar["urgency"], cfg)
     gate = cost <= cfg.cost_gate_k * bar["edge_bps"]
     z = bar["signal_z"]
     pos = state.get("position", 0)
-    if pos == 0:
-        if abs(z) >= cfg.z_entry and gate:
-            side = cfg.default_side
+    if pos != 0:
+        # Position open: exit on z through the exit band (exits never cost-gated)
+        if abs(z) <= cfg.z_exit:
+            qty = state.get("qty", 0) or 1
+            exit_side = "SELL" if pos > 0 else "BUY"
             ticket = OrderTicket(
-                symbol=bar["symbol"], side=side, qty=qty,
+                symbol=bar["symbol"], side=exit_side, qty=qty,
                 limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
-                tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
+                tif="DAY", ticket_id="%s-%04dx" % (cfg.sid, int(bar["bar"])),
                 parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
                 intent_ts=bar["event_ts"], state="NEW")
-            state["position"] = 1 if side == "BUY" else -1
-            return ticket, "OK", "entry"
-        return None, "OK", "gate-block" if abs(z) >= cfg.z_entry else "flat"
-    # Position open: exit on z through the exit band (exits never cost-gated)
-    if abs(z) <= cfg.z_exit:
-        exit_side = "SELL" if pos > 0 else "BUY"
+            state["position"] = 0
+            state["qty"] = 0
+            return ticket, "OK", "exit"
+        return None, "OK", "hold"
+    # Flat: normative entry rule (uoa_z, urgency_score, S091 hedge veto, S094 confirm)
+    entry_signal = (abs(z) >= cfg.z_entry
+                    and bar["urgency_score"] >= cfg.urgency_min
+                    and bar["hedged"] == 0 and bar["confirm_ok"] == 1)
+    if entry_signal and gate:
+        qty = size_shares(cfg.risk_R_usd, bar["stop_bps"], bar.get("vol_estimate"),
+                          bar["adv_shares"], cost, bar["close"],
+                          bar["urgency_score"], cfg)
+        side = cfg.default_side
         ticket = OrderTicket(
-            symbol=bar["symbol"], side=exit_side, qty=qty,
+            symbol=bar["symbol"], side=side, qty=qty,
             limit=(round(bar["close"], 2) if cfg.side_exec == "maker" else None),
-            tif="DAY", ticket_id="%s-%04dx" % (cfg.sid, int(bar["bar"])),
+            tif="DAY", ticket_id="%s-%04d" % (cfg.sid, int(bar["bar"])),
             parent_signal="%s@%d" % (cfg.primary_signal, bar["event_ts"]),
             intent_ts=bar["event_ts"], state="NEW")
-        state["position"] = 0
-        return ticket, "OK", "exit"
-    return None, "OK", "hold"
+        state["position"] = 1 if side == "BUY" else -1
+        state["qty"] = qty
+        return ticket, "OK", "entry"
+    if entry_signal:
+        return None, "OK", "gate-block"
+    if abs(z) >= cfg.z_entry:
+        return None, "OK", "veto"
+    return None, "OK", "flat"
 
 
 CFG = Config(
     sid="T049", primary_signal="S073",
-    z_entry=3.0, z_exit=1.0, cost_gate_k=0.5,
+    z_entry=3.0, z_exit=1.0, cost_gate_k=0.5, cost_scale_bps=10.0,
+    urgency_min=0.70, vol_mult=2.0,
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
-    spread_full_bps=3.0, taker_fee_bps=0.3,
+    spread_full_bps=3.0, taker_fee_bps=3.0,
     maker_rebate_bps=-0.2, side_exec="taker",
     borrow_bps=30.0, impact_k=25.0,
     daily_loss_stop_pct=2.0, venue="primary",
@@ -183,6 +212,8 @@ def tape():
             "edge_bps": float(r["edge_bps"]), "notional": float(r["notional"]),
             "adv_pct": float(r["adv_pct"]), "adv_shares": float(r["adv_shares"]),
             "stop_bps": float(r["stop_bps"]), "urgency": r["urgency"],
+            "urgency_score": float(r["urgency_score"]),
+            "hedged": int(r["hedged"]), "confirm_ok": int(r["confirm_ok"]),
             "market_state": r["market_state"],
             "daily_pnl_pct": float(r["daily_pnl_pct"]),
         })
@@ -194,7 +225,7 @@ def expected():
 
 
 def fresh_state():
-    return {"position": 0, "kill": KillSwitch()}
+    return {"position": 0, "qty": 0, "kill": KillSwitch()}
 
 
 def run_tape():
@@ -311,3 +342,26 @@ def test_invalid_input_unknown():
     bad["close"] = -1.0  # invalid price
     t, ms, _ = process_bar(fresh_state(), bad, CFG)
     assert t is None and ms == "UNKNOWN"
+
+
+def test_entry_vetoes():
+    """Normative entry rule: hedge/confirm/urgency vetoes -> no intent, OK."""
+    b3 = tape()[3]  # entry row: z and gate both pass
+    # hedged flow (S091 gate) vetoed
+    v = dict(b3); v["hedged"] = 1
+    t, ms, note = process_bar(fresh_state(), v, CFG)
+    assert t is None and ms == "OK" and note == "veto"
+    # unconfirmed (S094 confirm) vetoed
+    v = dict(b3); v["confirm_ok"] = 0
+    t, ms, note = process_bar(fresh_state(), v, CFG)
+    assert t is None and ms == "OK" and note == "veto"
+    # low urgency score vetoed
+    v = dict(b3); v["urgency_score"] = 0.10
+    t, ms, note = process_bar(fresh_state(), v, CFG)
+    assert t is None and ms == "OK" and note == "veto"
+    # urgency label feeds the cost callable: high urgency raises impact cost
+    c_norm = expected_cost_bps(b3["notional"], b3["adv_pct"], CFG.venue,
+                               CFG.side_exec, "normal", CFG)
+    c_high = expected_cost_bps(b3["notional"], b3["adv_pct"], CFG.venue,
+                               CFG.side_exec, "high", CFG)
+    assert c_high > c_norm
