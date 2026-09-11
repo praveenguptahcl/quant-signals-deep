@@ -1,8 +1,10 @@
 """Acceptance tests for R016 - Fragmentation / off-exchange regime.
 
-Template v1.0.0. Concrete sketch: loads the fixture tape, runs a reference
-implementation of the chapter's normative formula, and asserts causality,
-F1-F5 fail-safes, and dual-estimator agreement.
+Template v1.0.0. Reference implementation of the chapter's normative detector:
+trailing-window mean of per-bar OffEx with entry/exit hysteresis, bar masking
+(zero-total / halted bars excluded, never interpolated), warm-up DEGRADED,
+F1-F5 fail-safes, and dual-estimator agreement (mean-of-ratios vs
+aggregate-share ratio).
 
 Run: python3 -m pytest modules/tests/test_R016.py -q   (from repo root)
 """
@@ -15,106 +17,144 @@ FIX = Path(__file__).resolve().parent.parent / "fixtures"
 TAPE = FIX / "R016_tape.csv"
 EXPECTED = FIX / "R016_expected.csv"
 
-TOL = 1e-9  # float tolerance [default]
-CADENCE_S = 604800  # indicator cadence in seconds [default]
+TOL = 1e-9            # float tolerance [default]
+CADENCE_S = 604800    # indicator cadence in seconds [default]
 NS = 1_000_000_000
-STATE_LABELS = ['lit_dominated', 'normal', 'dark_dominated', 'undefined', 'warming', 'missing', 'invalid']
-BOUNDS = (0.0, 1.0)  # mathematical bounds of the indicator value (F2)
-DUAL_MODE = "abs"  # rel | abs | sign | state
-DUAL_TOL = 0.05
+BOUNDS = (0.0, 1.0)   # mathematical bounds of the indicator value (F2)
+DUAL_TOL = 0.05       # abs tolerance, mean-of-ratios vs aggregate ratio [default]
 ESTIMATOR_VERSION = "1.0.0"
+STATE_LABELS = ["lit_dominated", "normal", "dark_dominated",
+                "warming", "undefined", "missing", "invalid"]
 
 
-def _mean(xs):
-    xs = list(xs)
-    return sum(xs) / len(xs) if xs else float("nan")
+@dataclass(frozen=True)
+class RegimeState:
+    regime_id: str
+    state: str            # regime label
+    value: float          # indicator value
+    estimator_version: str
+    data_vintage: str
+    computed_at: int      # int64 ns UTC (= event_ts of newest input bar)
+    module_state: str     # OK | DEGRADED | UNKNOWN | OFF
 
-def _stdev(xs, ddof=1):
-    xs = list(xs)
-    n = len(xs)
-    if n <= ddof:
-        return float("nan")
-    m = _mean(xs)
-    return math.sqrt(sum((x - m) ** 2 for x in xs) / (n - ddof))
 
-def _pct_rank(x, hist):
-    h = list(hist)
-    if not h:
-        return float("nan")
-    return (sum(1 for v in h if v < x) + 0.5 * sum(1 for v in h if v == x)) / len(h)
+@dataclass
+class Config:
+    window_bars: int = 10       # trailing window for v [default]
+    warmup_bars: int = 5        # valid bars before OK label [default]
+    dark_entry: float = 0.45    # enter dark only if v > this, strictly [calibrate]
+    dark_exit: float = 0.43     # exit dark only if v < this, strictly [calibrate]
+    lit_entry: float = 0.35     # enter lit only if v < this, strictly [calibrate]
+    lit_exit: float = 0.37      # exit lit only if v > this, strictly [calibrate]
+    dual_tol: float = DUAL_TOL
 
-def _ols_slope(xs, ys):
-    xs, ys = list(xs), list(ys)
-    mx, my = _mean(xs), _mean(ys)
-    den = sum((x - mx) ** 2 for x in xs)
-    if den == 0:
-        return 0.0
-    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
 
-def _sign(x):
-    return 1 if x > 0 else (-1 if x < 0 else 0)
+class RegimeMiningError(AssertionError):
+    """F5: ex-post backtest-period selection without a pre-registered definition."""
 
-# ============================ R016 ============================
-# RB-list: R016 Fragmentation / off-exchange regime. Grok RB2 worked example:
-# lit 32.0m, TRF 28.0m -> OfEx = 28/60 = 0.467 -> high vs own median.
-R016_ROWS = [  # (lit_m, trf_m)
-    (32.0, 28.0), (30.0, 26.0), (33.0, 29.0), (31.0, 30.0), (32.0, 27.0),
-    (29.0, 25.0), (34.0, 30.0), (30.0, 28.0), (31.0, 27.0), (33.0, 29.0),
-]
 
-def r016_tape():
-    hdr = ["bar", "event_ts", "asof_ts", "lit", "trf"]
-    rows = []
-    for i, (lit, trf) in enumerate(R016_ROWS, 1):
-        ts = TS0 + (i - 1) * DAY
-        rows.append({"bar": i, "event_ts": ts, "asof_ts": ts + 3600 * NS, "lit": lit, "trf": trf})
-    return hdr, rows
+def _masked(r):
+    """Zero-total or halted bars are masked: excluded, never interpolated."""
+    if r.get("halt"):
+        return True
+    lit, trf = r.get("lit"), r.get("trf")
+    return lit is None or trf is None or (lit + trf) == 0
 
-def _ofex(r):
-    tot = r["lit"] + r["trf"]
-    return r["trf"] / tot if tot > 0 else float("nan")
 
-def _r016_state(v):
-    if not math.isfinite(v):
-        return "undefined"
-    return "lit_dominated" if v < 0.35 else ("dark_dominated" if v > 0.45 else "normal")
-
-def primary_indicator_r016(rows, cfg):
+def primary_indicator(rows, cfg):
+    """Sentinel: trailing-window mean of per-bar OfEx; warm-up -> DEGRADED."""
     rows = list(rows)
     if not rows:
-        return {"value": float("nan"), "state": "missing", "module_state": "UNKNOWN", "computed_at": 0, "vintage": "synthetic"}
-    if any("lit" not in r or "trf" not in r or r["lit"] < 0 or r["trf"] < 0 for r in rows):
-        return {"value": float("nan"), "state": "invalid", "module_state": "UNKNOWN",
-                "computed_at": rows[-1].get("event_ts", 0), "vintage": "synthetic"}
-    vals = [_ofex(r) for r in rows]
-    v = _mean([x for x in vals if math.isfinite(x)])
-    v = v if vals and math.isfinite(v) else float("nan")
-    return {"value": v, "state": _r016_state(v), "module_state": "OK",
+        return {"value": float("nan"), "state": "missing",
+                "module_state": "UNKNOWN", "computed_at": 0, "vintage": "synthetic"}
+    if any(r.get("lit") is not None and r.get("lit") < 0 or
+           r.get("trf") is not None and r.get("trf") < 0 for r in rows):
+        return {"value": float("nan"), "state": "invalid",
+                "module_state": "UNKNOWN", "computed_at": rows[-1].get("event_ts", 0),
+                "vintage": "synthetic"}
+    vals = [r["trf"] / (r["lit"] + r["trf"]) for r in rows if not _masked(r)]
+    if not vals:
+        # F1: no usable bars at all (all missing / zero-total / halted)
+        return {"value": float("nan"), "state": "missing",
+                "module_state": "UNKNOWN", "computed_at": rows[-1].get("event_ts", 0),
+                "vintage": "synthetic"}
+    if len(vals) < cfg.warmup_bars:
+        v = sum(vals) / len(vals)
+        return {"value": v, "state": "warming", "module_state": "DEGRADED",
+                "computed_at": rows[-1]["event_ts"], "vintage": "synthetic"}
+    win = vals[-cfg.window_bars:]
+    v = sum(win) / len(win)
+    return {"value": v, "state": "n/a", "module_state": "OK",
             "computed_at": rows[-1]["event_ts"], "vintage": "synthetic"}
 
-def second_estimator_r016(rows, cfg):
+
+def transition(prev, v, cfg):
+    """Hysteresis state machine: entry thresholds are strict; exit uses the
+    wider band so labels do not flap at the boundary."""
+    if prev == "dark_dominated":
+        return "normal" if v < cfg.dark_exit else "dark_dominated"
+    if prev == "lit_dominated":
+        return "normal" if v > cfg.lit_exit else "lit_dominated"
+    if v > cfg.dark_entry:
+        return "dark_dominated"
+    if v < cfg.lit_entry:
+        return "lit_dominated"
+    return "normal"
+
+
+def second_estimator(rows, cfg):
+    """Verifier: aggregate share ratio sum(V_trf)/sum(V_total) over the same
+    unmasked window (FINRA's published-aggregate convention)."""
     rows = list(rows)
-    vals = sorted(_ofex(r) for r in rows)
-    vals = [x for x in vals if math.isfinite(x)]
-    v = vals[len(vals) // 2] if vals else float("nan")
-    return {"value": v, "state": "n/a", "computed_at": rows[-1]["event_ts"] if rows else 0}
-
-F2_POISON_R016 = '''
-F2_POISON_TAPE = [
-    {"bar": i + 1, "event_ts": 1000 + i, "asof_ts": 1001 + i, "lit": 0.0, "trf": 0.0}
-    for i in range(6)
-]  # zero total volume -> OfEx = 0/0 = NaN -> F2
-'''
+    vals = [(r["lit"], r["trf"]) for r in rows if not _masked(r)]
+    win = vals[-cfg.window_bars:] if vals else []
+    tot = sum(l + t for l, t in win)
+    v = sum(t for _, t in win) / tot if tot > 0 else float("nan")
+    return {"value": v, "state": "n/a",
+            "computed_at": rows[-1]["event_ts"] if rows else 0}
 
 
-primary_indicator = primary_indicator_r016
-second_estimator = second_estimator_r016
-
-
-F2_POISON_TAPE = [
-    {"bar": i + 1, "event_ts": 1000 + i, "asof_ts": 1001 + i, "lit": 0.0, "trf": 0.0}
-    for i in range(6)
-]  # zero total volume -> OfEx = 0/0 = NaN -> F2
+def detect(rows, cfg, now_ns=None, select_periods=False, preregistered=False):
+    """detect(state, events, cfg) -> RegimeState — reference implementation
+    with F1-F5 fail-safes wired in (Appendix f v1.0.0)."""
+    rows = list(rows)
+    r = primary_indicator(rows, cfg)
+    if r["module_state"] == "DEGRADED":
+        return RegimeState("R016", r["state"], r["value"], ESTIMATOR_VERSION,
+                           r.get("vintage", "synthetic"), r["computed_at"], "DEGRADED")
+    if r["module_state"] != "OK":
+        return RegimeState("R016", r["state"], r["value"], ESTIMATOR_VERSION,
+                           r.get("vintage", "synthetic"), r["computed_at"],
+                           r["module_state"])
+    # F2: mathematical bounds
+    lo, hi = BOUNDS
+    v = r["value"]
+    if not (math.isfinite(v) and lo <= v <= hi):
+        return RegimeState("R016", "out_of_bounds", v, ESTIMATOR_VERSION,
+                           r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
+    # apply hysteresis across the causal state path
+    state = None
+    for i in range(len(rows)):
+        p = primary_indicator(rows[: i + 1], cfg)
+        if p["module_state"] != "OK":
+            continue
+        state = transition(state, p["value"], cfg)
+    # F3: dual-estimator agreement (abs tolerance)
+    s = second_estimator(rows, cfg)
+    if not (math.isfinite(v) and math.isfinite(s["value"])
+            and abs(v - s["value"]) <= cfg.dual_tol):
+        return RegimeState("R016", state, v, ESTIMATOR_VERSION,
+                           r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
+    # F4: staleness timeout — 3x cadence
+    now = now_ns if now_ns is not None else rows[-1]["event_ts"] + CADENCE_S * NS
+    if now - r["computed_at"] > 3 * CADENCE_S * NS:
+        return RegimeState("R016", state, v, ESTIMATOR_VERSION,
+                           r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
+    # F5: no ex-post backtest-period selection without a pre-registered definition
+    if select_periods and not preregistered:
+        raise RegimeMiningError("F5: regime-gated period selection needs a pre-registered definition")
+    return RegimeState("R016", state, v, ESTIMATOR_VERSION,
+                       r.get("vintage", "synthetic"), r["computed_at"], "OK")
 
 
 # ---------------------------------------------------------------- fixtures
@@ -140,97 +180,104 @@ def tape():
     return rows
 
 
-@dataclass(frozen=True)
-class RegimeState:
-    regime_id: str
-    state: str            # regime label, e.g. "elevated"
-    value: float          # indicator value
-    estimator_version: str
-    data_vintage: str
-    computed_at: int      # int64 ns UTC (= event_ts of newest input bar)
-    module_state: str     # OK | DEGRADED | UNKNOWN | OFF
-
-
-@dataclass
-class Config:
-    pass  # regime-specific knobs live in the chapter's Config table (§R0.2)
-
-
-class RegimeMiningError(AssertionError):
-    """F5: ex-post backtest-period selection without a pre-registered definition."""
-
-
-def within_tolerance(v1, v2, mode, tol):
-    if mode == "rel":
-        denom = max(abs(v1), abs(v2), 1e-12)
-        return abs(v1 - v2) / denom <= tol
-    if mode == "abs":
-        return abs(v1 - v2) <= tol
-    if mode == "sign":
-        return (v1 > 0) == (v2 > 0) and (v1 < 0) == (v2 < 0)
-    if mode == "state":
-        return v1 == v2
-    raise ValueError(mode)
-
-
-def detect(rows, cfg, now_ns=None, select_periods=False, preregistered=False):
-    """detect(state, events, cfg) -> RegimeState — reference implementation
-    with F1-F5 fail-safes wired in (Appendix f v1.0.0)."""
-    rows = list(rows)
-    r = primary_indicator(rows, cfg)  # dict(value, state, module_state, computed_at)
-    if r["module_state"] != "OK":
-        return RegimeState("R016", r["state"], r["value"], ESTIMATOR_VERSION,
-                           r.get("vintage", "synthetic"), r["computed_at"],
-                           r["module_state"])
-    # F2: mathematical bounds
-    lo, hi = BOUNDS
-    v = r["value"]
-    if not (math.isfinite(v) and lo <= v <= hi):
-        return RegimeState("R016", "out_of_bounds", v, ESTIMATOR_VERSION,
-                           r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F3: dual-estimator agreement (state mode: same label, or values within
-    # the DUAL_TOL guard band at a state boundary [default])
-    s = second_estimator(rows, cfg)
-    if DUAL_MODE == "state":
-        agree = (r["state"] == s["state"]) or (
-            DUAL_TOL is not None and math.isfinite(v) and math.isfinite(s["value"])
-            and abs(v - s["value"]) <= DUAL_TOL)
-    else:
-        agree = within_tolerance(v, s["value"], DUAL_MODE, DUAL_TOL)
-    if not agree:
-        return RegimeState("R016", r["state"], v, ESTIMATOR_VERSION,
-                           r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F4: staleness timeout — 3x cadence
-    now = now_ns if now_ns is not None else rows[-1]["event_ts"] + CADENCE_S * NS
-    if now - r["computed_at"] > 3 * CADENCE_S * NS:
-        return RegimeState("R016", r["state"], v, ESTIMATOR_VERSION,
-                           r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F5: no ex-post backtest-period selection without a pre-registered definition
-    if select_periods and not preregistered:
-        raise RegimeMiningError("F5: regime-gated period selection needs a pre-registered definition")
-    return RegimeState("R016", r["state"], v, ESTIMATOR_VERSION,
-                       r.get("vintage", "synthetic"), r["computed_at"], "OK")
+def _synth_tape(ofex_list, ts0=1_000_000_000, total=60.0, step=86_400_000_000_000):
+    rows = []
+    for i, ofex in enumerate(ofex_list):
+        ts = ts0 + i * step
+        # round to 10 dp so the stored (lit, trf) legs are exact decimals;
+        # the ratio then recomputes to the same double everywhere
+        lit, trf = round(total * (1 - ofex), 10), round(total * ofex, 10)
+        rows.append({"bar": i + 1, "event_ts": ts, "asof_ts": ts + 3_600_000_000_000,
+                     "lit": lit, "trf": trf})
+    return rows
 
 
 # ------------------------------------------------------------------- tests
 def test_fixture_recomputes_to_expected():
-    """Chapter arithmetic: causal recompute of each bar matches expected CSV."""
+    """Causal recompute of each bar matches expected CSV incl. hysteresis states."""
     evs = tape()
     exp = {int(r["bar"]): r for r in load_csv(EXPECTED)}
     cfg = Config()
     for i in range(len(evs)):
-        r = primary_indicator(evs[: i + 1], cfg)
+        p = primary_indicator(evs[: i + 1], cfg)
         want = exp[i + 1]
-        wv = float(want["exp_value"])
-        if math.isnan(wv):
-            assert math.isnan(r["value"]), i
-        elif math.isinf(wv):
-            assert math.isinf(r["value"]) and (r["value"] > 0) == (wv > 0), i
-        else:
-            assert abs(r["value"] - wv) < TOL, i
-        assert r["state"] == want["exp_state"], i
-        assert r["computed_at"] == int(want["exp_computed_at"]), i
-        assert r["module_state"] == want["exp_module_state"], i
+        assert abs(p["value"] - float(want["exp_value"])) < TOL, i
+        assert p["computed_at"] == int(want["exp_computed_at"]), i
+        assert p["module_state"] == want["exp_module_state"], i
+    # states come from the hysteresis path: check via full detect at each prefix
+    for i in (5, 9, 14, 15, 18):
+        rsv = detect(evs[:i], cfg)
+        assert rsv.state == exp[i]["exp_state"], (i, rsv.state, exp[i]["exp_state"])
+
+
+def test_hysteresis_transitions_pinned():
+    """Exit bands are wider than entry: no flapping at the boundary."""
+    cfg = Config()
+    evs = tape()
+    r14 = detect(evs[:14], cfg)   # v = 0.438: below entry, above exit -> stays dark
+    assert abs(r14.value - 0.438) < TOL and r14.state == "dark_dominated"
+    r15 = detect(evs[:15], cfg)   # v = 0.425: below dark_exit -> normal
+    assert abs(r15.value - 0.425) < TOL and r15.state == "normal"
+    r17 = detect(evs[:17], cfg)   # v = 0.355: above lit_entry -> stays normal
+    assert abs(r17.value - 0.355) < TOL and r17.state == "normal"
+    r18 = detect(evs[:18], cfg)   # v = 0.320: below lit_entry -> lit_dominated
+    assert abs(r18.value - 0.320) < TOL and r18.state == "lit_dominated"
+
+
+def test_boundary_values_no_spurious_entry():
+    """Strict entry/exit: a value exactly on a cut keeps the old state.
+    Pinned on transition() directly (windowed means can drift 1 ulp, so the
+    strictness contract lives in the hysteresis function, not float equality
+    of the tape path)."""
+    cfg = Config()
+    assert transition("normal", 0.45, cfg) == "normal"            # entry needs strictly greater
+    assert transition("normal", 0.4500000001, cfg) == "dark_dominated"
+    assert transition("dark_dominated", 0.43, cfg) == "dark_dominated"  # exit needs strictly less
+    assert transition("dark_dominated", 0.4299999999, cfg) == "normal"
+    assert transition("normal", 0.35, cfg) == "normal"           # lit entry needs strictly less
+    assert transition("normal", 0.3499999999, cfg) == "lit_dominated"
+    assert transition("lit_dominated", 0.37, cfg) == "lit_dominated"    # lit exit needs strictly greater
+    assert transition("lit_dominated", 0.3700000001, cfg) == "normal"
+
+
+def test_warmup_withholds_label():
+    """< warmup valid bars -> DEGRADED, label withheld, never UNKNOWN-as-benign."""
+    cfg = Config()
+    evs = tape()
+    for i in range(1, 5):
+        rsv = detect(evs[:i], cfg)
+        assert rsv.module_state == "DEGRADED", i
+        assert rsv.state == "warming", i
+    assert detect(evs[:5], cfg).module_state == "OK"
+
+
+def test_missing_bar_masked_not_interpolated():
+    """Zero-total bar is excluded from the window; the path never sees NaN."""
+    cfg = Config()
+    evs = _synth_tape([0.40] * 8)
+    poisoned = evs[:4] + [{"bar": 99, "event_ts": 4_000_000_001, "asof_ts": 4_000_000_002,
+                           "lit": 0.0, "trf": 0.0}] + evs[4:]
+    rsv = detect(poisoned, cfg)
+    assert rsv.module_state == "OK" and math.isfinite(rsv.value)
+    assert abs(rsv.value - 0.40) < TOL  # masked bar contributes nothing
+
+
+def test_halted_bar_discarded_across_reopen():
+    """Halted bars are dropped; they must not leak into the trailing window."""
+    cfg = Config()
+    evs = _synth_tape([0.40] * 8)
+    halted = evs[:4] + [dict(evs[4], halt=True)] + evs[5:]
+    rsv = detect(halted, cfg)
+    assert rsv.module_state == "OK" and abs(rsv.value - 0.40) < TOL
+
+
+def test_split_invariance():
+    """2:1 split doubles both legs -> OffEx ratio (and the label path) unchanged."""
+    cfg = Config()
+    pre = _synth_tape([0.42] * 12, total=60.0)
+    post = _synth_tape([0.42] * 12, total=120.0)   # volumes doubled, ratio identical
+    r1, r2 = detect(pre, cfg), detect(post, cfg)
+    assert r1.state == r2.state and abs(r1.value - r2.value) < TOL
 
 
 def test_emits_valid_regime_state_vector():
@@ -246,15 +293,13 @@ def test_emits_valid_regime_state_vector():
 
 def test_no_lookahead_regime_gating():
     """Lag contract: a label computed at t may gate signals at t only for
-    trades at t+1+. Assert label_ts > indicator_ts for the earliest trade."""
+    trades at t+1+. label_ts == indicator_ts; earliest trade ts > label_ts."""
     evs = tape()
     cfg = Config()
-    for i in range(len(evs) - 1):
+    for i in range(5, len(evs) - 1):
         label = detect(evs[: i + 1], cfg)
-        indicator_ts = evs[i]["event_ts"]          # newest data used
-        assert label.computed_at == indicator_ts  # label stamped at t, not later
-        earliest_trade_ts = evs[i + 1]["event_ts"]
-        assert earliest_trade_ts > label.computed_at, f"lookahead at bar {{i}}"
+        assert label.computed_at == evs[i]["event_ts"]
+        assert evs[i + 1]["event_ts"] > label.computed_at
     # appending a future breakout bar must not move the label stamped at t
     label_t = detect(evs[:-1], cfg)
     assert label_t.computed_at == evs[-2]["event_ts"]
@@ -264,11 +309,16 @@ def test_F1_missing_input_unknown():
     assert detect([], Config()).module_state == "UNKNOWN"
     bad = [dict(event_ts=1, asof_ts=2)]  # missing indicator fields
     assert detect(bad, Config()).module_state == "UNKNOWN"
+    neg = [{"bar": 1, "event_ts": 1, "asof_ts": 2, "lit": -1.0, "trf": 5.0}]
+    assert detect(neg, Config()).module_state == "UNKNOWN"
 
 
-def test_F2_bounds_violation_unknown():
-    rsv = detect(F2_POISON_TAPE, Config())
-    assert rsv.module_state == "UNKNOWN", "out-of-bounds value must yield UNKNOWN"
+def test_F2_all_masked_unknown():
+    """Every bar masked (zero totals) -> no finite indicator -> UNKNOWN."""
+    rows = [{"bar": i + 1, "event_ts": 1000 + i, "asof_ts": 1001 + i,
+             "lit": 0.0, "trf": 0.0} for i in range(12)]
+    rsv = detect(rows, Config())
+    assert rsv.module_state == "UNKNOWN"
 
 
 def test_F3_dual_estimator_disagreement_unknown():
@@ -276,10 +326,8 @@ def test_F3_dual_estimator_disagreement_unknown():
     mod = _sys.modules[__name__]  # self-reference for monkeypatching
     evs = tape()
     orig = mod.second_estimator
-    p0 = primary_indicator(evs, Config())["value"]
-    bad_val = -1e9 if (p0 >= 0) else 1e9  # opposite sign: disagrees in sign/rel/abs/state modes
     try:
-        mod.second_estimator = lambda rows, cfg: {"value": bad_val, "state": "bogus",
+        mod.second_estimator = lambda rows, cfg: {"value": 0.99, "state": "n/a",
                                                  "computed_at": evs[-1]["event_ts"]}
         rsv = mod.detect(evs, Config())
         assert rsv.module_state == "UNKNOWN"
@@ -307,15 +355,12 @@ def test_F5_regime_mining_guard():
 
 
 def test_dual_estimator_agreement():
-    """Sentinel vs Verifier agree within tolerance on the fixture."""
+    """Sentinel (mean of ratios) vs Verifier (aggregate share ratio) agree
+    within tolerance on the fixture."""
     evs = tape()
     cfg = Config()
     r = primary_indicator(evs, cfg)
     s = second_estimator(evs, cfg)
-    if DUAL_MODE == "state":
-        ok = (r["state"] == s["state"]) or (
-            DUAL_TOL is not None and abs(r["value"] - s["value"]) <= DUAL_TOL)
-        assert ok, (r, s)
-    else:
-        assert within_tolerance(r["value"], s["value"], DUAL_MODE, DUAL_TOL), (r, s)
+    assert math.isfinite(r["value"]) and math.isfinite(s["value"])
+    assert abs(r["value"] - s["value"]) <= cfg.dual_tol, (r, s)
     assert detect(evs, cfg).module_state == "OK"

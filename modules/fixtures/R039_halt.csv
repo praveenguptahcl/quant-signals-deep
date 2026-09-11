@@ -1,0 +1,16 @@
+# TYPE: validation-run
+# R039 halt-freeze tape: snapshot -> HALT control row -> snapshot.
+# t2 HALT: freeze state, emit UNKNOWN (value retains cached K* = 100.0), no interpolation.
+# t3: normal snapshot resumes -> PIN. Contributions across the halt are discarded.
+ts_ns,strike,call_oi,put_oi,spot,event_type,factor
+1789588800000000000,96,10,50,100.0,,
+1789588800000000000,98,30,40,100.0,,
+1789588800000000000,100,60,20,100.0,,
+1789588800000000000,102,40,30,100.0,,
+1789588800000000000,104,50,10,100.0,,
+1789675200000000000,,,,,HALT,
+1789761600000000000,96,10,50,100.0,,
+1789761600000000000,98,30,40,100.0,,
+1789761600000000000,100,60,20,100.0,,
+1789761600000000000,102,40,30,100.0,,
+1789761600000000000,104,50,10,100.0,,

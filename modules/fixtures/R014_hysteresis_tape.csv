@@ -1,0 +1,17 @@
+# TYPE: validation-run
+# R014 — hysteresis pinning tape: 6 high-imbalance buckets (dp=0.5, sig_dp=0.2,
+# |imb|=0.9876) then 3 zero-imbalance buckets (dp=0.0). Final VPIN=0.6584 lies
+# strictly between exit_extreme=0.60 and enter_extreme=0.70, so the final label
+# depends ONLY on the previous label: 'extreme' with hysteresis hold,
+# 'elevated' on cold start. Any drift in the hysteresis transition table fails
+# test_hysteresis_end_to_end. All numbers synthetic, seed 9014 [example].
+bar,event_ts,asof_ts,dp,buy_frac,v,sig_dp
+1,1788220800000000000,1788220860000000000,0.5,0.95,10000,0.2
+2,1788220800000000060,1788220860000000060,0.5,0.95,10000,0.2
+3,1788220800000000120,1788220860000000120,0.5,0.95,10000,0.2
+4,1788220800000000180,1788220860000000180,0.5,0.95,10000,0.2
+5,1788220800000000240,1788220860000000240,0.5,0.95,10000,0.2
+6,1788220800000000300,1788220860000000300,0.5,0.95,10000,0.2
+7,1788220800000000360,1788220860000000360,0.0,0.5,10000,0.2
+8,1788220800000000420,1788220860000000420,0.0,0.5,10000,0.2
+9,1788220800000000480,1788220860000000480,0.0,0.5,10000,0.2

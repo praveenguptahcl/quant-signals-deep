@@ -1,21 +1,31 @@
-"""R035 — Earnings proximity / earnings season: acceptance tests (concrete sketch).
+"""R035 — Earnings proximity / earnings season: acceptance tests.
 
-Real imports, fixture load, real assertions. Not a production harness.
+Reference implementation of the §R2 normative pseudocode (hysteresis state
+machine), fixture load, real assertions. Not a production harness.
 Definition of done: `python3 -m pytest modules/tests/test_R035.py -q` exits 0.
 """
+
 import csv
 import math
 import os
-import statistics
 
 RID = "R035"
 TOL = 1e-9
-DUAL_TOL = 1e-12
-ESTIMATOR_VERSION = "1.0.0"
+DUAL_TOL = 0.5          # [default] days; announced-vs-actual timestamp agreement band (F3)
+ESTIMATOR_VERSION = "1.1.0"
 CADENCE_NS = 86400000000000
 DATA_VINTAGE = "2026-09-09"
 
-CFG = {"D": 2, "ivp_crit": 90.0, "min_lag_bars": 1}
+CFG = {
+    "D": 2,             # [example] entry distance (calendar days)
+    "D_watch": 5,       # [example] watch distance
+    "ivp_crit": 90.0,   # [example] entry IV-percentile
+    "h_d": 1,           # [example] hysteresis: distance margin
+    "h_ivp": 10.0,      # [example] hysteresis: IV-percentile margin
+    "L": 252,           # [example] IV-percentile lookback sessions
+    "L_min": 126,       # [default] min sessions for a clean lookback
+    "min_lag_bars": 1,  # [default]
+}
 
 
 def _parse_float(x):
@@ -39,57 +49,112 @@ def _mk(state, value, ts_ns, module_state):
 
 
 def _row_value(e, cfg):
-    _d = _parse_float(e['d_days']); _iv = _parse_float(e['iv_pct'])
+    _d = _parse_float(e["d_days"])
+    _iv = _parse_float(e["iv_pct"])
     if not (math.isfinite(_d) and math.isfinite(_iv)):
-        raise ValueError('non-finite earnings inputs')
-    return _d
+        raise ValueError("non-finite earnings inputs")
+    return _d, _iv
 
 
 def _aggregate(events, vals, cfg):
-    return vals[-1]
+    return vals[-1][0]
 
 
 def _dual_aggregate(events, cfg):
-    return float(events[-1]['d_days'])
+    """Independent second-calendar path: d from the dual source must agree
+    within DUAL_TOL, else F3 UNKNOWN (announced vs actual timestamp)."""
+    last = events[-1]
+    raw = (last.get("d_days_dual") or "").strip()
+    return _parse_float(raw) if raw else _parse_float(last["d_days"])
 
 
-def _state_of(value, e, cfg):
-    _iv = float(e['iv_pct'])
-    if value <= cfg['D'] and _iv >= cfg['ivp_crit']:
-        return 'PRE_EARNINGS'
-    if value <= 5:
-        return 'WATCH'
-    return 'NORMAL'
+def _entry(d, iv, cfg):
+    return d <= cfg["D"] and iv >= cfg["ivp_crit"]
 
 
-def _bounds_ok(value, cfg):
-    return math.isfinite(value)
+def _stay_pre(d, iv, cfg):
+    return d <= cfg["D"] + cfg["h_d"] and iv >= cfg["ivp_crit"] - cfg["h_ivp"]
 
 
-def detect(state, events, cfg):
+def _label(d, iv, prev, cfg):
+    """Normative hysteresis transitions (§R2). prev=None after a reset."""
+    if d < 0:
+        return "NORMAL"  # [default] the print has passed; next cycle's build-up starts fresh
+    if prev == "PRE_EARNINGS":
+        if _stay_pre(d, iv, cfg):
+            return "PRE_EARNINGS"
+    elif prev == "WATCH":
+        if _entry(d, iv, cfg):
+            return "PRE_EARNINGS"
+        if d <= cfg["D_watch"] + cfg["h_d"]:
+            return "WATCH"
+        return "NORMAL"
+    else:  # NORMAL / None / post-reset: strict entry, no hysteresis memory
+        if _entry(d, iv, cfg):
+            return "PRE_EARNINGS"
+        if d <= cfg["D_watch"]:
+            return "WATCH"
+        return "NORMAL"
+    # fall-through: exited PRE_EARNINGS -> WATCH band (with hysteresis) or NORMAL
+    if d <= cfg["D_watch"] + cfg["h_d"]:
+        return "WATCH"
+    return "NORMAL"
+
+
+def detect(state, events, cfg, dual_fn=None):
     """detect(state, events, cfg) -> list[RegimeState].
 
-    Causal: the label at position t uses only events[:t+1]. Empty input or an
-    unparseable row yields module_state UNKNOWN (F1); out-of-bounds indicator
-    values yield UNKNOWN (F2). Never interpolates.
+    Causal hysteresis machine: the label at position t uses only events[:t+1]
+    and the carried per-name memory. Empty input -> UNKNOWN (F1);
+    unconfirmed calendar -> UNKNOWN (F1); non-finite d/iv -> UNKNOWN (F2);
+    dual-calendar disagreement -> UNKNOWN (F3); HALTED -> UNKNOWN + memory
+    reset (discard across reopen, [default]); short lookback -> DEGRADED
+    label still emitted. Never interpolates.
     """
     if not events:
         return [_mk("UNKNOWN", float("nan"), 0, "UNKNOWN")]  # F1
+    dual = dual_fn or _dual_aggregate
+    mem = {}   # name -> (label, value)
     out = []
-    vals = []
     for i, e in enumerate(events):
         ts = int(float(e["ts_ns"]))
+        name = e.get("name", "")
+        mkt = (e.get("market_state") or "CONTINUOUS_TRADING").strip()
+        if mkt == "HALTED":
+            mem.pop(name, None)  # [default] reset hysteresis memory across reopen
+            out.append(_mk("UNKNOWN", float("nan"), ts, "UNKNOWN"))
+            continue
+        if mkt == "AUCTION":
+            prev = mem.get(name)
+            if prev is None:
+                out.append(_mk("UNKNOWN", float("nan"), ts, "UNKNOWN"))
+            else:
+                out.append(_mk(prev[0], prev[1], ts, "DEGRADED"))  # hold last, degraded
+            continue
+        if mkt == "CLOSED":
+            out.append(_mk("OFF", float("nan"), ts, "OFF"))
+            continue
+        if str(e.get("calendar_confirmed", "1")).strip() not in ("1", "true", "True"):
+            out.append(_mk("UNKNOWN", float("nan"), ts, "UNKNOWN"))  # F1; memory kept
+            continue
         try:
-            v = _row_value(e, cfg)
+            d, iv = _row_value(e, cfg)
         except Exception:
-            out.append(_mk("UNKNOWN", float("nan"), ts, "UNKNOWN"))  # F1
+            out.append(_mk("UNKNOWN", float("nan"), ts, "UNKNOWN"))  # F2; memory kept
             continue
-        vals.append(v)
-        value = _aggregate(events[: i + 1], vals, cfg)
-        if not _bounds_ok(value, cfg):
-            out.append(_mk("UNKNOWN", value, ts, "UNKNOWN"))  # F2
+        v = d
+        dv = dual(events[: i + 1], cfg)
+        if not (math.isfinite(dv) and abs(dv - v) <= DUAL_TOL):
+            out.append(_mk("UNKNOWN", float("nan"), ts, "UNKNOWN"))  # F3; memory kept
             continue
-        out.append(_mk(_state_of(value, e, cfg), value, ts, "OK"))
+        label = _label(d, iv, mem.get(name, (None, None))[0], cfg)
+        try:
+            lookback_n = int(float(e.get("lookback_n", "252")))
+        except (TypeError, ValueError):
+            lookback_n = 0
+        module_state = "DEGRADED" if lookback_n < cfg["L_min"] else "OK"
+        mem[name] = (label, d)
+        out.append(_mk(label, d, ts, module_state))
     return out
 
 
@@ -151,22 +216,33 @@ def test_f1_missing_input_unknown():
     assert got[0]["state"] == "UNKNOWN"
 
 
+def test_f1_unconfirmed_calendar_unknown():
+    tape = _load("R035_tape.csv")
+    got = detect(None, tape, CFG)
+    assert got[12]["state"] == "UNKNOWN" and got[12]["module_state"] == "UNKNOWN"
+
+
 def test_f2_bounds_violation_unknown():
     tape = _load("R035_tape.csv")
-    bad = [dict(r) for r in tape]
-    bad[0]["iv_pct"] = "nan"
-    got = detect(None, bad, CFG)
-    assert got[0]["module_state"] == "UNKNOWN", got[0]
+    got = detect(None, tape, CFG)
+    assert got[13]["module_state"] == "UNKNOWN", got[13]
+    assert got[13]["state"] == "UNKNOWN"
 
 
 def test_f3_dual_estimator_agreement():
     tape = _load("R035_tape.csv")
-    vals = [_row_value(e, CFG) for e in tape]
-    v1 = _aggregate(tape, vals, CFG)
-    v2 = _dual_aggregate(tape, CFG)
-    if not _bounds_ok(v1, CFG):
-        return  # degenerate panel: both estimators must agree on UNKNOWN-ness
-    assert _close(v1, v2, DUAL_TOL), (v1, v2)
+    got = detect(None, tape, CFG)
+    # row 14: second calendar disagrees by 3 days -> F3 UNKNOWN
+    assert got[14]["module_state"] == "UNKNOWN" and got[14]["state"] == "UNKNOWN"
+    # agreement path: rows with matching dual stay non-UNKNOWN
+    assert got[4]["module_state"] == "OK"
+
+
+def test_f3_dual_disagreement_wiring():
+    """Injected dual disagreement must force UNKNOWN (logic-drift pin)."""
+    tape = _load("R035_tape.csv")[:5]
+    got = detect(None, tape, CFG, dual_fn=lambda ev, c: 999.0)
+    assert all(g["state"] == "UNKNOWN" and g["module_state"] == "UNKNOWN" for g in got)
 
 
 def test_f4_staleness_expires_to_unknown():
@@ -188,11 +264,80 @@ def test_f5_no_expost_selection():
         assert rs["computed_at"] >= 0
 
 
-def test_spot_handcheck():
-    """Independently hand-verified arithmetic (see module section R3)."""
-    tape = _load('R035_tape.csv')
-    got = detect(None, tape, CFG)
-    assert got[0]['state'] == 'PRE_EARNINGS', got[0]
-    assert got[1]['state'] == 'NORMAL'
-    assert got[2]['state'] == 'PRE_EARNINGS'
+def test_hysteresis_hold_pins():
+    """Rows 5-6 must stay PRE_EARNINGS inside the hysteresis band."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[5]["state"] == "PRE_EARNINGS", got[5]   # iv 84 >= 90-10
+    assert got[6]["state"] == "PRE_EARNINGS", got[6]   # d 3 <= 2+1, iv 85 >= 80
 
+
+def test_hysteresis_exit_pin():
+    """Row 10: iv 79 < 80 exits PRE_EARNINGS -> WATCH."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[10]["state"] == "WATCH", got[10]
+
+
+def test_halt_resets_hysteresis_memory():
+    """Rows 6 and 8 share identical inputs; the halt between them must reset
+    memory, so row 8 is WATCH where row 6 is PRE_EARNINGS."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[6]["state"] == "PRE_EARNINGS"
+    assert got[7]["state"] == "UNKNOWN" and got[7]["module_state"] == "UNKNOWN"
+    assert got[8]["state"] == "WATCH", got[8]
+
+
+def test_print_passed_forces_normal():
+    """Row 11: d=-1 (print passed) -> NORMAL regardless of IV."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[11]["state"] == "NORMAL", got[11]
+    assert got[11]["value"] == -1.0
+
+
+def test_missing_bars_no_interpolation():
+    """The 2-day gap before row 11 must not be interpolated: value stays -1.0."""
+    tape = _load("R035_tape.csv")
+    t10 = int(float(tape[10]["ts_ns"]))
+    t11 = int(float(tape[11]["ts_ns"]))
+    assert t11 - t10 == 3 * CADENCE_NS, "fixture must contain a 2-day gap"
+    got = detect(None, tape, CFG)
+    assert got[11]["value"] == -1.0 and got[11]["state"] == "NORMAL"
+
+
+def test_degraded_short_lookback():
+    """Row 15: split inside lookback, 100 < 126 sessions -> DEGRADED label emitted."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[15]["module_state"] == "DEGRADED", got[15]
+    assert got[15]["state"] == "NORMAL"
+
+
+def test_entry_after_unknown_or_degraded():
+    """Row 16: strict entry works after UNKNOWN/DEGRADED rows (no stuck state)."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[16]["state"] == "PRE_EARNINGS", got[16]
+    assert got[16]["module_state"] == "OK"
+
+
+def test_boundary_entry_conditions():
+    """Row 1: d=5 -> WATCH (not entry). Row 3: iv=89 -> WATCH (not entry).
+    Row 4: d=2, iv=90 -> PRE_EARNINGS (inclusive boundaries)."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[1]["state"] == "WATCH"
+    assert got[3]["state"] == "WATCH"
+    assert got[4]["state"] == "PRE_EARNINGS"
+
+
+def test_auction_holds_last_state_degraded():
+    tape = [dict(r) for r in _load("R035_tape.csv")[:5]]
+    tape.append(dict(tape[-1]))
+    tape[-1]["market_state"] = "AUCTION"
+    got = detect(None, tape, CFG)
+    assert got[-1]["state"] == "PRE_EARNINGS", got[-1]
+    assert got[-1]["module_state"] == "DEGRADED"
+
+
+def test_spot_handcheck():
+    """Independently hand-verified arithmetic (see module §R3)."""
+    got = detect(None, _load("R035_tape.csv"), CFG)
+    assert got[0]["state"] == "NORMAL", got[0]
+    assert got[4]["state"] == "PRE_EARNINGS"
+    assert got[9]["state"] == "PRE_EARNINGS"

@@ -1,0 +1,10 @@
+# TYPE: validation-run
+# R025: expected indicator values/states for the gap pin, computed causally.
+# Bar 5 has a missing y2 -> F1 -> UNKNOWN (never interpolate).
+# All numbers synthetic, seed 9025 [example].
+bar,event_ts,exp_value,exp_state,exp_computed_at,exp_module_state
+1,1788220800000000000,-20.0000000000,flat,1788220800000000000,OK
+2,1788307200000000000,-27.0000000000,inverted,1788307200000000000,OK
+3,1788393600000000000,-23.0000000000,inverted,1788393600000000000,OK
+4,1788652800000000000,-23.0000000000,inverted,1788652800000000000,OK
+5,1788739200000000000,NaN,invalid,1788739200000000000,UNKNOWN

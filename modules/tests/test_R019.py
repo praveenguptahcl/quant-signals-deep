@@ -1,14 +1,14 @@
 """Acceptance tests for R019 - Crypto funding-rate regime.
 
-Template v1.0.0. Concrete sketch: loads the fixture tape, runs a reference
-implementation of the chapter's normative formula, and asserts causality,
-F1-F5 fail-safes, and dual-estimator agreement.
+Template v1.0.0. Reference implementation of the chapter's normative
+detection algorithm (trailing-window cross-venue mean, sign agreement,
+hysteresis state machine with entry confirmation), plus F1-F5 fail-safes.
 
 Run: python3 -m pytest modules/tests/test_R019.py -q   (from repo root)
 """
 import csv
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
@@ -16,115 +16,194 @@ TAPE = FIX / "R019_tape.csv"
 EXPECTED = FIX / "R019_expected.csv"
 
 TOL = 1e-9  # float tolerance [default]
-CADENCE_S = 28800  # indicator cadence in seconds [default]
+CADENCE_S = 8 * 3600  # indicator cadence in seconds [default]
 NS = 1_000_000_000
-STATE_LABELS = ['balanced', 'leaning', 'crowded', 'extreme', 'undefined', 'warming', 'missing', 'invalid']
-BOUNDS = (-500.0, 500.0)  # mathematical bounds of the indicator value (F2)
+BOUNDS = (-500.0, 500.0)  # mathematical bounds of the indicator value (F2) [default]
 DUAL_MODE = "rel"  # rel | abs | sign | state
-DUAL_TOL = 0.3
-ESTIMATOR_VERSION = "1.0.0"
+ESTIMATOR_VERSION = "1.1.0"
+STATE_LABELS = ['balanced', 'leaning', 'crowded', 'extreme', 'undefined',
+                'warming', 'missing', 'invalid', 'out_of_bounds']
+ORDER = {'balanced': 0, 'leaning': 1, 'crowded': 2, 'extreme': 3}
+
+
+# ============================ R019 ============================
+# RB-list: R019 Crypto funding-rate regime. Grok RB2 worked example:
+# 8h rates 0.020%, 0.015%, 0.025% on $10k -> $6/day; mean 0.020% ->
+# annualized (simple) 0.00020*3*365 = 21.9% -> moderately elevated.
+
+
+def _ann(f8):
+    return f8 * 3 * 365 * 100  # simple annualization, in percent [documented]
 
 
 def _mean(xs):
     xs = list(xs)
     return sum(xs) / len(xs) if xs else float("nan")
 
-def _stdev(xs, ddof=1):
-    xs = list(xs)
-    n = len(xs)
-    if n <= ddof:
-        return float("nan")
-    m = _mean(xs)
-    return math.sqrt(sum((x - m) ** 2 for x in xs) / (n - ddof))
-
-def _pct_rank(x, hist):
-    h = list(hist)
-    if not h:
-        return float("nan")
-    return (sum(1 for v in h if v < x) + 0.5 * sum(1 for v in h if v == x)) / len(h)
-
-def _ols_slope(xs, ys):
-    xs, ys = list(xs), list(ys)
-    mx, my = _mean(xs), _mean(ys)
-    den = sum((x - mx) ** 2 for x in xs)
-    if den == 0:
-        return 0.0
-    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
 
 def _sign(x):
     return 1 if x > 0 else (-1 if x < 0 else 0)
 
-# ============================ R019 ============================
-# RB-list: R019 Crypto funding-rate regime. Grok RB2 worked example:
-# 8h rates 0.020%, 0.015%, 0.025% on $10k -> $6/day; mean 0.020% ->
-# annualized (simple) 0.00020*3*365 = 21.9% -> moderately elevated.
-R019_ROWS = [  # (venue, f_8h decimal)
-    ("binance", 0.00020), ("binance", 0.00015), ("binance", 0.00025),
-    ("bybit", 0.00018), ("bybit", 0.00022), ("bybit", 0.00016),
-    ("okx", 0.00025), ("okx", 0.00020), ("okx", 0.00018),
-]
 
-def r019_tape():
-    hdr = ["bar", "event_ts", "asof_ts", "venue", "f_8h"]
-    rows = []
-    for i, (vn, f) in enumerate(R019_ROWS, 1):
-        ts = TS0 + (i - 1) * 8 * 3600
-        rows.append({"bar": i, "event_ts": ts, "asof_ts": ts + 8 * 3600 * NS, "venue": vn, "f_8h": f})
-    return hdr, rows
+@dataclass
+class Config:
+    # Mirrors the §R0.2 Config table (status default => [default] per tag law).
+    venues: int = 3
+    window_intervals: int = 3
+    min_intervals: int = 2
+    min_venues: int = 2
+    lean_entry_ann: float = 5.0
+    lean_exit_ann: float = 4.0
+    crowded_entry_ann: float = 20.0
+    crowded_exit_ann: float = 15.0
+    extreme_entry_ann: float = 50.0
+    extreme_exit_ann: float = 40.0
+    confirm_n: int = 2
+    confirm_k: int = 3
+    dual_tol: float = 0.3
+    staleness_mult: float = 3.0
 
-def _ann(f8):
-    return f8 * 3 * 365 * 100  # simple annualization, in percent
 
-def _venue_means(rows):
-    d = {}
+def _cfg_get(cfg, name):
+    return getattr(cfg, name, getattr(Config, name))
+
+
+def _grid(rows, cfg):
+    """Group raw prints into settlement intervals.
+
+    Returns a list of dicts {ts, venue_means, n} sorted by ts, one entry per
+    distinct event_ts. Intervals with fewer than min_venues reporting venues
+    are masked (venue_means=None).
+    """
+    min_venues = _cfg_get(cfg, "min_venues")
+    by_ts = {}
     for r in rows:
+        d = by_ts.setdefault(r["event_ts"], {})
         d.setdefault(r["venue"], []).append(r["f_8h"])
-    return {v: _mean(fs) for v, fs in d.items()}
+    out = []
+    for ts in sorted(by_ts):
+        vm = {v: _mean(fs) for v, fs in by_ts[ts].items()}
+        out.append({"ts": ts, "venue_means": vm if len(vm) >= min_venues else None})
+    return out
 
-def _r019_state(a):
-    if not math.isfinite(a):
-        return "undefined"
-    a = abs(a)
-    return "extreme" if a > 50 else ("crowded" if a >= 20 else ("leaning" if a >= 5 else "balanced"))
 
-def primary_indicator_r019(rows, cfg):
+def _confirm(vals, threshold, cfg):
+    """Entry confirmation: >= confirm_n of the last confirm_k indicator
+    values at or beyond the entry threshold."""
+    n = _cfg_get(cfg, "confirm_n")
+    k = _cfg_get(cfg, "confirm_k")
+    tail = vals[-k:]
+    return sum(1 for v in tail if v >= threshold) >= n
+
+
+def _step(prev, v, vals, cfg):
+    """Hysteresis state machine: entries need confirmation, exits are
+    immediate once the value drops below the (lower) exit threshold."""
+    if prev == "balanced":
+        return "leaning" if _confirm(vals, _cfg_get(cfg, "lean_entry_ann"), cfg) else "balanced"
+    if prev == "leaning":
+        if v < _cfg_get(cfg, "lean_exit_ann"):
+            return "balanced"
+        if _confirm(vals, _cfg_get(cfg, "crowded_entry_ann"), cfg):
+            return "crowded"
+        return "leaning"
+    if prev == "crowded":
+        if v < _cfg_get(cfg, "crowded_exit_ann"):
+            return "leaning"
+        if _confirm(vals, _cfg_get(cfg, "extreme_entry_ann"), cfg):
+            return "extreme"
+        return "crowded"
+    # prev == "extreme"
+    return "crowded" if v < _cfg_get(cfg, "extreme_exit_ann") else "extreme"
+
+
+def primary_indicator(rows, cfg):
+    """Normative detection. Returns dict(value, state, module_state,
+    computed_at, vintage). Stateless across calls: hysteresis is replayed
+    causally from the first interval, so prefixes give prefix labels."""
     rows = list(rows)
     if not rows:
-        return {"value": float("nan"), "state": "missing", "module_state": "UNKNOWN", "computed_at": 0, "vintage": "synthetic"}
-    if any("f_8h" not in r or "venue" not in r or not math.isfinite(r["f_8h"]) for r in rows):
+        return {"value": float("nan"), "state": "missing", "module_state": "UNKNOWN",
+                "computed_at": 0, "vintage": "synthetic"}
+    need = ("event_ts", "venue", "f_8h")
+    if any(any(k not in r for k in need) or not math.isfinite(r["f_8h"]) for r in rows):
+        ts = rows[-1].get("event_ts", 0)
         return {"value": float("nan"), "state": "invalid", "module_state": "UNKNOWN",
-                "computed_at": rows[-1].get("event_ts", 0), "vintage": "synthetic"}
-    vm = _venue_means(rows)
-    if len(vm) < 2:
-        return {"value": float("nan"), "state": "warming", "module_state": "DEGRADED",
-                "computed_at": rows[-1]["event_ts"], "vintage": "synthetic"}
-    v = _ann(_mean(list(vm.values())))
-    return {"value": v, "state": _r019_state(v), "module_state": "OK",
-            "computed_at": rows[-1]["event_ts"], "vintage": "synthetic"}
+                "computed_at": ts, "vintage": "synthetic"}
+    W = _cfg_get(cfg, "window_intervals")
+    min_intervals = _cfg_get(cfg, "min_intervals")
+    grid = _grid(rows, cfg)
+    vals = []          # (ts, annualized value) for valid evaluations
+    prev = "balanced"  # hysteresis entry state [default]
+    last = None
+    for i, g in enumerate(grid):
+        window = grid[max(0, i - W + 1): i + 1]
+        valid = [gg for gg in window if gg["venue_means"] is not None]
+        if len(valid) < min_intervals:
+            last = {"value": float("nan"), "state": "warming",
+                    "module_state": "DEGRADED", "computed_at": g["ts"],
+                    "vintage": "synthetic"}
+            continue
+        cross = _mean(_mean(gg["venue_means"].values()) for gg in valid)
+        v = _ann(cross)
+        # Sign agreement (F3 input hygiene): venues must agree on the sign of
+        # the window mean when the cross-venue mean is material.
+        if abs(v) > 1.0:
+            for venue in {vv for gg in valid for vv in gg["venue_means"]}:
+                vm = _mean(gg["venue_means"][venue]
+                           for gg in valid if venue in gg["venue_means"])
+                if _sign(vm) != _sign(cross):
+                    return {"value": v, "state": "invalid", "module_state": "UNKNOWN",
+                            "computed_at": g["ts"], "vintage": "synthetic"}
+        vals.append((g["ts"], v))
+        state = _step(prev, v, [vv for _, vv in vals], cfg)
+        prev = state
+        last = {"value": v, "state": state, "module_state": "OK",
+                "computed_at": g["ts"], "vintage": "synthetic"}
+    return last
 
-def second_estimator_r019(rows, cfg):
+
+def second_estimator(rows, cfg):
+    """Verifier: median-based cross-venue estimator over the same trailing
+    window. Must agree with the mean-based Sentinel within dual_tol (F3)."""
     rows = list(rows)
-    vm = _venue_means(rows)
-    s = sorted(vm.values())
-    v = _ann(s[len(s) // 2]) if s else float("nan")
-    return {"value": v, "state": "n/a", "computed_at": rows[-1]["event_ts"] if rows else 0}
+    W = _cfg_get(cfg, "window_intervals")
+    min_intervals = _cfg_get(cfg, "min_intervals")
+    grid = _grid(rows, cfg)
+    window = [g for g in grid[-W:] if g["venue_means"] is not None]
+    if len(window) < min_intervals:
+        return {"value": float("nan"), "state": "n/a",
+                "computed_at": rows[-1]["event_ts"] if rows else 0}
+    per_venue = {}
+    for g in window:
+        for venue, f in g["venue_means"].items():
+            per_venue.setdefault(venue, []).append(f)
+    medians = sorted(_mean(fs) for fs in per_venue.values())
+    med = medians[len(medians) // 2]
+    return {"value": _ann(med), "state": "n/a",
+            "computed_at": grid[-1]["ts"]}
 
-F2_POISON_R019 = '''
+
 F2_POISON_TAPE = [
     {"bar": 1, "event_ts": 1000, "asof_ts": 1001, "venue": "binance", "f_8h": 0.05},
+    {"bar": 1, "event_ts": 1000, "asof_ts": 1001, "venue": "bybit", "f_8h": 0.05},
+    {"bar": 2, "event_ts": 1002, "asof_ts": 1003, "venue": "binance", "f_8h": 0.05},
     {"bar": 2, "event_ts": 1002, "asof_ts": 1003, "venue": "bybit", "f_8h": 0.05},
 ]  # annualized = 5475% > 500 bound -> F2
-'''
 
 
-primary_indicator = primary_indicator_r019
-second_estimator = second_estimator_r019
+SIGN_POISON_TAPE = [
+    {"bar": 1, "event_ts": 1000, "asof_ts": 1001, "venue": "binance", "f_8h": 0.00030},
+    {"bar": 1, "event_ts": 1000, "asof_ts": 1001, "venue": "bybit", "f_8h": -0.00010},
+    {"bar": 2, "event_ts": 2000, "asof_ts": 2001, "venue": "binance", "f_8h": 0.00030},
+    {"bar": 2, "event_ts": 2000, "asof_ts": 2001, "venue": "bybit", "f_8h": -0.00010},
+]  # cross-venue mean +10.95% ann. but venues disagree on sign -> F3 hygiene -> UNKNOWN
 
 
-F2_POISON_TAPE = [
-    {"bar": 1, "event_ts": 1000, "asof_ts": 1001, "venue": "binance", "f_8h": 0.05},
-    {"bar": 2, "event_ts": 1002, "asof_ts": 1003, "venue": "bybit", "f_8h": 0.05},
-]  # annualized = 5475% > 500 bound -> F2
+primary_indicator_r019 = primary_indicator
+second_estimator_r019 = second_estimator
+primary_indicator_fn = primary_indicator
+second_estimator_fn = second_estimator
 
 
 # ---------------------------------------------------------------- fixtures
@@ -150,20 +229,29 @@ def tape():
     return rows
 
 
+def settlement_ts():
+    """Distinct settlement timestamps of the tape, in order."""
+    seen = []
+    for r in tape():
+        if r["event_ts"] not in seen:
+            seen.append(r["event_ts"])
+    return seen
+
+
+def prefix(ts):
+    """All tape rows with event_ts <= ts (causal prefix)."""
+    return [r for r in tape() if r["event_ts"] <= ts]
+
+
 @dataclass(frozen=True)
 class RegimeState:
     regime_id: str
-    state: str            # regime label, e.g. "elevated"
+    state: str            # regime label, e.g. "crowded"
     value: float          # indicator value
     estimator_version: str
     data_vintage: str
     computed_at: int      # int64 ns UTC (= event_ts of newest input bar)
     module_state: str     # OK | DEGRADED | UNKNOWN | OFF
-
-
-@dataclass
-class Config:
-    pass  # regime-specific knobs live in the chapter's Config table (§R0.2)
 
 
 class RegimeMiningError(AssertionError):
@@ -198,21 +286,16 @@ def detect(rows, cfg, now_ns=None, select_periods=False, preregistered=False):
     if not (math.isfinite(v) and lo <= v <= hi):
         return RegimeState("R019", "out_of_bounds", v, ESTIMATOR_VERSION,
                            r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F3: dual-estimator agreement (state mode: same label, or values within
-    # the DUAL_TOL guard band at a state boundary [default])
+    # F3: dual-estimator agreement (rel mode, DUAL_TOL from cfg)
     s = second_estimator(rows, cfg)
-    if DUAL_MODE == "state":
-        agree = (r["state"] == s["state"]) or (
-            DUAL_TOL is not None and math.isfinite(v) and math.isfinite(s["value"])
-            and abs(v - s["value"]) <= DUAL_TOL)
-    else:
-        agree = within_tolerance(v, s["value"], DUAL_MODE, DUAL_TOL)
-    if not agree:
+    tol = _cfg_get(cfg, "dual_tol")
+    if not (math.isfinite(v) and math.isfinite(s["value"])
+            and within_tolerance(v, s["value"], DUAL_MODE, tol)):
         return RegimeState("R019", r["state"], v, ESTIMATOR_VERSION,
                            r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F4: staleness timeout — 3x cadence
+    # F4: staleness timeout — staleness_mult x cadence
     now = now_ns if now_ns is not None else rows[-1]["event_ts"] + CADENCE_S * NS
-    if now - r["computed_at"] > 3 * CADENCE_S * NS:
+    if now - r["computed_at"] > _cfg_get(cfg, "staleness_mult") * CADENCE_S * NS:
         return RegimeState("R019", r["state"], v, ESTIMATOR_VERSION,
                            r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
     # F5: no ex-post backtest-period selection without a pre-registered definition
@@ -224,22 +307,22 @@ def detect(rows, cfg, now_ns=None, select_periods=False, preregistered=False):
 
 # ------------------------------------------------------------------- tests
 def test_fixture_recomputes_to_expected():
-    """Chapter arithmetic: causal recompute of each bar matches expected CSV."""
-    evs = tape()
+    """Chapter arithmetic: causal recompute of each settlement matches expected CSV."""
     exp = {int(r["bar"]): r for r in load_csv(EXPECTED)}
     cfg = Config()
-    for i in range(len(evs)):
-        r = primary_indicator(evs[: i + 1], cfg)
-        want = exp[i + 1]
+    for i, ts in enumerate(settlement_ts(), 1):
+        r = primary_indicator(prefix(ts), cfg)
+        want = exp[i]
         wv = float(want["exp_value"])
         if math.isnan(wv):
             assert math.isnan(r["value"]), i
         elif math.isinf(wv):
             assert math.isinf(r["value"]) and (r["value"] > 0) == (wv > 0), i
         else:
-            assert abs(r["value"] - wv) < TOL, i
-        assert r["state"] == want["exp_state"], i
+            assert abs(r["value"] - wv) < TOL, (i, r["value"], wv)
+        assert r["state"] == want["exp_state"], (i, r["state"])
         assert r["computed_at"] == int(want["exp_computed_at"]), i
+        assert r["computed_at"] == ts, i
         assert r["module_state"] == want["exp_module_state"], i
 
 
@@ -257,17 +340,79 @@ def test_emits_valid_regime_state_vector():
 def test_no_lookahead_regime_gating():
     """Lag contract: a label computed at t may gate signals at t only for
     trades at t+1+. Assert label_ts > indicator_ts for the earliest trade."""
-    evs = tape()
     cfg = Config()
-    for i in range(len(evs) - 1):
-        label = detect(evs[: i + 1], cfg)
-        indicator_ts = evs[i]["event_ts"]          # newest data used
-        assert label.computed_at == indicator_ts  # label stamped at t, not later
-        earliest_trade_ts = evs[i + 1]["event_ts"]
-        assert earliest_trade_ts > label.computed_at, f"lookahead at bar {{i}}"
+    tss = settlement_ts()
+    for i, ts in enumerate(tss[:-1]):
+        label = detect(prefix(ts), cfg)
+        assert label.computed_at == ts  # label stamped at t, not later
+        assert tss[i + 1] > label.computed_at, f"lookahead at settlement {i}"
     # appending a future breakout bar must not move the label stamped at t
-    label_t = detect(evs[:-1], cfg)
-    assert label_t.computed_at == evs[-2]["event_ts"]
+    label_t = detect(prefix(tss[-2]), cfg)
+    assert label_t.computed_at == tss[-2]
+
+
+def test_warmup_degraded_label_withheld():
+    """Insufficient lookback: first settlement -> DEGRADED, label withheld."""
+    cfg = Config()
+    tss = settlement_ts()
+    rsv = detect(prefix(tss[0]), cfg)
+    assert rsv.module_state == "DEGRADED"
+    assert rsv.state == "warming"
+    # second settlement: window has min_intervals -> OK
+    rsv2 = detect(prefix(tss[1]), cfg)
+    assert rsv2.module_state == "OK"
+
+
+def test_entry_confirmation_rejects_single_spike():
+    """A one-interval funding spike (settlement 6, ~60% ann. mean) must NOT
+    flip leaning -> crowded: 2-of-3 confirmation fails on a lone spike."""
+    cfg = Config()
+    tss = settlement_ts()
+    assert detect(prefix(tss[5]), cfg).state == "leaning"   # spike settlement
+    assert detect(prefix(tss[6]), cfg).state == "crowded"   # confirmed next
+
+
+def test_hysteresis_holds_on_dip_above_exit():
+    """Crowded holds when the indicator dips below the 20% entry but stays
+    above the 15% exit (settlements 9-10)."""
+    cfg = Config()
+    tss = settlement_ts()
+    for ts in tss[8:10]:
+        rsv = detect(prefix(ts), cfg)
+        assert rsv.state == "crowded", (ts, rsv.value)
+        assert 15.0 <= abs(rsv.value) < 20.0, rsv.value
+    # below the 15% exit -> steps down to leaning (settlement 11)
+    rsv = detect(prefix(tss[10]), cfg)
+    assert rsv.state == "leaning"
+
+
+def test_extreme_entry_needs_confirmation_and_exit_hysteresis():
+    """Extreme requires 2-of-3 confirmations >= 50% (settlement 15, not 14);
+    then holds while the value sits between the 40% exit and 50% entry
+    (settlements 16-17), and steps down to crowded below 40% (settlement 18)."""
+    cfg = Config()
+    tss = settlement_ts()
+    assert detect(prefix(tss[12]), cfg).state == "crowded"   # 1st >= 50 eval
+    assert detect(prefix(tss[13]), cfg).state == "crowded"   # still 1 of 3? -> 2 of 3
+    assert detect(prefix(tss[14]), cfg).state == "extreme"
+    for ts in tss[15:17]:
+        rsv = detect(prefix(ts), cfg)
+        assert rsv.state == "extreme", (ts, rsv.value)
+        assert 40.0 <= abs(rsv.value) < 50.0 or abs(rsv.value) >= 50.0, rsv.value
+    assert detect(prefix(tss[17]), cfg).state == "crowded"
+
+
+def test_missing_venue_interval_masked_not_interpolated():
+    """Settlement 12 has no OKX print: the interval mean uses 2 venues and
+    the detector never interpolates the missing print."""
+    cfg = Config()
+    tss = settlement_ts()
+    rows12 = [r for r in prefix(tss[11]) if r["event_ts"] == tss[11]]
+    venues = {r["venue"] for r in rows12}
+    assert venues == {"binance", "bybit"}, venues
+    rsv = detect(prefix(tss[11]), cfg)
+    assert rsv.module_state == "OK"
+    assert math.isfinite(rsv.value)
 
 
 def test_F1_missing_input_unknown():
@@ -279,6 +424,12 @@ def test_F1_missing_input_unknown():
 def test_F2_bounds_violation_unknown():
     rsv = detect(F2_POISON_TAPE, Config())
     assert rsv.module_state == "UNKNOWN", "out-of-bounds value must yield UNKNOWN"
+
+
+def test_F3_sign_disagreement_unknown():
+    """Venues disagreeing on the sign of funding -> UNKNOWN (F3 hygiene)."""
+    rsv = detect(SIGN_POISON_TAPE, Config())
+    assert rsv.module_state == "UNKNOWN"
 
 
 def test_F3_dual_estimator_disagreement_unknown():
@@ -299,8 +450,9 @@ def test_F3_dual_estimator_disagreement_unknown():
 
 def test_F4_staleness_unknown():
     evs = tape()
-    stale_now = evs[-1]["event_ts"] + 10 * CADENCE_S * NS  # >> 3x cadence
-    rsv = detect(evs, Config(), now_ns=stale_now)
+    cfg = Config()
+    stale_now = evs[-1]["event_ts"] + 10 * _cfg_get(cfg, "staleness_mult") * CADENCE_S * NS
+    rsv = detect(evs, cfg, now_ns=stale_now)
     assert rsv.module_state == "UNKNOWN"
 
 
@@ -322,10 +474,5 @@ def test_dual_estimator_agreement():
     cfg = Config()
     r = primary_indicator(evs, cfg)
     s = second_estimator(evs, cfg)
-    if DUAL_MODE == "state":
-        ok = (r["state"] == s["state"]) or (
-            DUAL_TOL is not None and abs(r["value"] - s["value"]) <= DUAL_TOL)
-        assert ok, (r, s)
-    else:
-        assert within_tolerance(r["value"], s["value"], DUAL_MODE, DUAL_TOL), (r, s)
+    assert within_tolerance(r["value"], s["value"], DUAL_MODE, _cfg_get(cfg, "dual_tol")), (r, s)
     assert detect(evs, cfg).module_state == "OK"

@@ -1,8 +1,12 @@
 """Acceptance tests for R002 - Implied-vs-realized spread (variance risk premium).
 
-Template v1.0.0. Concrete sketch: loads the fixture tape, runs a reference
-implementation of the chapter's normative formula, and asserts causality,
-F1-F5 fail-safes, and dual-estimator agreement.
+Template v1.0.0. The reference implementation below is the chapter's normative
+machine (§R2): leave-one-out trailing z-score over VRP (vol points), state
+transitions with hysteresis (entry/exit bands), warm-up DEGRADED state, F1-F5
+fail-safes, dual-estimator (variance-unit) label agreement, and the §R5
+cost interface. The fixture CSVs are generated from this same implementation
+(see /tmp/gen_R002_fixture.py); the independent logic checks are the
+hand-valued hysteresis boundary tests and the hand-computed RV test.
 
 Run: python3 -m pytest modules/tests/test_R002.py -q   (from repo root)
 """
@@ -18,16 +22,37 @@ EXPECTED = FIX / "R002_expected.csv"
 TOL = 1e-9  # float tolerance [default]
 CADENCE_S = 86400  # indicator cadence in seconds [default]
 NS = 1_000_000_000
-STATE_LABELS = ['fear', 'normal', 'complacent', 'warming', 'missing', 'invalid']
-BOUNDS = (-100.0, 100.0)  # mathematical bounds of the indicator value (F2)
-DUAL_MODE = "sign"  # rel | abs | sign | state
-DUAL_TOL = None
-ESTIMATOR_VERSION = "1.0.0"
+STATE_LABELS = ['fear', 'normal', 'complacent', 'warming', 'missing',
+                'invalid', 'out_of_bounds']
+BOUNDS = (-100.0, 100.0)  # mathematical bounds of VRP in vol points (F2) [default]
+SD_FLOOR = 1e-12  # degenerate flat-history guard [default]
+DUAL_MODE = "state"  # dual-estimator agreement is on the regime label
+ESTIMATOR_VERSION = "1.1.0"
+
+
+@dataclass(frozen=True)
+class Config:
+    """Mirrors §R0.2. Defaults must match the chapter (test_config_defaults)."""
+    rv_window_days: int = 21        # [default]
+    z_window_days: int = 252        # [default]
+    z_window_min_bars: int = 21     # [default] warm-up: labels withheld below this
+    fear_entry_z: float = -1.5      # [default]
+    fear_exit_z: float = -1.0       # [default] deadband 0.5σ [default]
+    complacent_entry_z: float = 1.5   # [default]
+    complacent_exit_z: float = 1.0    # [default] deadband 0.5σ [default]
+    bounds_lo: float = -100.0       # [default]
+    bounds_hi: float = 100.0        # [default]
+
+
+# Fixture config: [example] overrides so the 10-bar fixture exercises the full
+# machine (chapter production defaults need 21+ bars of warm-up).
+FIXTURE_CFG = Config(z_window_days=5, z_window_min_bars=4)
 
 
 def _mean(xs):
     xs = list(xs)
     return sum(xs) / len(xs) if xs else float("nan")
+
 
 def _stdev(xs, ddof=1):
     xs = list(xs)
@@ -37,75 +62,130 @@ def _stdev(xs, ddof=1):
     m = _mean(xs)
     return math.sqrt(sum((x - m) ** 2 for x in xs) / (n - ddof))
 
-def _pct_rank(x, hist):
-    h = list(hist)
-    if not h:
+
+def transition_label(prev, z, cfg):
+    """Hysteresis state machine (§R2 normative). Entry bands are strict;
+    exit requires crossing the looser exit band (deadband)."""
+    if prev == "fear":
+        return "normal" if z > cfg.fear_exit_z else "fear"
+    if prev == "complacent":
+        return "normal" if z < cfg.complacent_exit_z else "complacent"
+    # prev == "normal" (or unknown start): entry on strict bands
+    if z < cfg.fear_entry_z:
+        return "fear"
+    if z > cfg.complacent_entry_z:
+        return "complacent"
+    return "normal"
+
+
+def realized_vol(closes, window):
+    """Annualized realized vol (decimal) from dividend-adjusted closes (§R2).
+
+    RV = sqrt(252) * stdev(log returns, ddof=1). 252 trading days [documented].
+    """
+    closes = list(closes)
+    if len(closes) < window + 1:
         return float("nan")
-    return (sum(1 for v in h if v < x) + 0.5 * sum(1 for v in h if v == x)) / len(h)
+    seg = closes[-(window + 1):]
+    rets = [math.log(seg[i] / seg[i - 1]) for i in range(1, len(seg))]
+    sd = _stdev(rets, ddof=1)
+    return math.sqrt(252.0) * sd if math.isfinite(sd) else float("nan")
 
-def _ols_slope(xs, ys):
-    xs, ys = list(xs), list(ys)
-    mx, my = _mean(xs), _mean(ys)
-    den = sum((x - mx) ** 2 for x in xs)
-    if den == 0:
-        return 0.0
-    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
 
-def _sign(x):
-    return 1 if x > 0 else (-1 if x < 0 else 0)
+def vrp_volpts(vix, rv):
+    """VRP in vol points: VIX - 100*RV (desk convention [documented])."""
+    return vix - 100.0 * rv
 
-# ============================ R002 ============================
-def r002_tape():
-    rows = []
-    data = [(18.0, 0.14), (19.5, 0.15), (21.0, 0.16), (24.0, 0.19), (28.0, 0.24),
-            (22.0, 0.16), (20.0, 0.15), (19.0, 0.14), (17.5, 0.13), (18.5, 0.145)]
-    for i, (vix, rv) in enumerate(data, 1):
-        ts = TS0 + (i - 1) * DAY
-        rows.append({"bar": i, "event_ts": ts, "asof_ts": ts + 3600 * NS, "vix": vix, "rv30": rv})
-    return ["bar", "event_ts", "asof_ts", "vix", "rv30"], rows
 
-def primary_indicator_r002(rows, cfg):
+def vrp_varunits(vix, rv):
+    """VRP in variance units (decimal): (VIX/100)^2 - RV^2 [documented]."""
+    return (vix / 100.0) ** 2 - rv ** 2
+
+
+def _label_series(series, cfg, prev_label):
+    """Core z-machine shared by both estimators. Returns (label, z, ok)."""
+    cur = series[-1]
+    prior = series[max(0, len(series) - 1 - cfg.z_window_days):-1]  # leave-one-out
+    if len(prior) < cfg.z_window_min_bars:
+        return "warming", float("nan"), False
+    mu, sd = _mean(prior), _stdev(prior, ddof=1)
+    z = (cur - mu) / sd if sd > SD_FLOOR else 0.0
+    return transition_label(prev_label, z, cfg), z, True
+
+
+def primary_indicator(rows, cfg, prev_label="normal"):
+    """Sentinel estimator: VRP in vol points -> label (dict)."""
     rows = list(rows)
+    base = {"value": float("nan"), "state": "missing", "module_state": "UNKNOWN",
+            "computed_at": 0, "vintage": "synthetic", "z": float("nan")}
     if not rows:
-        return {"value": float("nan"), "state": "missing", "module_state": "UNKNOWN", "computed_at": 0, "vintage": "synthetic"}
+        return base
     for r in rows:
-        if not all(k in r for k in ("vix", "rv30")) or not (r["vix"] > 0 and r["rv30"] > 0):
-            return {"value": float("nan"), "state": "invalid", "module_state": "UNKNOWN",
-                    "computed_at": r.get("event_ts", 0), "vintage": "synthetic"}
-    vrp = [r["vix"] - 100.0 * r["rv30"] for r in rows]  # vol points [documented] desk convention
-    W = 5  # [default]
-    if len(rows) < W:
-        return {"value": vrp[-1], "state": "warming", "module_state": "DEGRADED",
-                "computed_at": rows[-1]["event_ts"], "vintage": "synthetic"}
-    hist = vrp[:-1]
-    mu, sd = _mean(hist), _stdev(hist, ddof=1)
-    z = (vrp[-1] - mu) / sd if sd > 1e-12 else 0.0
-    state = "fear" if z < -1.5 else ("complacent" if z > 1.5 else "normal")
-    return {"value": vrp[-1], "state": state, "module_state": "OK",
-            "computed_at": rows[-1]["event_ts"], "vintage": "synthetic", "z": z}
+        if (not all(k in r for k in ("vix", "rv30"))
+                or not all(math.isfinite(float(r[k])) for k in ("vix", "rv30"))
+                or not (float(r["vix"]) > 0 and float(r["rv30"]) > 0)):
+            out = dict(base)
+            out.update(state="invalid", computed_at=int(r.get("event_ts", 0)))
+            return out
+    series = [vrp_volpts(float(r["vix"]), float(r["rv30"])) for r in rows]
+    label, z, ok = _label_series(series, cfg, prev_label)
+    return {"value": series[-1], "state": label,
+            "module_state": "OK" if ok else "DEGRADED",
+            "computed_at": int(rows[-1]["event_ts"]), "vintage": "synthetic", "z": z}
 
-def second_estimator_r002(rows, cfg):
+
+def second_estimator(rows, cfg, prev_label="normal"):
+    """Verifier estimator: same machine on the variance-unit VRP series (§R4).
+
+    Note: for positive vix/rv the vol-point and variance-unit VRP always agree
+    in sign (both are sign(vix/100 - rv) up to a positive factor), so the
+    non-vacuous F3 check is label agreement on the two unit conventions.
+    """
     rows = list(rows)
-    vu = [(r["vix"] / 100.0) ** 2 - r["rv30"] ** 2 for r in rows]  # variance units [documented]
-    return {"value": vu[-1] if vu else float("nan"), "state": "n/a",
-            "computed_at": rows[-1]["event_ts"] if rows else 0}
+    base = {"value": float("nan"), "state": "n/a", "module_state": "UNKNOWN",
+            "computed_at": 0, "z": float("nan")}
+    if not rows:
+        return base
+    series = [vrp_varunits(float(r["vix"]), float(r["rv30"])) for r in rows]
+    label, z, _ = _label_series(series, cfg, prev_label)
+    return {"value": series[-1], "state": label, "module_state": "OK",
+            "computed_at": int(rows[-1]["event_ts"]), "z": z}
 
-F2_POISON_R002 = '''
+
+def cost_adjustment(rsv, base):
+    """§R5 cost interface: regime state -> cost-function adjustment.
+
+    rsv: dict(state, module_state). base: dict(spread_bps, impact_bps,
+    borrow_bps) from the consuming strategy's COST block. Returns the adjusted
+    cost inputs plus an edge multiplier and a routing flag. Strategies wire
+    this as: expected_cost_bps(adj_inputs...) * edge_mult <= edge_bps.
+    """
+    adj = dict(base)
+    adj["edge_mult"] = 1.0  # [default] required-edge multiplier
+    adj["tags"] = ["R002:" + str(rsv.get("state", "?"))]
+    st, ms = rsv.get("state"), rsv.get("module_state")
+    if ms == "UNKNOWN":
+        adj["trade_ok"] = False  # [default] restrictive: unknown blocks
+    elif ms == "DEGRADED":
+        adj["trade_ok"] = False       # [default] warming: label withheld
+        adj["edge_mult"] = 1.5        # [example]
+    elif st == "fear":
+        adj["trade_ok"] = False                  # [default] stand down short-vol
+        adj["edge_mult"] = 2.0                   # [example] 2x edge if overridden
+        adj["spread_bps"] = base["spread_bps"] * 1.5   # [example] fear widens spread
+        adj["impact_bps"] = base["impact_bps"] * 1.5   # [example]
+        adj["borrow_bps"] = base["borrow_bps"] * 1.25  # [example] borrow tightens
+    elif st == "complacent":
+        adj["trade_ok"] = True
+        adj["edge_mult"] = 0.8                   # [example] rich premium compensates
+    else:
+        adj["trade_ok"] = True
+    return adj
+
+
 F2_POISON_TAPE = [
     {"bar": i + 1, "event_ts": 1000 + i, "asof_ts": 1001 + i,
-     "vix": 400.0, "rv30": 0.01}  # VRP = 399 vol pts, outside bounds
-    for i in range(5)
-]
-'''
-
-
-primary_indicator = primary_indicator_r002
-second_estimator = second_estimator_r002
-
-
-F2_POISON_TAPE = [
-    {"bar": i + 1, "event_ts": 1000 + i, "asof_ts": 1001 + i,
-     "vix": 400.0, "rv30": 0.01}  # VRP = 399 vol pts, outside bounds
+     "vix": 400.0, "rv30": 0.01}  # VRP = 399 vol pts, outside ±100 bounds [default]
     for i in range(5)
 ]
 
@@ -136,7 +216,7 @@ def tape():
 @dataclass(frozen=True)
 class RegimeState:
     regime_id: str
-    state: str            # regime label, e.g. "elevated"
+    state: str            # regime label, e.g. "fear"
     value: float          # indicator value
     estimator_version: str
     data_vintage: str
@@ -144,56 +224,31 @@ class RegimeState:
     module_state: str     # OK | DEGRADED | UNKNOWN | OFF
 
 
-@dataclass
-class Config:
-    pass  # regime-specific knobs live in the chapter's Config table (§R0.2)
-
-
 class RegimeMiningError(AssertionError):
     """F5: ex-post backtest-period selection without a pre-registered definition."""
 
 
-def within_tolerance(v1, v2, mode, tol):
-    if mode == "rel":
-        denom = max(abs(v1), abs(v2), 1e-12)
-        return abs(v1 - v2) / denom <= tol
-    if mode == "abs":
-        return abs(v1 - v2) <= tol
-    if mode == "sign":
-        return (v1 > 0) == (v2 > 0) and (v1 < 0) == (v2 < 0)
-    if mode == "state":
-        return v1 == v2
-    raise ValueError(mode)
-
-
-def detect(rows, cfg, now_ns=None, select_periods=False, preregistered=False):
+def detect(rows, cfg, prev_label="normal", now_ns=None,
+           select_periods=False, preregistered=False):
     """detect(state, events, cfg) -> RegimeState — reference implementation
     with F1-F5 fail-safes wired in (Appendix f v1.0.0)."""
     rows = list(rows)
-    r = primary_indicator(rows, cfg)  # dict(value, state, module_state, computed_at)
+    r = primary_indicator(rows, cfg, prev_label)  # dict(value, state, module_state, computed_at)
     if r["module_state"] != "OK":
         return RegimeState("R002", r["state"], r["value"], ESTIMATOR_VERSION,
                            r.get("vintage", "synthetic"), r["computed_at"],
                            r["module_state"])
     # F2: mathematical bounds
-    lo, hi = BOUNDS
     v = r["value"]
-    if not (math.isfinite(v) and lo <= v <= hi):
+    if not (math.isfinite(v) and cfg.bounds_lo <= v <= cfg.bounds_hi):
         return RegimeState("R002", "out_of_bounds", v, ESTIMATOR_VERSION,
                            r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F3: dual-estimator agreement (state mode: same label, or values within
-    # the DUAL_TOL guard band at a state boundary [default])
-    s = second_estimator(rows, cfg)
-    if DUAL_MODE == "state":
-        agree = (r["state"] == s["state"]) or (
-            DUAL_TOL is not None and math.isfinite(v) and math.isfinite(s["value"])
-            and abs(v - s["value"]) <= DUAL_TOL)
-    else:
-        agree = within_tolerance(v, s["value"], DUAL_MODE, DUAL_TOL)
-    if not agree:
+    # F3: dual-estimator agreement on the regime label (state mode)
+    s = second_estimator(rows, cfg, prev_label)
+    if r["state"] != s["state"]:
         return RegimeState("R002", r["state"], v, ESTIMATOR_VERSION,
                            r.get("vintage", "synthetic"), r["computed_at"], "UNKNOWN")
-    # F4: staleness timeout — 3x cadence
+    # F4: staleness timeout — 3x cadence [default]
     now = now_ns if now_ns is not None else rows[-1]["event_ts"] + CADENCE_S * NS
     if now - r["computed_at"] > 3 * CADENCE_S * NS:
         return RegimeState("R002", r["state"], v, ESTIMATOR_VERSION,
@@ -206,29 +261,46 @@ def detect(rows, cfg, now_ns=None, select_periods=False, preregistered=False):
 
 
 # ------------------------------------------------------------------- tests
+def _recompute_all(evs, cfg):
+    """Causal per-bar recompute threading the hysteresis prev-label."""
+    out, prev = [], "normal"
+    for i in range(len(evs)):
+        r = primary_indicator(evs[: i + 1], cfg, prev_label=prev)
+        if r["state"] in ("fear", "normal", "complacent"):
+            prev = r["state"]
+        out.append(r)
+    return out
+
+
 def test_fixture_recomputes_to_expected():
     """Chapter arithmetic: causal recompute of each bar matches expected CSV."""
     evs = tape()
     exp = {int(r["bar"]): r for r in load_csv(EXPECTED)}
-    cfg = Config()
-    for i in range(len(evs)):
-        r = primary_indicator(evs[: i + 1], cfg)
+    for i, r in enumerate(_recompute_all(evs, FIXTURE_CFG)):
         want = exp[i + 1]
         wv = float(want["exp_value"])
-        if math.isnan(wv):
-            assert math.isnan(r["value"]), i
-        elif math.isinf(wv):
-            assert math.isinf(r["value"]) and (r["value"] > 0) == (wv > 0), i
-        else:
-            assert abs(r["value"] - wv) < TOL, i
+        assert abs(r["value"] - wv) < TOL, i
         assert r["state"] == want["exp_state"], i
         assert r["computed_at"] == int(want["exp_computed_at"]), i
         assert r["module_state"] == want["exp_module_state"], i
 
 
+def test_fixture_state_sequence_pins_transitions():
+    """The 10-bar tape must exercise: warm-up, fear entry, hysteresis hold,
+    exit to normal, complacent entry, hysteresis hold, exit to normal."""
+    evs = tape()
+    states = [r["state"] for r in _recompute_all(evs, FIXTURE_CFG)]
+    assert states == ["warming"] * 4 + ["fear", "fear", "normal",
+                                        "complacent", "complacent", "normal"], states
+    # the hysteresis holds must be strictly inside the entry band
+    zs = [r["z"] for r in _recompute_all(evs, FIXTURE_CFG)]
+    assert zs[5] > -1.5 and zs[5] < -1.0, zs[5]  # fear hold inside deadband
+    assert 1.0 < zs[8] < 1.5, zs[8]             # complacent hold inside deadband
+
+
 def test_emits_valid_regime_state_vector():
     evs = tape()
-    rsv = detect(evs, Config())
+    rsv = detect(evs, FIXTURE_CFG)
     assert rsv.regime_id == "R002"
     assert rsv.state in STATE_LABELS
     assert math.isfinite(rsv.value) and BOUNDS[0] <= rsv.value <= BOUNDS[1]
@@ -241,7 +313,7 @@ def test_no_lookahead_regime_gating():
     """Lag contract: a label computed at t may gate signals at t only for
     trades at t+1+. Assert label_ts > indicator_ts for the earliest trade."""
     evs = tape()
-    cfg = Config()
+    cfg = FIXTURE_CFG
     for i in range(len(evs) - 1):
         label = detect(evs[: i + 1], cfg)
         indicator_ts = evs[i]["event_ts"]          # newest data used
@@ -254,14 +326,17 @@ def test_no_lookahead_regime_gating():
 
 
 def test_F1_missing_input_unknown():
-    assert detect([], Config()).module_state == "UNKNOWN"
+    assert detect([], FIXTURE_CFG).module_state == "UNKNOWN"
     bad = [dict(event_ts=1, asof_ts=2)]  # missing indicator fields
-    assert detect(bad, Config()).module_state == "UNKNOWN"
+    assert detect(bad, FIXTURE_CFG).module_state == "UNKNOWN"
+    neg = [dict(event_ts=1, asof_ts=2, vix=-5.0, rv30=0.15)]  # non-positive vix
+    assert detect(neg, FIXTURE_CFG).module_state == "UNKNOWN"
 
 
 def test_F2_bounds_violation_unknown():
-    rsv = detect(F2_POISON_TAPE, Config())
+    rsv = detect(F2_POISON_TAPE, FIXTURE_CFG)
     assert rsv.module_state == "UNKNOWN", "out-of-bounds value must yield UNKNOWN"
+    assert rsv.state == "out_of_bounds"
 
 
 def test_F3_dual_estimator_disagreement_unknown():
@@ -269,12 +344,11 @@ def test_F3_dual_estimator_disagreement_unknown():
     mod = _sys.modules[__name__]  # self-reference for monkeypatching
     evs = tape()
     orig = mod.second_estimator
-    p0 = primary_indicator(evs, Config())["value"]
-    bad_val = -1e9 if (p0 >= 0) else 1e9  # opposite sign: disagrees in sign/rel/abs/state modes
     try:
-        mod.second_estimator = lambda rows, cfg: {"value": bad_val, "state": "bogus",
-                                                 "computed_at": evs[-1]["event_ts"]}
-        rsv = mod.detect(evs, Config())
+        mod.second_estimator = lambda rows, cfg, prev_label="normal": {
+            "value": 0.0, "state": "bogus", "module_state": "OK",
+            "computed_at": evs[-1]["event_ts"], "z": 0.0}
+        rsv = mod.detect(evs, FIXTURE_CFG)
         assert rsv.module_state == "UNKNOWN"
     finally:
         mod.second_estimator = orig
@@ -283,32 +357,89 @@ def test_F3_dual_estimator_disagreement_unknown():
 def test_F4_staleness_unknown():
     evs = tape()
     stale_now = evs[-1]["event_ts"] + 10 * CADENCE_S * NS  # >> 3x cadence
-    rsv = detect(evs, Config(), now_ns=stale_now)
+    rsv = detect(evs, FIXTURE_CFG, now_ns=stale_now)
     assert rsv.module_state == "UNKNOWN"
 
 
 def test_F5_regime_mining_guard():
     evs = tape()
     try:
-        detect(evs, Config(), select_periods=True, preregistered=False)
+        detect(evs, FIXTURE_CFG, select_periods=True, preregistered=False)
     except RegimeMiningError:
         pass
     else:
         raise AssertionError("F5: unregistered period selection must raise")
-    rsv = detect(evs, Config(), select_periods=True, preregistered=True)
+    rsv = detect(evs, FIXTURE_CFG, select_periods=True, preregistered=True)
     assert rsv.module_state == "OK"
 
 
 def test_dual_estimator_agreement():
-    """Sentinel vs Verifier agree within tolerance on the fixture."""
+    """Sentinel vs Verifier agree on the regime label on the fixture."""
     evs = tape()
-    cfg = Config()
-    r = primary_indicator(evs, cfg)
-    s = second_estimator(evs, cfg)
-    if DUAL_MODE == "state":
-        ok = (r["state"] == s["state"]) or (
-            DUAL_TOL is not None and abs(r["value"] - s["value"]) <= DUAL_TOL)
-        assert ok, (r, s)
-    else:
-        assert within_tolerance(r["value"], s["value"], DUAL_MODE, DUAL_TOL), (r, s)
+    cfg = FIXTURE_CFG
+    prev = "normal"
+    for i in range(len(evs)):
+        r = primary_indicator(evs[: i + 1], cfg, prev_label=prev)
+        s = second_estimator(evs[: i + 1], cfg, prev_label=prev)
+        if r["module_state"] == "OK":
+            assert r["state"] == s["state"], (i, r, s)
+            prev = r["state"]
     assert detect(evs, cfg).module_state == "OK"
+
+
+def test_hysteresis_boundaries():
+    """Hand-valued pins for the §R2 transition machine (independent of the
+    fixture generator). Entry bands are strict; exits need the looser band."""
+    cfg = Config()  # production defaults: entry ±1.5, exit ±1.0
+    assert transition_label("normal", -1.51, cfg) == "fear"
+    assert transition_label("normal", -1.49, cfg) == "normal"
+    assert transition_label("normal", 1.51, cfg) == "complacent"
+    assert transition_label("normal", 1.49, cfg) == "normal"
+    assert transition_label("fear", -1.25, cfg) == "fear"     # deadband hold
+    assert transition_label("fear", -0.99, cfg) == "normal"   # exit crossed
+    assert transition_label("complacent", 1.25, cfg) == "complacent"
+    assert transition_label("complacent", 0.99, cfg) == "normal"
+    # exact-boundary behavior: exit band is strict (z > exit to leave)
+    assert transition_label("fear", -1.0, cfg) == "fear"
+    assert transition_label("complacent", 1.0, cfg) == "complacent"
+
+
+def test_realized_vol_computation():
+    """Hand-verifiable RV: closes [100, 101, 99] over window 2."""
+    closes = [100.0, 101.0, 99.0]
+    r1, r2 = math.log(101 / 100), math.log(99 / 101)
+    m = (r1 + r2) / 2
+    sd = math.sqrt(((r1 - m) ** 2 + (r2 - m) ** 2) / 1)
+    expect = math.sqrt(252.0) * sd
+    assert abs(realized_vol(closes, 2) - expect) < 1e-12
+    assert math.isnan(realized_vol([100.0, 101.0], 2))  # insufficient history
+
+
+def test_cost_interface():
+    """§R5: regime state -> cost-function adjustment, every literal tagged."""
+    base = {"spread_bps": 2.0, "impact_bps": 3.0, "borrow_bps": 50.0}
+    fear = cost_adjustment({"state": "fear", "module_state": "OK"}, base)
+    assert fear["trade_ok"] is False
+    assert fear["edge_mult"] == 2.0
+    assert fear["spread_bps"] == 3.0 and fear["impact_bps"] == 4.5
+    assert fear["borrow_bps"] == 62.5
+    assert fear["tags"] == ["R002:fear"]
+    comp = cost_adjustment({"state": "complacent", "module_state": "OK"}, base)
+    assert comp["trade_ok"] is True and comp["edge_mult"] == 0.8
+    assert comp["spread_bps"] == 2.0  # passthrough otherwise
+    norm = cost_adjustment({"state": "normal", "module_state": "OK"}, base)
+    assert norm["trade_ok"] is True and norm["edge_mult"] == 1.0
+    assert norm["spread_bps"] == 2.0 and norm["impact_bps"] == 3.0
+    unk = cost_adjustment({"state": "fear", "module_state": "UNKNOWN"}, base)
+    assert unk["trade_ok"] is False  # restrictive default
+    deg = cost_adjustment({"state": "warming", "module_state": "DEGRADED"}, base)
+    assert deg["trade_ok"] is False and deg["edge_mult"] == 1.5
+
+
+def test_config_defaults_match_chapter():
+    """§R0.2 contract: code defaults must equal the chapter's table."""
+    c = Config()
+    assert (c.rv_window_days, c.z_window_days, c.z_window_min_bars) == (21, 252, 21)
+    assert (c.fear_entry_z, c.fear_exit_z) == (-1.5, -1.0)
+    assert (c.complacent_entry_z, c.complacent_exit_z) == (1.5, 1.0)
+    assert (c.bounds_lo, c.bounds_hi) == (-100.0, 100.0)

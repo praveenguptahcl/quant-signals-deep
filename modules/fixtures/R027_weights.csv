@@ -1,0 +1,8 @@
+# TYPE: validation-run
+# ex-ante fixed weights; sha256 pinned at ingest; changes need errata (F5)
+release_class,weight
+NFP,0.30
+ISM,0.25
+Retail,0.20
+Claims,0.15
+GDP,0.10
