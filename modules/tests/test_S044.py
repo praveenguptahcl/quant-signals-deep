@@ -1,8 +1,9 @@
 """Acceptance tests for S044 — Stochastic oscillator / Williams %R.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Reference implementation of the chapter's normative
+pseudocode (warmup guard, zero-range veto, cost gate, locate_ok, cooldown)
+with 8 acceptance tests pinning fixture arithmetic, causality, the cost
+gate, and fail-safe behavior.
 
 Run: python3 -m pytest modules/tests/test_S044.py -q   (from repo root)
 """
@@ -78,6 +79,8 @@ def _pctK(rows, t, N):
     win = rows[t - N + 1:t + 1]
     Ln = min(x["low"] for x in win)
     Hn = max(x["high"] for x in win)
+    if Hn == Ln:
+        return float("nan")  # C11: zero-range window vetoed at %K level
     return 100.0 * (rows[t]["close"] - Ln) / (Hn - Ln)
 
 
@@ -120,14 +123,23 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
-def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S044 reference stub)."""
+def signal(state, events, cfg, locate_ok=True):
+    """signal(state, events, cfg) -> SignalVector (S044 reference stub).
+
+    Implements the §S3 normative pseudocode: warmup guard (no signal before
+    bar n+2), zero-range veto (C11), cost-gate predicate, locate_ok (C7),
+    and post-exit cooldown via state["cooldown_until"] (C10).
+    """
     evs = list(events)
     if not evs:
         return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
     e = evs[-1]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
     if e["high"] < e["low"] or e["close"] <= 0 or e["high"] <= 0:
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], 0, "UNKNOWN")
+    # C11: zero-range bar -> UNKNOWN for the bar, never emit a level
+    if e["high"] == e["low"]:
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], 0, "UNKNOWN")
     if len(evs) < cfg.n + 2:
@@ -137,10 +149,11 @@ def signal(state, events, cfg):
     direction = f["dir"]
     confidence = 0.6 if direction else 0.0  # crossover conviction [example]
     capital = 0.5 * confidence
-    # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
+    # normative cost gate: expected_cost_bps(...) <= k * edge_bps
     edge_bps = abs(f["K"] - f["D"]) * 10.0  # crossover gap [example]
-    ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
-    if not ok:
+    cost_ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
+    cooldown_active = e["event_ts"] < state.get("cooldown_until", 0)
+    if not (cost_ok and locate_ok and not cooldown_active):
         direction, confidence, capital = 0, 0.0, 0.0
     return SignalVector("TEST:XNAS", direction, confidence, capital,
                         e["event_ts"], 0, "OK")
@@ -209,3 +222,38 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_zero_range_bar_yields_unknown():
+    """C11: a zero-range bar (high == low) vetoes the bar -> UNKNOWN."""
+    e = dict(tape()[16])  # bar 17: the fixture's crossover bar
+    e["high"] = e["low"] = e["close"] = 104.715
+    s = signal(dict(), [e], Config())
+    assert s.module_state == "UNKNOWN", s
+    assert s.direction == 0 and s.confidence == 0.0 and s.capital == 0.0
+    # zero-range window at %K level also vetoes (NaN, no division by zero)
+    flat = [dict(r) for r in tape()[:14]]
+    for r in flat:
+        r.update(high=100.0, low=100.0, close=100.0, open=100.0)
+    assert math.isnan(_pctK(flat, 13, 14))
+
+
+def test_warmup_bars_emit_no_signal():
+    """Warmup: no signal before bar n+2; state stays OK, direction 0."""
+    rows, cfg = tape(), Config()
+    for i in range(1, cfg.n + 1):  # bars 1..15 (warmup zone)
+        s = signal(dict(), rows[: i + 1], cfg)
+        assert s.direction == 0, (i, s)
+        assert s.module_state == "OK", (i, s)
+
+
+def test_cooldown_suppresses_entry():
+    """C10: an active cooldown_until suppresses even a confirmed crossover."""
+    rows, cfg = tape(), Config()
+    control = signal(dict(), rows[:17], cfg)
+    assert control.direction == -1, "fixture crossover bar must fire without cooldown"
+    suppressed = signal({"cooldown_until": rows[16]["event_ts"] + 600_000_000_000},
+                        rows[:17], cfg)
+    assert suppressed.direction == 0, suppressed
+    assert suppressed.confidence == 0.0 and suppressed.capital == 0.0
+    assert suppressed.module_state == "OK"

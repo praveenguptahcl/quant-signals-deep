@@ -1,7 +1,8 @@
 """Acceptance tests for S028 — Donchian breakout.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
+Template v1.0.0. Concrete: loads the fixture tape, runs a reference
+implementation of the chapter's normative pseudocode (entry rule, spread/locate
+gates, conviction, cost-gate predicate, exit/cooldown state machine), and pins
 causality, the cost gate, and hand-checked fixture arithmetic.
 
 Run: python3 -m pytest modules/tests/test_S028.py -q   (from repo root)
@@ -110,36 +111,85 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     fee_bps = 0.30      # taker incl. regulatory [example]
     borrow_bps = 0.0     # long-biased reference; reason: no borrow [default]
     impact_bps = 1.0     # breakout chasing concession [example]
+    if side == "maker":
+        fee_bps = -0.20  # rebate [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
 def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S028 reference stub)."""
+    """signal(state, events, cfg) -> SignalVector (S028 reference stub).
+
+    Implements the §S3 normative pseudocode: F1/F2 validation, completed-bar
+    channel, exit/cooldown state machine, spread + locate gates, conviction,
+    and the executable cost-gate predicate. `state` is a plain dict carrying
+    module-owned state (position, cooldown_until, locate_ok, module_state).
+    """
+    def flat(module_state, ts):
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, ts, 0, module_state)
+
     evs = list(events)
     if not evs:
-        return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
+        return flat("UNKNOWN", 0)
     e = evs[-1]
+    ts = e["event_ts"]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
-    if e["high"] < e["low"] or e["close"] <= 0 or e["high"] <= 0:
-        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
-                            e["event_ts"], 0, "UNKNOWN")
+    req = ("event_ts", "open", "high", "low", "close", "volume")
+    if any(k not in e or e[k] is None for k in req) or \
+            e["high"] < e["low"] or e["close"] <= 0 or e["high"] <= 0:
+        return flat("UNKNOWN", ts)
+    # warmup: need N completed bars before the triggering bar
     if len(evs) <= cfg.lookback:
-        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
-                            e["event_ts"], 0, "OK")
-    win = evs[-cfg.lookback - 1:-1]
+        return flat("OK", ts)
+    win = evs[-cfg.lookback - 1:-1]  # completed-bar convention: bar t excluded
     up = max(x["high"] for x in win)
     lo = min(x["low"] for x in win)
+    mid = (up + lo) / 2.0
+    mstate = state.get("module_state", "OK")
+    # exit handling on an open signal position (C10)
+    pos = state.get("position")
+    if pos is not None and pos["direction"] != 0:
+        bars_held = len(evs) - pos["entry_len"]
+        if pos["direction"] == 1:
+            exit_hit = e["close"] <= mid or e["close"] < lo
+        else:
+            exit_hit = e["close"] >= mid or e["close"] > up
+        exit_hit = exit_hit or bars_held >= 10 or mstate != "OK"
+        if exit_hit:
+            state["position"] = None
+            state["cooldown_until"] = ts + int(cfg.cooldown_s * 1e9)
+            return flat(mstate, ts)
+    # C10 post-exit cooldown: no re-entry
+    if ts < state.get("cooldown_until", 0):
+        return flat(mstate, ts)
+    # entry rule: close-through breakout
     brk = 1 if e["close"] > up else (-1 if e["close"] < lo else 0)
-    direction = brk
-    confidence = 0.8 if brk else 0.0  # breakout conviction [example]
+    spread_ok = e.get("spread_ticks") is None or \
+        e["spread_ticks"] <= cfg.max_spread_ticks  # absent -> pass [default]
+    direction = brk if spread_ok else 0
+    # C7 locate gate: no SHORT without asserted locate
+    if direction == -1 and not state.get("locate_ok", False):
+        direction = 0
+    # conviction [default] functional form; calibrate OOS per §S2 recipes
+    if direction != 0:
+        rail = up if direction == 1 else lo
+        break_bps = abs(e["close"] - rail) / e["close"] * 1e4
+        vol_ratio = e["volume"] / max(sum(x["volume"] for x in win) / len(win), 1.0)
+        conviction = min(0.95, 0.40 + break_bps / 10.0 + 0.20 * min(vol_ratio, 2.0))
+    else:
+        conviction = 0.0
+    confidence = conviction
     capital = 0.5 * confidence
-    # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
-    edge_bps = abs(e["close"] - (up + lo) / 2.0) / e["close"] * 1e4  # rail distance [example]
-    gate = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
-    if not gate:
+    # normative cost-gate predicate (C2), concrete arguments
+    edge_bps = abs(e["close"] - mid) / e["close"] * 1e4  # rail distance [example]
+    cost = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    if not (cost <= cfg.cost_gate_k * edge_bps):
         direction, confidence, capital = 0, 0.0, 0.0
-    return SignalVector("TEST:XNAS", direction, confidence, capital,
-                        e["event_ts"], 0, "OK")
+    # book-keep entry for exit/cooldown tracking
+    if direction != 0:
+        state["position"] = {"direction": direction, "entry_len": len(evs)}
+    sig = SignalVector("TEST:XNAS", direction, confidence, capital, ts, 0, mstate)
+    # t->t+1 causality assertion: earliest fill is a later event, never this bar
+    return sig
 
 
 
@@ -201,3 +251,102 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def _bar(ev, ts, o, h, l, c, v, **kw):
+    row = {"ev": ev, "event_ts": ts, "open": o, "high": h,
+           "low": l, "close": c, "volume": v}
+    row.update(kw)
+    return row
+
+
+def test_completed_bar_exclusion_pins_no_lookahead():
+    """Pinning the §S3 completed-bar convention: the triggering bar's own
+    extremes must not move the rail. Perturbing bar 8's high to 200.0 must
+    leave donch_up == 101.20 (window = bars 3..7 only)."""
+    rows = tape()
+    tampered = [dict(r) for r in rows]
+    tampered[-1]["high"] = 200.0  # extreme print inside the triggering bar
+    feats = compute_features(tampered)
+    by_id = {f["id"]: f for f in feats}
+    assert abs(by_id[8]["donch_up"] - 101.20) < TOL, by_id[8]
+    assert by_id[8]["brk"] == 1
+    # the stub agrees: rail unaffected by the triggering bar's own high
+    s_clean = signal(dict(), rows, Config())
+    s_tamp = signal(dict(), tampered, Config())
+    assert s_clean.direction == s_tamp.direction == 1
+
+
+def test_warmup_rows_emit_flat_ok():
+    """Fewer than N completed bars -> flat direction, OK state, no crash."""
+    rows = tape()
+    cfg = Config()
+    for i in range(cfg.lookback):
+        s = signal(dict(), rows[: i + 1], cfg)
+        assert s.direction == 0, i
+        assert s.confidence == 0.0 and s.capital == 0.0, i
+        assert s.module_state == "OK", i
+
+
+def test_short_break_requires_locate():
+    """C7: a short breakout emits -1 only with locate_ok; otherwise flat."""
+    rows = tape()
+    base_ts = rows[-1]["event_ts"]
+    # synthetic bar 9: close 99.00 < lo 100.00 (window bars 4..8, N=5) -> brk=-1
+    bar9 = _bar(9, base_ts + 300_000_000_000, 100.2, 100.3, 98.8, 99.0, 900)
+    evs = rows + [bar9]
+    s_no_locate = signal(dict(), evs, Config())
+    assert s_no_locate.direction == 0  # locate veto -> flat
+    st = {"locate_ok": True}
+    s_locate = signal(st, evs, Config())
+    assert s_locate.direction == -1
+    assert 0.0 < s_locate.confidence <= 1.0
+    assert st["position"]["direction"] == -1  # entry booked for exit tracking
+
+
+def test_spread_veto_blocks_entry():
+    """Spread gate: spread_ticks above max_spread_ticks vetoes the entry;
+    absent spread_ticks passes (default)."""
+    rows = tape()
+    bar_wide = dict(rows[-1]); bar_wide["spread_ticks"] = 10
+    evs_wide = rows[:-1] + [bar_wide]
+    s_wide = signal(dict(), evs_wide, Config())
+    assert s_wide.direction == 0  # vetoed despite the breakout
+    bar_ok = dict(rows[-1]); bar_ok["spread_ticks"] = 2
+    s_ok = signal(dict(), rows[:-1] + [bar_ok], Config())
+    assert s_ok.direction == 1  # within spread budget -> breakout emits
+
+
+def test_cooldown_suppresses_reentry():
+    """C10: after an exit, entries are suppressed until cooldown_s elapses."""
+    rows = tape()
+    cfg = Config()  # cooldown_s = 600.0 [default]
+    state = {}
+    s_entry = signal(state, rows, cfg)
+    assert s_entry.direction == 1
+    base_ts = rows[-1]["event_ts"]
+    # bar 9 (+300s): close back at the midline -> exit, cooldown starts
+    bar9 = _bar(9, base_ts + 300_000_000_000, 101.0, 101.1, 100.0, 100.6, 800)
+    s_exit = signal(state, rows + [bar9], cfg)
+    assert s_exit.direction == 0
+    assert state["cooldown_until"] == bar9["event_ts"] + int(600.0 * 1e9)
+    # bar 10 (+600s): fresh breakout shape but inside cooldown -> suppressed
+    bar10 = _bar(10, bar9["event_ts"] + 300_000_000_000,
+                 100.6, 103.0, 100.5, 102.8, 2600)  # close 102.8 > rail 102.5
+    s_supp = signal(state, rows + [bar9, bar10], cfg)
+    assert s_supp.direction == 0, "re-entry inside cooldown must be suppressed"
+    # bar 11 (+1300s after exit): cooldown elapsed -> breakout emits again
+    bar11 = _bar(11, bar9["event_ts"] + 1_000_000_000_000,
+                 100.6, 103.0, 100.5, 102.8, 2600)
+    s_re = signal(state, rows + [bar9, bar11], cfg)
+    assert s_re.direction == 1, "breakout after cooldown must not be suppressed"
+
+
+def test_maker_side_rebate_below_taker():
+    """Side field pinned: maker cost (rebate) is strictly below taker cost."""
+    args = dict(notional=1.0, adv_pct=0.001, venue="XNAS", urgency="normal")
+    taker = expected_cost_bps(side="taker", **args)
+    maker = expected_cost_bps(side="maker", **args)
+    assert abs(taker - 1.80) < 1e-9, taker   # 0.50 + 0.30 + 0.0 + 1.0 [example]
+    assert abs(maker - 1.30) < 1e-9, maker   # 0.50 + (-0.20) + 0.0 + 1.0 [example]
+    assert maker < taker

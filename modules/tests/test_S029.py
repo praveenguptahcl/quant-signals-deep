@@ -1,8 +1,9 @@
 """Acceptance tests for S029 — Keltner / Bollinger breakouts.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Loads the fixture tape, runs a reference implementation of
+the chapter's normative pseudocode, and asserts causality, the cost gate,
+the OR-leg entry rule, warmup-flat behavior, and hand-checked fixture
+arithmetic.
 
 Run: python3 -m pytest modules/tests/test_S029.py -q   (from repo root)
 """
@@ -118,11 +119,13 @@ class Config:
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    """Reference cost model: intraday envelope breakout, liquid large-cap."""
+    """Reference cost model (§S2 COST block): intraday envelope breakout."""
     spread_bps = 0.50   # half-spread [example]
     fee_bps = 0.30      # taker incl. regulatory [example]
-    borrow_bps = 0.0     # long-biased reference; reason: no borrow [default]
-    impact_bps = 1.0     # breakout chasing concession [example]
+    borrow_bps = 0.0    # long-biased reference; reason: no borrow [default]
+    impact_bps = 1.0    # breakout chasing concession [example]
+    if side == "maker":
+        fee_bps = -0.20  # rebate [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
@@ -141,9 +144,10 @@ def signal(state, events, cfg):
     import math as _m
     if _m.isnan(f["bb_up"]):
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "OK")
-    brk = f["bb_brk"]  # Bollinger close-breakout leg (Keltner leg: f["kc_brk"])
-    direction = brk
-    confidence = 0.7 if brk else 0.0  # envelope-break conviction [example]
+    # OR-leg entry per §S2/§S3 normative pseudocode: either envelope leg fires.
+    bb_brk, kc_brk = f["bb_brk"], f["kc_brk"]
+    direction = bb_brk if bb_brk else kc_brk
+    confidence = 0.7 if direction else 0.0  # envelope-break conviction [example]
     capital = 0.5 * confidence
     # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
     edge_bps = abs(e["close"] - f["sma"]) / e["close"] * 1e4  # midline distance [example]
@@ -217,3 +221,60 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_warmup_emits_flat():
+    """Warmup bars (NaN features, t < N) emit direction 0 with state OK."""
+    rows = tape()
+    cfg, state = Config(), dict()
+    warmup = [signal(state, rows[: i + 1], cfg) for i in range(cfg.lookback - 1)]
+    assert len(warmup) == cfg.lookback - 1
+    for s in warmup:
+        assert s.direction == 0 and s.confidence == 0.0 and s.capital == 0.0
+        assert s.module_state == "OK"
+
+
+def _craft_bb_only_break():
+    """21 synthetic bars: flat 100.0 closes -> sd=0 (bb_up=100.0),
+    range 1.0 -> atr=1.0 (kc_up=102.0); bar 21 closes at 101.0,
+    which breaks the Bollinger leg only (kc_up ~= 102.10)."""
+    ts = 1757000000000000000
+    bars = [{"ev": i + 1, "event_ts": ts + i * 60_000_000_000, "open": 100.0,
+             "high": 100.5, "low": 99.5, "close": 100.0, "volume": 100}
+            for i in range(20)]
+    bars.append({"ev": 21, "event_ts": ts + 20 * 60_000_000_000, "open": 100.5,
+                 "high": 101.5, "low": 100.5, "close": 101.0, "volume": 500})
+    return bars
+
+
+def test_bollinger_leg_entry_via_or():
+    """OR-leg entry: a Bollinger-only break emits +1 (Keltner leg silent)."""
+    bars = _craft_bb_only_break()
+    f = compute_features(bars)[-1]
+    assert f["bb_brk"] == 1 and f["kc_brk"] == 0, f
+    # edge ~= 94 bps [example]; cost 1.80 bps <= 0.5 * edge -> gate passes
+    s = signal(dict(), bars, Config())
+    assert s.module_state == "OK"
+    assert s.direction == 1
+
+
+def test_maker_cost_lt_taker():
+    """§S2 maker-rebate branch: maker stack is cheaper than taker stack."""
+    taker = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    maker = expected_cost_bps(1.0, 0.001, "XNAS", "maker", "normal")
+    assert abs(taker - 1.80) < 1e-9
+    assert abs(maker - 1.30) < 1e-9
+    assert maker < taker
+
+
+def test_fixture_type_header():
+    """Fixture tape carries the mandatory TYPE header."""
+    with open(TAPE) as fh:
+        first = fh.readline().strip()
+    assert first.startswith("# TYPE:"), first
+    assert "validation-run" in first, first
+
+
+def test_fixture_bar_count():
+    """Chapter tape is exactly 30 synthetic bars."""
+    assert len(tape()) == 30  # [example]

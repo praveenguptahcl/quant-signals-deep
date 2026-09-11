@@ -1,11 +1,13 @@
 """Acceptance tests for S027 — End-of-day momentum / last-hour drift.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Loads the fixture tape, runs a reference implementation of
+the chapter's normative pseudocode, and pins causality, the cost gate, the
+mechanism classifier, and the lookahead rule (close is the target, never a
+feature).
 
 Run: python3 -m pytest modules/tests/test_S027.py -q   (from repo root)
 """
+import copy
 import csv
 import math
 from dataclasses import dataclass
@@ -65,8 +67,14 @@ def event_ts(row):
     return row["event_ts"]
 
 
-def bad_event():
-    return {"id": "bad", "event_ts": 1, "p930": -1.0, "p1530": 100.0, "pclose": 100.0}
+def bad_event(kind):
+    base = {"id": "bad", "event_ts": 1, "p930": 100.0, "p1530": 100.5,
+            "pclose": 100.2}
+    if kind == "non-positive":
+        base["p930"] = -1.0
+    elif kind == "crossed":
+        base["high"], base["low"] = 99.0, 101.0  # high < low: bad bar [example]
+    return base
 
 
 FEATURE_COLS = ["r_first", "r_last", "s"]
@@ -99,19 +107,50 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def _sign(x):
+    return 1 if x > 0 else (-1 if x < 0 else 0)
+
+
+def classify_mechanism(e, rf):
+    """Normative [example] heuristic per §S3: INFORMATION vs MECHANICAL."""
+    if e.get("scheduled_catalyst_day") or e.get("rebalance_day") or e.get("expiry_day"):
+        return "MECHANICAL"
+    imb = e.get("imbalance_usd")
+    if imb is not None and _sign(imb) != _sign(rf):
+        return "MECHANICAL"
+    vr = e.get("vol_ratio_0930_1530")
+    if vr is not None and vr > 2.0:  # abnormal-flow threshold [example]
+        return "MECHANICAL"
+    return "INFORMATION"
+
+
+def valid(e):
+    if e["p930"] <= 0 or e["p1530"] <= 0 or e["pclose"] <= 0:
+        return False
+    if "high" in e and "low" in e and e["high"] < e["low"]:
+        return False
+    return True
+
+
 def signal(state, events, cfg):
     """signal(state, events, cfg) -> SignalVector (S027 reference stub)."""
     evs = list(events)
     if not evs:
-        return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
+        return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")  # F1: empty input
     e = evs[-1]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
-    if e["p930"] <= 0 or e["p1530"] <= 0 or e["pclose"] <= 0:
+    if not valid(e):
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], 0, "UNKNOWN")
     rf = e["p1530"] / e["p930"] - 1.0
+    # NOTE: e["pclose"] is ex post (the target). It is NEVER read here.
+    mech = classify_mechanism(e, rf)
+    # §S2 Boolean entry rule: mechanism must be INFORMATION; else FLAT.
+    if mech != "INFORMATION":
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], 0, "OK")
     direction = 1 if rf > 0 else (-1 if rf < 0 else 0)
-    confidence = min(1.0, abs(rf) / 0.02) if direction else 0.0  # 2% = full conviction [example]
+    confidence = min(1.0, abs(rf) / 0.02) if direction else 0.0  # conviction [example]
     capital = 0.5 * confidence
     # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
     edge_bps = abs(rf) * 1e4 * 0.1  # 10% of the formation move persists [example]
@@ -178,6 +217,42 @@ def test_cost_gate_predicate():
 
 
 def test_invalid_input_yields_unknown():
-    s = signal(dict(), [bad_event()], Config())
+    # non-positive anchor, crossed bar, and empty events -> UNKNOWN (F1/F2)
+    for kind in ("non-positive", "crossed"):
+        s = signal(dict(), [bad_event(kind)], Config())
+        assert s.module_state == "UNKNOWN", kind
+        assert s.direction == 0 and s.capital == 0.0, kind
+    s = signal(dict(), [], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_close_never_used_as_input():
+    """Lookahead pin: pclose is the ex post target; perturbing it must not
+    change the emitted signal. Guards the t->t+1 causality contract."""
+    rows = tape()
+    cfg, state = Config(), dict()
+    for i in range(len(rows)):
+        base = copy.deepcopy(rows[: i + 1])
+        alt = copy.deepcopy(rows[: i + 1])
+        alt[-1]["pclose"] = rows[i]["pclose"] * 1.5  # +50% ex post shock
+        s0, s1 = signal(state, base, cfg), signal(state, alt, cfg)
+        assert s0 == s1, "signal depends on ex post close at row %d" % i
+
+
+def test_mechanical_mechanism_flats():
+    """The mechanism classifier forces FLAT on mechanical-flow days (§S2)."""
+    rows = tape()
+    cfg, state = Config(), dict()
+    e = dict(rows[0])  # d1: rf > 0 -> would emit +1 on an information day
+    e["rebalance_day"] = True
+    s = signal(state, [e], cfg)
+    assert s.direction == 0 and s.confidence == 0.0, s
+    assert s.module_state == "OK"
+    # imbalance leaning against the morning move is also mechanical
+    e2 = dict(rows[0]); e2["imbalance_usd"] = -1e8
+    s2 = signal(state, [e2], cfg)
+    assert s2.direction == 0, s2
+    # and the information-day default still emits
+    s3 = signal(state, [dict(rows[0])], cfg)
+    assert s3.direction == 1, s3

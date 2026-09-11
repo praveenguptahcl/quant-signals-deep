@@ -51,14 +51,22 @@ class SignalVector:
     module_state: str       # OK | DEGRADED | UNKNOWN | OFF
 
 
-def recompute(rows):
+def recompute(rows, n_long=2, n_short=2):
     srt = sorted(rows, key=lambda r: r["formation_ret"], reverse=True)
+    n = len(srt)
     out = []
     for r in rows:
         rk = next(k for k, x in enumerate(srt) if x["sector"] == r["sector"]) + 1
-        pos = 1 if rk <= 2 else (-1 if rk >= len(srt) - 1 else 0)
+        pos = 1 if rk <= n_long else (-1 if rk > n - n_short else 0)
         out.append({"sector": r["sector"], "formation_ret": r["formation_ret"],
                     "rank": rk, "position": pos})
+    # F5: rank tie straddling a basket boundary -> tied names neutral
+    by_sec = {o["sector"]: o for o in out}
+    for a, b in zip(srt, srt[1:]):
+        if abs(a["formation_ret"] - b["formation_ret"]) <= 1e-12:
+            pa, pb = by_sec[a["sector"]], by_sec[b["sector"]]
+            if pa["position"] != pb["position"]:
+                pa["position"] = pb["position"] = 0
     return out
 
 
@@ -75,12 +83,16 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     impact_bps = 1.00   # rotation-day fill slippage [example]
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
-def signal(state, bars, cfg):
+def signal(state, bars, cfg, market_state="CONTINUOUS_TRADING"):
     # bars: one row per sector at rank time; returns per-sector SignalVector via state bag
     bars = list(bars)
     if not bars:
         return SignalVector("TEST", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
     b = bars[0]
+    if market_state == "HALTED":
+        return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")
+    if market_state == "AUCTION":
+        return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], 0, "DEGRADED")
     if any(not math.isfinite(r["formation_ret"]) for r in bars):
         return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")
     srt = sorted(bars, key=lambda r: r["formation_ret"], reverse=True)
@@ -156,3 +168,32 @@ def test_invalid_input_yields_unknown():
     bad = [{"sector": "X", "event_ts": 1, "asof_ts": 2, "formation_ret": float("nan"), "rank_t": "12:00"}]
     s = signal({}, bad, Config())
     assert s.module_state == "UNKNOWN" and s.direction == 0
+
+
+def _mk(sector, ret, ts=1):
+    return {"sector": sector, "event_ts": ts, "asof_ts": ts + 12000,
+            "formation_ret": ret, "rank_t": "12:00"}
+
+
+def test_rank_tie_at_boundary_neutral():
+    """F5: a tie straddling a basket boundary neutralizes the tied names."""
+    rows = [_mk("A", 2.0), _mk("B", 2.0), _mk("C", 0.5), _mk("D", -0.5)]
+    got = {o["sector"]: o for o in recompute(rows, n_long=1, n_short=1)}
+    # A and B tie across the long/neutral boundary -> both neutral
+    assert got["A"]["position"] == 0 and got["B"]["position"] == 0
+    # no boundary tie at the short leg -> D still short
+    assert got["D"]["position"] == -1
+
+
+def test_empty_input_yields_unknown():
+    s = signal({}, [], Config())
+    assert s.module_state == "UNKNOWN" and s.direction == 0
+
+
+def test_halt_and_auction_states():
+    rows = parse_tape()
+    cfg = Config()
+    h = signal({}, rows, cfg, market_state="HALTED")
+    assert h.module_state == "UNKNOWN" and h.direction == 0
+    a = signal({}, rows, cfg, market_state="AUCTION")
+    assert a.module_state == "DEGRADED" and a.direction == 0

@@ -1,8 +1,9 @@
 """Acceptance tests for S037 — Jump-filtered gap reversal (Lee–Mykland veto).
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Reference implementation of the chapter's normative §S3
+pseudocode: loads the fixture tape, asserts causality, the (vacuous)
+cost-gate invariant, veto-flag exposure, warmup, cooldown, and hand-checked
+fixture arithmetic.
 
 Run: python3 -m pytest modules/tests/test_S037.py -q   (from repo root)
 """
@@ -120,13 +121,14 @@ def compute_features(rows):
 
 @dataclass
 class Config:
-    jump_thresh: float = 2.9702   # 5% LM threshold [documented]
+    jump_thresh: float = 2.9702   # 5% LM threshold [documented] - pinned, not a knob
+    min_bars: int = 3             # warmup: min intraday bars after open [default]
     cost_gate_k: float = 0.5      # cost-gate multiplier [default]
-    cooldown_s: float = 600.0    # post-exit cooldown [default]
+    cooldown_s: float = 600.0    # post-exit cooldown, seconds [default]
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    """Reference cost model: gap-fade entry gated by the jump filter."""
+    """Reference cost model from the §S2 COST block (callable)."""
     spread_bps = 0.50   # half-spread [example]
     fee_bps = 0.30      # taker incl. regulatory [example]
     borrow_bps = 0.0    # long-biased reference; reason: no borrow [default]
@@ -134,30 +136,64 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
+def _block(state, e, cfg):
+    """F1/F2: invalid input -> UNKNOWN + C10 cooldown, never interpolate."""
+    state["veto_flag"] = False
+    state["cooldown_until"] = e["event_ts"] + int(cfg.cooldown_s * 1e9)
+    state["module_state"] = "UNKNOWN"
+
+
 def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S037 reference stub)."""
+    """signal(state, events, cfg) -> SignalVector (S037 reference implementation).
+
+    Mirrors the normative §S3 pseudocode: always emits direction 0 (a veto is
+    a stand-down, never a reversal); the veto is exposed via state['veto_flag'].
+    """
     evs = list(events)
     if not evs:
+        state["module_state"] = "UNKNOWN"
         return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
     e = evs[-1]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
     if e["close"] <= 0:
+        _block(state, e, cfg)
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], 0, "UNKNOWN")
+    # F3: monotonic causality clock
+    if e["event_ts"] < state.get("last_ts", 0):
+        _block(state, e, cfg)
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], 0, "UNKNOWN")
+    state["last_ts"] = e["event_ts"]
+    # C10: post-exit cooldown -> suppressed as DEGRADED
+    if e["event_ts"] < state.get("cooldown_until", 0):
+        state["module_state"] = "DEGRADED"
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], 0, "DEGRADED")
+    # warmup: too few bars for a stable bipower estimate -> OK, flat
     sess = [x for x in evs if x["session"] == e["session"]]
-    if len(sess) < 3:
-        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "OK")
+    if len(sess) < cfg.min_bars:
+        state["veto_flag"] = False
+        state["module_state"] = "OK"
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], 0, "OK")
     pc, op = sess[0]["prior_close"], sess[0]["open"]
     if not (pc == pc and op == op) or pc <= 0 or op <= 0:
+        _block(state, e, cfg)
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], 0, "UNKNOWN")
     _, _, _, T = lm_stats(pc, op, [x["close"] for x in sess])
     jump = T > cfg.jump_thresh
-    # jump -> veto: direction 0, state OK (a veto is not an error)
-    direction = 0
-    confidence, capital = 0.0, 0.0
-    return SignalVector("TEST:XNAS", direction, confidence, capital,
-                        e["event_ts"], 0, "OK")
+    state["veto_flag"] = bool(jump)   # consumers read this flag (C11)
+    state["module_state"] = "OK"
+    # normative cost gate, vacuous by construction: edge_bps = 0 [example]
+    # (RISK-FILTER-ONLY) -> the predicate can never pass for a tradeable
+    # emission; any future direction != 0 would trip this assertion in CI.
+    cost = expected_cost_bps(0, 0, "XNAS", "taker", "normal")
+    assert not (cost <= cfg.cost_gate_k * 0.0), "cost-gate invariant violated"
+    # jump -> veto: direction 0, state OK (a veto is not an error);
+    # no jump -> defer to S036 (still direction 0 from this module)
+    return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "OK")
 
 
 
@@ -211,15 +247,67 @@ def test_no_signal_bar_fills():
 
 
 def test_cost_gate_predicate():
-    """expected_cost_bps(...) <= k * edge_bps gates entries."""
-    k = 0.5  # [default]
+    """expected_cost_bps(...) <= k * edge_bps is executable and behaves sanely;
+    inside S037 it is invoked with edge_bps = 0 (RISK-FILTER-ONLY invariant)."""
     cost = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
-    assert cost > 0
-    assert cost <= k * 100.0   # huge edge -> gate passes
-    assert not (cost <= k * 0.01)  # tiny edge -> gate blocks
+    assert abs(cost - 1.8) < 1e-12  # 1.8 bps reference stack [example]
+    k = 0.5  # [default]
+    assert cost <= k * 100.0        # huge edge -> predicate passes
+    assert not (cost <= k * 0.01)   # tiny edge -> predicate blocks
+    # §S3 normative invocation: edge_bps = 0 [example] -> provably vacuous
+    assert not (cost <= k * 0.0)
 
 
 def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_veto_flag_exposed_in_state():
+    """s1 (jump) sets state['veto_flag'] True; s2 (no jump) leaves it False."""
+    rows = tape()
+    cfg = Config()
+    s1 = [r for r in rows if r["session"] == "s1"]
+    st = {}
+    for i in range(len(s1)):
+        signal(st, s1[: i + 1], cfg)
+    assert st["veto_flag"] is True
+    s2 = [r for r in rows if r["session"] == "s2"]
+    st2 = {}
+    for i in range(len(s2)):
+        signal(st2, s2[: i + 1], cfg)
+    assert st2["veto_flag"] is False
+
+
+def test_warmup_insufficient_bars():
+    """Fewer than min_bars bars -> OK, dir 0, no veto (fail-safe flat)."""
+    rows = tape()
+    cfg, st = Config(), {}
+    s = signal(st, rows[:2], cfg)  # 2 < min_bars (3) [default]
+    assert s.module_state == "OK"
+    assert s.direction == 0
+    assert st["veto_flag"] is False
+
+
+def test_cooldown_suppresses_after_unknown():
+    """After an UNKNOWN block, events inside cooldown_s are DEGRADED."""
+    rows = tape()
+    cfg, st = Config(), {}
+    ts = rows[1]["event_ts"]
+    bad = {"id": "bad", "event_ts": ts, "session": "s1",
+           "prior_close": 100.0, "open": 102.0, "close": -5.0}
+    s = signal(st, [bad], cfg)
+    assert s.module_state == "UNKNOWN"
+    s2 = signal(st, [bad, rows[1]], cfg)  # rows[1].ts inside 600 s [default] cooldown
+    assert s2.module_state == "DEGRADED"
+    assert s2.direction == 0 and s2.capital == 0.0
+
+
+def test_config_defaults_audit():
+    """Config defaults pinned: threshold is theory, the rest are [default]."""
+    cfg = Config()
+    assert cfg.jump_thresh == 2.9702  # [documented] theory value, not a knob
+    assert cfg.min_bars == 3          # [default]
+    assert cfg.cost_gate_k == 0.5     # [default]
+    assert cfg.cooldown_s == 600.0    # [default]

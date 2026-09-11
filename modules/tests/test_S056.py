@@ -104,10 +104,9 @@ def test_fixture_recomputes_to_expected():
                 assert abs(float(gv) - float(ev)) <= TOL, (k, gv, ev)
             except (ValueError, TypeError):
                 assert str(gv) == str(ev), (k, gv, ev)
-        got = recompute(parse_tape())
-        assert abs(got[3]["premium_bps"] - 12.0) < 1e-9
-        assert got[3]["direction"] == -1 and got[4]["direction"] == 1
-        assert got[0]["direction"] == 0
+    assert abs(got[3]["premium_bps"] - 12.0) < 1e-9
+    assert got[3]["direction"] == -1 and got[4]["direction"] == 1
+    assert got[0]["direction"] == 0
 
 
 def test_signal_emits_valid_signalvector():
@@ -146,4 +145,42 @@ def test_cost_gate_predicate():
 def test_invalid_input_yields_unknown():
     bad = {"snap": 0, "event_ts": 1, "asof_ts": 2, "inav": 0.0, "etf_px": 100.0}
     s = signal({}, [bad], Config())
+    assert s.module_state == "UNKNOWN" and s.direction == 0
+
+
+def test_config_defaults_match_chapter():
+    """Config defaults are pinned to the §S0.2 / §S2 parameter table."""
+    cfg = Config()
+    assert cfg.cost_bound_bps == 8.0  # [example]
+    assert cfg.cost_gate_k == 0.5     # [default]
+
+
+def _bar(premium_bps):
+    """One synthetic 15-sec bar with the given premium in bps."""
+    return {"snap": 0, "event_ts": 1788984000000000000, "asof_ts": 1788984000000120000,
+            "inav": 100.0, "etf_px": 100.0 * (1.0 + premium_bps / 10000.0)}
+
+
+def test_cost_gate_blocks_thin_edge():
+    """Premium 8.05 bps breaches the 8 bps bound but the cost gate blocks it:
+    expected_cost_bps = 4.1 > 0.5 * 8.05 = 4.025 -> direction 0 (C2)."""
+    s = signal({}, [_bar(8.05)], Config())
+    assert s.direction == 0 and s.confidence == 0.0
+
+
+def test_cost_gate_passes_clean_edge():
+    """Premium 12 bps clears both bound and gate: -1, confidence 0.5, capital 0.25."""
+    s = signal({}, [_bar(12.0)], Config())
+    assert s.direction == -1
+    assert abs(s.confidence - 0.5) <= TOL
+    assert abs(s.capital - 0.25) <= TOL
+    assert s.computed_at == 1788984000000000000
+
+
+def test_nonfinite_price_yields_unknown():
+    bad = {"snap": 0, "event_ts": 1, "asof_ts": 2, "inav": 100.0, "etf_px": float("inf")}
+    s = signal({}, [bad], Config())
+    assert s.module_state == "UNKNOWN" and s.direction == 0
+    neg = {"snap": 0, "event_ts": 1, "asof_ts": 2, "inav": -100.0, "etf_px": 100.0}
+    s = signal({}, [neg], Config())
     assert s.module_state == "UNKNOWN" and s.direction == 0

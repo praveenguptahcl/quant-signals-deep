@@ -86,6 +86,12 @@ def compute_features(rows):
         mu = sum(w) / len(w)
         var = sum((x - mu) ** 2 for x in w) / (len(w) - 1)  # sample std
         sigma = math.sqrt(var)
+        if sigma <= 0.0:
+            # F2: degenerate window (all deviations equal) -> zero-width band;
+            # never emit on it. sigma recorded so signal() can raise UNKNOWN.
+            out.append({"id": r["id"], "dev": devs[t], "sigma": 0.0,
+                        "z": float("nan"), "trig": 0, "dir": 0})
+            continue
         z = devs[t] / sigma
         trig = 1 if abs(z) >= cfg.z_thresh else 0
         d = (-1 if z > 0 else (1 if z < 0 else 0)) * trig  # fade the deviation
@@ -123,8 +129,11 @@ def signal(state, events, cfg):
                             e["event_ts"], 0, "UNKNOWN")
     feats = compute_features(evs)
     f = feats[-1]
-    if f["z"] != f["z"]:  # warmup guard: never trade the sigma warmup
-        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "OK")
+    if f["z"] != f["z"]:  # NaN z: warmup or degenerate window
+        if f["sigma"] is not None and f["sigma"] <= 0.0:
+            return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                                e["event_ts"], 0, "UNKNOWN")  # F2: never emit on a zero-width band
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "OK")  # warmup guard: never trade the sigma warmup
     direction = f["dir"]
     confidence = min(1.0, abs(f["z"]) / 3.0) if direction else 0.0  # |z|=3 full [example]
     capital = 0.5 * confidence
@@ -203,3 +212,22 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_empty_events_yields_unknown():
+    # F1: empty event list -> UNKNOWN, never a phantom signal
+    s = signal(dict(), [], Config())
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0 and s.confidence == 0.0 and s.capital == 0.0
+
+
+def test_sigma_zero_window_yields_unknown():
+    # F2: price glued to VWAP all session -> sigma == 0 -> UNKNOWN, not a crash
+    ts = 1757000000000000000
+    rows = [{"id": "flat%d" % i, "event_ts": ts + i * 60_000_000_000,
+             "close": 100.0, "vwap": 100.0} for i in range(6)]
+    feats = compute_features(rows)
+    assert feats[-1]["sigma"] == 0.0
+    s = signal(dict(), rows, Config())
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0

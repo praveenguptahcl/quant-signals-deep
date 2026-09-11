@@ -1,8 +1,9 @@
 """Acceptance tests for S047 — Bid–ask bounce / Roll spread.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Loads the fixture tape, runs a reference implementation of
+the chapter's normative pseudocode, and pins causality, the cost gate,
+hand-checked fixture arithmetic, the undefined-estimator branch, and the
+estimator/veto role (11 tests).
 
 Run: python3 -m pytest modules/tests/test_S047.py -q   (from repo root)
 """
@@ -193,3 +194,69 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_empty_events_yields_unknown():
+    """F1: no events at all -> UNKNOWN, never a fabricated signal."""
+    s = signal(dict(), [], Config())
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0 and s.confidence == 0.0 and s.capital == 0.0
+
+
+def test_too_few_trades_waits():
+    """n < min_trades: healthy module, no information — wait, direction 0."""
+    s = signal(dict(), tape()[:5], Config())
+    assert s.module_state == "OK"
+    assert s.direction == 0 and s.confidence == 0.0 and s.capital == 0.0
+
+
+def trend_rows(n=25, start=50.0, step=0.25):
+    """Synthetic constant-drift tape: zero first-order autocovariance [example].
+    step is binary-exact (0.25) so drift diffs carry no float noise."""
+    base = 1757000000000000000
+    return [{"id": "u%d" % i, "event_ts": base + i * 1_000_000_000,
+             "price": start + i * step, "side": "ask"} for i in range(n)]
+
+
+def test_trending_tape_is_undefined_no_information():
+    """gamma1 >= 0 (informed/trending flow): estimator undefined -> OK, dir 0."""
+    rows = trend_rows()
+    n, g1, sp, valid = roll_stats([r["price"] for r in rows])
+    assert n == 25
+    assert valid == 0 and g1 >= 0 and sp != sp  # NaN spread: undefined
+    s = signal(dict(), rows, Config())
+    assert s.module_state == "OK"
+    assert s.direction == 0 and s.confidence == 0.0
+
+
+def test_pure_alternation_identity():
+    """Roll identity pinned: pure bid/ask alternation -> spread == 2*step.
+    41 prices -> 40 diffs (20 up, 20 down), so the mean-adjusted covariance is
+    exact: gamma1 = -0.0004, spread = 0.04."""
+    px = [50.01 if i % 2 == 0 else 49.99 for i in range(41)]  # [example]
+    n, g1, sp, valid = roll_stats(px)
+    assert n == 41 and valid == 1
+    assert abs(g1 - (-0.0004)) < 1e-12, g1  # [default] tolerance
+    assert abs(sp - 0.04) < 1e-9, sp        # 2*sqrt(0.0004) == 2*0.02
+    assert abs(sp - 2.0 * math.sqrt(0.0004)) < 1e-12
+
+
+def test_deterministic_recompute():
+    """Estimator is pure arithmetic: bit-identical across recomputations."""
+    rows = tape()
+    prices = [r["price"] for r in rows]
+    a = roll_stats(prices)
+    b = roll_stats(prices)
+    assert a == b
+    assert compute_features(rows) == compute_features(rows)
+
+
+def test_harvest_veto_consistency():
+    """Estimator/veto role: direction 0 and confidence 0 on every event,
+    even when the spread estimate is valid (no harvest entries, ever)."""
+    rows = tape()
+    cfg = Config()
+    for i in range(len(rows)):
+        s = signal(dict(), rows[: i + 1], cfg)
+        assert s.direction == 0, i
+        assert s.confidence == 0.0 and s.capital == 0.0, i

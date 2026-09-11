@@ -78,17 +78,18 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     """Reference cost model: decomposed fee stack (impact=0 flagged [example]).
 
     Mirrors the S001.md COST block. Tags per the module's tag law.
+    fee_schedule_as_of: 2026-09-11 [default].
     """
     spread_bps = 0.43    # half-spread of 1 tick at $231.40 reference px [example]
     take_fee_bps = 0.13  # exchange take fee $0.0030/share / $231.40 [example]
-    sec31_bps = 0.00     # SEC Section 31 $0.00/million eff. 2025-05-14 [documented]
+    sec31_bps = 0.21     # SEC Section 31 $20.60/million eff. 2026-04-04 [documented]
     taf_bps = 0.01       # FINRA TAF $0.000195/share eff. 2026-01-01 / $231.40 [documented]
-    fee_bps = take_fee_bps + sec31_bps + taf_bps  # ~= 0.14 [example composite]
-    borrow_bps = 0.0      # long-only signal; 0 with reason: no borrow [default]
-    impact_bps = 0.0      # flagged [example]; calibrated per venue at scale-up
+    fee_bps = take_fee_bps + sec31_bps + taf_bps  # ~= 0.35 [example composite]
+    borrow_bps_per_day = 0.0  # long-only signal; 0 with reason: no borrow [default]
+    impact_bps = 0.0     # flagged [example]; calibrated per venue at scale-up
     if side == "maker":
-        fee_bps = -0.20   # rebate [example]
-    return spread_bps + fee_bps + borrow_bps + impact_bps
+        fee_bps = -0.20 + sec31_bps + taf_bps  # rebate [example]; §31/TAF conservative
+    return spread_bps + fee_bps + borrow_bps_per_day + impact_bps
 
 
 def ofi_z(hist, d_bar):
@@ -106,8 +107,9 @@ def signal(state, events, cfg):
     """signal(state, events, cfg) -> SignalVector (S001 reference stub).
 
     Mirrors the normative pseudocode in S001.md §S3, including the F1 locked/
-    crossed-quote skip, the n<5 insufficient-sample veto, the cost-gate
-    predicate, and t->t+1 causality. regime_gates() is stubbed to ALLOW;
+    crossed-quote skip, the F1 monotonicity check, the F4 staleness TTL,
+    the n<5 insufficient-sample veto, the cost-gate predicate, and t->t+1
+    causality. regime_gates() is stubbed to ALLOW;
     a live harness must wire the §S2 machine records (R001/R010).
     """
     evs = list(events)
@@ -127,6 +129,10 @@ def signal(state, events, cfg):
                             e["event_ts"], 0, "OK")
     # F1: event_ts must be strictly increasing; no reordering
     if e["event_ts"] <= prev["event_ts"]:
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], e["asof_ts"] - e["event_ts"], "UNKNOWN")
+    # F4: staleness TTL = 3 s [default]; late arrival -> UNKNOWN, no prev advance
+    if e["asof_ts"] - e["event_ts"] > 3_000_000_000:
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], e["asof_ts"] - e["event_ts"], "UNKNOWN")
     eb, ea = cks_contributions(e["bid_px"], e["bid_sz"], e["ask_px"], e["ask_sz"],
@@ -296,9 +302,39 @@ def test_insufficient_sample_veto():
 
 
 def test_maker_rebate_branch():
-    """expected_cost_bps honors the maker rebate branch."""
+    """expected_cost_bps honors the maker rebate branch (§31/TAF kept as
+    conservative composite on the maker stack)."""
     taker = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
     maker = expected_cost_bps(1.0, 0.001, "XNAS", "maker", "normal")
-    assert abs(taker - 0.57) < 1e-9   # 0.43 + 0.13 + 0.00 + 0.01 [example composite]
-    assert abs(maker - 0.23) < 1e-9   # 0.43 - 0.20 rebate [example]
+    assert abs(taker - 0.78) < 1e-9   # 0.43 + 0.13 + 0.21 + 0.01 [example composite]
+    assert abs(maker - 0.45) < 1e-9   # 0.43 - 0.20 + 0.21 + 0.01 [example composite]
     assert maker < taker
+
+
+def test_stale_event_yields_unknown():
+    """F4: arrival jitter beyond the 3 s staleness TTL -> UNKNOWN, and
+    prev_book must NOT advance across the stale event."""
+    evs = tape()
+    cfg, state = Config(), {}
+    for i in range(len(evs)):
+        signal(state, evs[: i + 1], cfg)
+    prev_ev = state["prev"]["ev"]
+    stale = evs[-1].copy()
+    stale["event_ts"] = stale["event_ts"] + 1  # still strictly increasing
+    stale["asof_ts"] = stale["event_ts"] + 4_000_000_000  # 4 s jitter > 3 s TTL
+    s = signal(state, evs + [stale], cfg)
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0
+    assert state["prev"]["ev"] == prev_ev  # no advance across the gap
+
+
+def test_cost_gate_blocks_through_stub():
+    """Normative predicate through the full stub path: with k=0 the gate can
+    never pass, so the pinned z=5.73 edge is vetoed to direction 0."""
+    evs = tape()
+    cfg = Config(cost_gate_k=0.0)  # cost <= 0 * edge_bps -> False
+    state = {}
+    sigs = [signal(state, evs[: i + 1], cfg) for i in range(len(evs))]
+    assert sigs[-1].module_state == "OK"
+    assert sigs[-1].direction == 0  # z=5.73 >= z_entry but cost gate fails
+    assert sigs[-1].confidence == 0.0 and sigs[-1].capital == 0.0

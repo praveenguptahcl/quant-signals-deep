@@ -1,4 +1,5 @@
 # TYPE: validation-run
+# seed: 60
 # Expected outputs for S060_tape.csv. Hand-checked per the S060 chapter S4.
 # All numbers synthetic.
 hy_m1,hy_0,hy_p1,chosen_lag

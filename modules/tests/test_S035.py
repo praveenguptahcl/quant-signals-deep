@@ -73,12 +73,12 @@ def bad_event():
 FEATURE_COLS = ["rank", "leg"]
 
 
-def _legs(rows):
+def _legs(rows, n_long=3, n_short=3):
     order = sorted(range(len(rows)), key=lambda i: rows[i]["r_form"])
     leg = [0] * len(rows)
-    for i in order[:3]:
+    for i in order[:n_long]:
         leg[i] = 1
-    for i in order[-3:]:
+    for i in order[-n_short:]:
         leg[i] = -1
     return leg, order
 
@@ -115,22 +115,32 @@ class Config:
     min_names: int = 6           # minimum cross-section [default]
     cost_gate_k: float = 0.5     # cost-gate multiplier [default]
     cooldown_s: float = 86_400.0 # weekly rebalance [example]
+    edge_bps: float = 250.0      # ex-ante weekly reversal spread (bps) [example]
+    width_min_pp: float = 2.0    # cross-width veto threshold (pp) [example]
+
+
+BORROW_BPS_PER_DAY = 0.20  # [example]; reason: short-leg borrow, 3-name short leg
+HOLDING_DAYS = 5.0         # [example] base-spec hold
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    """Reference cost model: weekly cross-sectional reversal, large-cap."""
-    spread_bps = 0.50   # half-spread [example]
-    fee_bps = 0.30      # taker incl. regulatory [example]
-    borrow_bps = 1.00   # short-leg borrow [example]; reason: 3-name short leg
-    impact_bps = 1.00   # weekly-turn concession [example]
-    return spread_bps + fee_bps + borrow_bps + impact_bps
+    """Reference cost model: weekly cross-sectional reversal, large-cap.
+
+    Components from the §S2 COST block; borrow normalized per day x holding days.
+    """
+    spread_bps = 0.50        # half-spread [example]
+    fee_bps = 0.30           # taker incl. regulatory [example]
+    borrow_bps = BORROW_BPS_PER_DAY * HOLDING_DAYS  # 0.20 x 5 = 1.00 [example]
+    impact_bps = 1.00        # weekly-turn concession [example]
+    return spread_bps + fee_bps + borrow_bps + impact_bps  # == 2.80 [example]
 
 
 def signal(state, events, cfg):
     """signal(state, events, cfg) -> SignalVector (S035 reference stub).
 
-    Portfolio-level stub: the reversal book is active when the cross-section
-    is wide enough; per-name legs come from compute_features.
+    Per-name stub following the §S3 normative pseudocode: the book is on when
+    the cross-section is wide enough and the cost gate passes; each event's
+    direction is its leg. Short leg assumes asserted locate (C7) [example].
     """
     evs = list(events)
     if not evs:
@@ -140,19 +150,20 @@ def signal(state, events, cfg):
     if e["r_form"] != e["r_form"]:
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
                             e["event_ts"], 0, "UNKNOWN")
-    direction = 0
-    confidence = 0.0
-    if len(evs) >= cfg.min_names:
-        rf = [x["r_form"] for x in evs]
-        width = max(rf) - min(rf)
-        direction = 1  # reversal spread is on
-        confidence = min(1.0, width / 20.0)  # 20pp wide = full [example]
-    capital = 0.5 * confidence
+    # Thin cross-section -> UNKNOWN
+    if len(evs) < cfg.min_names:
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0,
+                            e["event_ts"], 0, "UNKNOWN")
+    leg, _ = _legs(evs, cfg.n_long, cfg.n_short)
+    idx = len(evs) - 1
+    rf = [x["r_form"] for x in evs]
+    width = max(rf) - min(rf)                      # pp; r_form in %
+    cross_width_ok = width >= cfg.width_min_pp     # 2.0 [example]
     # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
-    edge_bps = 250.0  # weekly reversal spread [example]
-    ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
-    if not ok:
-        direction, confidence, capital = 0, 0.0, 0.0
+    ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * cfg.edge_bps
+    direction = leg[idx] if (cross_width_ok and ok) else 0
+    confidence = min(1.0, width / 20.0) if direction != 0 else 0.0  # conviction [example]
+    capital = 0.5 * confidence                     # 0.5 [default]
     return SignalVector("TEST:XNAS", direction, confidence, capital,
                         e["event_ts"], 0, "OK")
 
@@ -197,6 +208,7 @@ def test_no_signal_bar_fills():
     cfg, state = Config(), dict()
     for i in range(len(rows) - 1):
         s = signal(state, rows[: i + 1], cfg)
+        assert s.computed_at == event_ts(rows[i])  # signal stamped at bar t
         fill_event_ts = event_ts(rows[i + 1])  # earliest possible fill: next event
         assert fill_event_ts > s.computed_at, "signal-bar fill at row %d" % i
 
@@ -214,3 +226,49 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_cost_stack_pinning():
+    """COST block components pinned: borrow = borrow_bps_per_day x holding_days."""
+    cost = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    assert abs(cost - 2.80) < TOL, cost          # 2.80 [example] reference total
+    assert abs(BORROW_BPS_PER_DAY * HOLDING_DAYS - 1.00) < TOL  # borrow normalisation
+
+
+def test_thin_cross_section_unknown():
+    """Fewer than min_names events -> UNKNOWN (never interpolate a thin sort)."""
+    rows = tape()[:3]
+    s = signal(dict(), rows, Config())
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0 and s.capital == 0.0
+
+
+def _narrow_rows():
+    base = 1_757_000_000_000_000_000
+    syms = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    rfs = [-0.9, -0.6, -0.3, -0.1, 0.0, 0.1, 0.3, 0.5, 0.7, 0.9]  # width 1.8pp [example]
+    return [{"id": "n%02d" % i, "event_ts": base + i * 86_400_000_000_000,
+             "symbol": s, "r_form": r, "r_hold": 0.0}
+            for i, (s, r) in enumerate(zip(syms, rfs))]
+
+
+def test_narrow_cross_section_vetoes():
+    """Width below width_min_pp -> book flat, direction 0, state OK."""
+    rows = _narrow_rows()
+    cfg = Config()
+    assert max(r["r_form"] for r in rows) - min(r["r_form"] for r in rows) < cfg.width_min_pp
+    s = signal(dict(), rows, cfg)
+    assert s.module_state == "OK"
+    assert s.direction == 0 and s.confidence == 0.0 and s.capital == 0.0
+
+
+def test_r_hold_never_leaks():
+    """Permuting the ex-post r_hold must not change ranks or legs."""
+    rows = tape()
+    ref = {(f["id"], f["rank"], f["leg"]) for f in compute_features(rows)}
+    shuffled = [dict(r) for r in rows]
+    holds = [r["r_hold"] for r in shuffled][::-1]  # reverse the ex-post column
+    for r, h in zip(shuffled, holds):
+        r["r_hold"] = h
+    got = {(f["id"], f["rank"], f["leg"]) for f in compute_features(shuffled)}
+    assert got == ref

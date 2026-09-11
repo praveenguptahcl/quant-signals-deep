@@ -1,6 +1,8 @@
 # TYPE: validation-run
 # Expected outputs for S053_tape.csv. Hand-checked per the S053 chapter S4.
+# zc = demeaned zero-crossing count per the normative S3 definition.
 # All numbers synthetic.
 pair,zc,pass_gate
 A,7,1
-B,0,0
+B,1,0
+C,11,1

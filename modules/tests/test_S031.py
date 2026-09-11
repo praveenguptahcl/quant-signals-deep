@@ -1,8 +1,8 @@
 """Acceptance tests for S031 — Consecutive-bar streaks (runs).
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Loads the fixture tape, runs a reference implementation of
+the chapter's normative pseudocode, and asserts causality, the cost gate,
+the locate veto, and hand-checked fixture arithmetic.
 
 Run: python3 -m pytest modules/tests/test_S031.py -q   (from repo root)
 """
@@ -114,8 +114,13 @@ def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
-def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S031 reference stub)."""
+def signal(state, events, cfg, locate_ok=True):
+    """signal(state, events, cfg) -> SignalVector (S031 reference stub).
+
+    locate_ok is the consumer-asserted Reg-SHO flag (C7): production
+    state.locate_ok defaults False [default] (shorts vetoed); the harness
+    asserts it True here to pin the continuation-down arithmetic.
+    """
     evs = list(events)
     if not evs:
         return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
@@ -126,6 +131,8 @@ def signal(state, events, cfg):
                             e["event_ts"], 0, "UNKNOWN")
     feats = compute_features(evs)
     direction = feats[-1]["direction"]
+    if direction == -1 and not locate_ok:
+        direction = 0  # C7: no locate -> no SHORT
     confidence = 0.6 if direction else 0.0  # streak conviction [example]
     capital = 0.5 * confidence
     # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
@@ -150,12 +157,12 @@ def test_fixture_recomputes_to_expected():
             assert _close(f[col], w[col]), (f["id"], col)
 
     by_id = {f["id"]: f for f in feats}
-    # Tape signs: +,+,-,+,+,+,-,-,-,-,-,-,-,+ ; k1=3, k2=6
-    assert by_id[6]["s"] == 3 and by_id[6]["direction"] == 1, by_id[6]   # continuation up
+    # Tape signs: +,+,-,+,+,+,-,-,-,-,-,-,-,+,0 ; k1=3, k2=6    assert by_id[6]["s"] == 3 and by_id[6]["direction"] == 1, by_id[6]   # continuation up
     assert by_id[9]["s"] == -3 and by_id[9]["direction"] == -1, by_id[9]  # continuation down
     assert by_id[12]["s"] == -6 and by_id[12]["direction"] == 1, by_id[12]  # exhaustion fade
     assert by_id[13]["s"] == -7 and by_id[13]["direction"] == 1, by_id[13]
     assert by_id[14]["s"] == 1 and by_id[14]["direction"] == 0, by_id[14]
+    assert by_id[15]["s"] == 0 and by_id[15]["direction"] == 0, by_id[15]  # zero-return breaks streak
 
 
 
@@ -194,3 +201,43 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_cost_gate_blocks_entry_end_to_end():
+    """Cost-gate blocking wired through signal(): bar-6 s=3 is +1 by default,
+    but cost_gate_k=0.0 zeroes it (1.8 bps cost [example] > 0.0 * edge)."""
+    rows = tape()
+    gated = signal(dict(), rows[:6], Config(cost_gate_k=0.0))
+    assert gated.direction == 0 and gated.confidence == 0.0 and gated.capital == 0.0
+    # Sanity: default k=0.5 [default] lets the same bar through (0.5 * 6 bps = 3 > 1.8)
+    open_sig = signal(dict(), rows[:6], Config())
+    assert open_sig.direction == 1 and open_sig.module_state == "OK"
+
+
+def test_short_vetoed_without_locate():
+    """C7: SHORT direction requires locate_ok; bar-9 s=-3 is -1 with locate."""
+    rows = tape()
+    vetoed = signal(dict(), rows[:9], Config(), locate_ok=False)
+    assert vetoed.direction == 0
+    located = signal(dict(), rows[:9], Config(), locate_ok=True)
+    assert located.direction == -1
+
+
+def test_empty_events_yields_unknown():
+    s = signal(dict(), [], Config())
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0
+
+
+def test_zero_return_resets_streak():
+    """Zero-return rule = break [example]: equal closes collapse the streak to 0."""
+    bars = [
+        {"ev": 1, "event_ts": 1, "open": 100.0, "high": 100.1, "low": 99.9,
+         "close": 100.0, "volume": 10},
+        {"ev": 2, "event_ts": 2, "open": 100.0, "high": 100.1, "low": 99.9,
+         "close": 100.0, "volume": 10},  # zero-return bar: close == prev close
+    ]
+    feats = compute_features(bars)
+    assert feats[-1]["s"] == 0 and feats[-1]["direction"] == 0
+    s = signal(dict(), bars, Config())
+    assert s.direction == 0 and s.module_state == "OK"

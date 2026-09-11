@@ -1,8 +1,10 @@
 """Acceptance tests for S049 — Distance-method pair.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0; module deep-reviewed 2026-09-11 (module v1.1.0): the formation
+window is a configurable parameter (Config.form_days), the cost stack
+decomposes into named components with an explicit per-day borrow rate, and the
+acceptance tests pin the cost-gate veto, window parameterization, and
+incomplete-day masking in addition to the fixture arithmetic and causality.
 
 Run: python3 -m pytest modules/tests/test_S049.py -q   (from repo root)
 """
@@ -16,6 +18,12 @@ TAPE = FIX / "S049_tape.csv"
 EXPECTED = FIX / "S049_expected.csv"
 
 TOL = 1e-9  # [default] tolerance on float comparisons
+
+# --- named module constants (mirror §S2 COST block / §S0.2 Config) ---
+FORM_DAYS_DEFAULT = 12        # [example] fixture window; production 60-250 [example]
+EDGE_BPS_PER_Z = 20.0         # [example] edge model: bps per unit of spread z
+BORROW_BPS_PER_DAY = 1.37     # [example] ~500 bps/yr GC-ish short rate, illustrative
+HOLD_DAYS_REF = 1.5           # [example] expected holding days for the reference stack
 
 
 def _num(x):
@@ -51,7 +59,6 @@ class SignalVector:
     module_state: str       # OK | DEGRADED | UNKNOWN | OFF
 
 
-
 def tape():
     rows = []
     for r in load_csv(TAPE):
@@ -76,7 +83,11 @@ def _day_key(rid):
 
 
 def complete_days(rows):
-    """Group rows into complete (A,B) days -> [(day, ts, closeA, closeB)]."""
+    """Group rows into complete (A,B) days -> [(day, ts, closeA, closeB)].
+
+    Incomplete days (a leg missing) are masked: no contribution, state carries
+    forward (§S3 normative pseudocode). Causality: ts = max of the leg stamps.
+    """
     by_day = {}
     for r in rows:
         d = _day_key(r["id"])
@@ -89,20 +100,26 @@ def complete_days(rows):
     return out
 
 
-def formation_stats(days):
-    """Pinned formation: days 1..12, spread = A/B - 1."""
-    f = [ca / cb - 1.0 for d, _, ca, cb in days if d <= 12]
+def formation_days(days, form_days):
+    """First `form_days` complete days = the formation window (Gatev-style)."""
+    return [(d, ts, ca, cb) for d, ts, ca, cb in days if d <= form_days]
+
+
+def formation_stats(days, form_days):
+    """Pinned formation: spread = A/B - 1, sample sd (ddof=1)."""
+    f = [ca / cb - 1.0 for d, _, ca, cb in formation_days(days, form_days)]
     mu = sum(f) / len(f)
     sd = (sum((x - mu) ** 2 for x in f) / (len(f) - 1)) ** 0.5
     return mu, sd
 
 
 def _positions(days, mu, sd, cfg):
+    """Position state machine: fade the stretch, exit on reversion."""
     pos = 0
     out = []
     for d, _, ca, cb in days:
         sp = ca / cb - 1.0
-        if d <= 12:  # formation window: stats shown, z/dir blank
+        if d <= cfg.form_days:  # formation window: stats shown, z/dir blank
             out.append((d, sp, mu, sd, float("nan"), 0))
             continue
         z = (sp - mu) / sd
@@ -117,10 +134,10 @@ def _positions(days, mu, sd, cfg):
     return out
 
 
-def compute_features(rows):
-    cfg = Config()
+def compute_features(rows, cfg=None):
+    cfg = cfg or Config()
     days = complete_days(rows)
-    mu, sd = formation_stats(days)
+    mu, sd = formation_stats(days, cfg.form_days)
     out = []
     for d, sp, mu_, sd_, z, pos in _positions(days, mu, sd, cfg):
         out.append({"id": "d%d" % d, "spread": sp, "form_mean": mu_,
@@ -130,23 +147,39 @@ def compute_features(rows):
 
 @dataclass
 class Config:
-    entry_z: float = 2.0         # entry trigger [example]
-    exit_z: float = 0.5          # exit trigger [example]
-    cost_gate_k: float = 0.5     # cost-gate multiplier [default]
+    entry_z: float = 2.0          # entry trigger [example]
+    exit_z: float = 0.5           # exit trigger [example]
+    cost_gate_k: float = 0.5      # cost-gate multiplier [default]
     cooldown_s: float = 86_400.0  # one position per episode [default]
+    form_days: int = FORM_DAYS_DEFAULT  # formation window [example]
 
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    """Reference cost model: pairs distance entry, liquid large-caps."""
-    spread_bps = 0.50   # half-spread [example]
-    fee_bps = 0.30      # taker incl. regulatory [example]
-    borrow_bps = 2.00   # short leg [example]; flagged, C7 locate
-    impact_bps = 1.00   # concession [example]
+    """Reference cost model: pairs distance entry, liquid large-caps.
+
+    Stack (bps): spread 0.50 [example] + fees (taker 0.30 incl. regulatory
+    [example]; maker -0.20 rebate [example]) + borrow
+    BORROW_BPS_PER_DAY * HOLD_DAYS_REF [example] + impact 1.00 [example].
+    """
+    spread_bps = 0.50
+    fee_bps = 0.30
+    if side == "maker":
+        fee_bps = -0.20  # rebate [example]
+    borrow_bps = BORROW_BPS_PER_DAY * HOLD_DAYS_REF  # short leg [example]; C7 locate
+    impact_bps = 1.00
     return spread_bps + fee_bps + borrow_bps + impact_bps
 
 
 def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S049 reference stub)."""
+    """signal(state, events, cfg) -> SignalVector (S049 reference stub).
+
+    Fixture context assumes a healthy, locatable, cointegrated pair
+    (state.pair_cointegrated / locate_ok True); production paths add the
+    §S3 eligibility gates on top of the same arithmetic.
+    """
+    state = dict(state or {})
+    state.setdefault("pair_cointegrated", True)
+    state.setdefault("locate_ok", True)
     evs = list(events)
     if not evs:
         return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
@@ -157,22 +190,32 @@ def signal(state, events, cfg):
                                 r["event_ts"], 0, "UNKNOWN")
     e = evs[-1]
     days = complete_days(evs)
-    if len([d for d in days if d[0] <= 12]) < 12:
+    if len(formation_days(days, cfg.form_days)) < cfg.form_days:
         return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "OK")
-    mu, sd = formation_stats(days)
-    pos = _positions(days, mu, sd, cfg)[-1][5]
+    mu, sd = formation_stats(days, cfg.form_days)
+    if not (sd > 0 and math.isfinite(mu) and math.isfinite(sd)):
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, e["event_ts"], 0, "UNKNOWN")
+    track = _positions(days, mu, sd, cfg)
+    pos = track[-1][5]
+    z = track[-1][4]
     direction = pos
-    confidence = 0.6 if direction else 0.0  # distance-entry conviction [example]
+    # eligibility gates (§S2 entry rule): broken pair or missing locate -> FLAT
+    if not state["pair_cointegrated"] or not state["locate_ok"]:
+        direction = 0
+    confidence = 0.6 if direction else 0.0  # entry conviction [example]
     capital = 0.5 * confidence
-    # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
-    z = _positions(days, mu, sd, cfg)[-1][4]
-    edge_bps = abs(z) * 20.0 if z == z else 0.0  # 20bps per unit z [example]
+    # normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps (C2)
+    edge_bps = abs(z) * EDGE_BPS_PER_Z if z == z else 0.0
     ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
     if not ok:
         direction, confidence, capital = 0, 0.0, 0.0
     return SignalVector("TEST:XNAS", direction, confidence, capital,
                         e["event_ts"], 0, "OK")
 
+
+def rows_through(rows, day):
+    """Event rows up to and including day `day` (causal prefix)."""
+    return [r for r in rows if _day_key(r["id"]) <= day]
 
 
 # ------------------------------------------------------------------- tests
@@ -206,7 +249,6 @@ def test_fixture_recomputes_to_expected():
     assert s.direction == 0 and s.module_state == "OK"   # flat after exit
 
 
-
 def test_signal_emits_valid_signalvector():
     rows = tape()
     cfg, state = Config(), dict()
@@ -236,6 +278,50 @@ def test_cost_gate_predicate():
     assert cost > 0
     assert cost <= k * 100.0   # huge edge -> gate passes
     assert not (cost <= k * 0.01)  # tiny edge -> gate blocks
+
+
+def test_cost_stack_decomposes():
+    """The 4-component stack is exactly: spread + fees + borrow/day*hold + impact."""
+    taker = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    assert abs(taker - (0.50 + 0.30 + BORROW_BPS_PER_DAY * HOLD_DAYS_REF + 1.00)) < TOL
+    maker = expected_cost_bps(1.0, 0.001, "XNAS", "maker", "normal")
+    assert abs(maker - (0.50 - 0.20 + BORROW_BPS_PER_DAY * HOLD_DAYS_REF + 1.00)) < TOL
+    assert maker < taker  # rebate side strictly cheaper in the reference stack
+
+
+def test_gate_veto_zeros_direction():
+    """On the entry day, a failing cost gate forces FLAT (C2 bona-fide-intent)."""
+    rows = rows_through(tape(), 13)  # causal prefix ending at the entry day
+    entry = signal(dict(), rows, Config())
+    assert entry.direction == -1 and entry.module_state == "OK"  # gate passes at k=0.5
+    vetoed = signal(dict(), rows, Config(cost_gate_k=0.001))
+    assert vetoed.direction == 0 and vetoed.capital == 0.0
+    assert vetoed.module_state == "OK"  # veto is a decision, not a failure
+
+
+def test_formation_window_parameterized():
+    """form_days is normative: changing it recomputes formation stats and the
+    formation/trading boundary (pins §S0.2 Config.form_days)."""
+    rows = tape()
+    base = {f["id"]: f for f in compute_features(rows, Config())}
+    alt = {f["id"]: f for f in compute_features(rows, Config(form_days=6))}
+    # formation boundary moves: d7 leaves formation, so z appears on d7
+    assert math.isnan(base["d7"]["z"]) and not math.isnan(alt["d7"]["z"])
+    # stats recompute: mean/sd over 6 days differ from the 12-day window
+    assert abs(alt["d13"]["form_mean"] - base["d13"]["form_mean"]) > 1e-6
+    assert abs(alt["d13"]["z"] - base["d13"]["z"]) > 1e-6
+    # the day-13 episode still reads as a stretched spread under both windows
+    assert base["d13"]["dir"] == -1 and alt["d13"]["dir"] == -1
+
+
+def test_incomplete_day_masked():
+    """A day with only one leg contributes nothing: no crash, state carries."""
+    rows = tape() + [{"id": "d17A", "event_ts": 1758382400000000000,
+                      "sym": "A", "close": 101.0}]
+    s = signal(dict(), rows, Config())
+    assert s.module_state == "OK" and s.direction == 0  # flat carries from d16
+    feats = compute_features(rows)
+    assert len(feats) == 16  # d17 absent: masked, not interpolated
 
 
 def test_invalid_input_yields_unknown():

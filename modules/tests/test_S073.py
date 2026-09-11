@@ -2,7 +2,8 @@
 
 Template v1.0.0. Concrete sketch: real imports, fixture load, a reference
 implementation of the chapter's normative pseudocode, and real assertions
-including causality (assert fill_event > signal_event) and invalid -> UNKNOWN.
+including causality (assert fill_event > signal_event), the cost gate,
+the staleness TTL, and invalid -> UNKNOWN.
 
 Run: python3 -m pytest modules/tests/test_S073.py -q   (from repo root)
 """
@@ -51,45 +52,57 @@ class SignalVector:
     module_state: str       # OK | DEGRADED | UNKNOWN | OFF
 
 
-def recompute(rows):
+def recompute(rows, u_star=2.0, vol_oi_star=1.5):
     out = []
     for r in rows:
         u = r["volume"] / r["med20_vol"]
         vo = r["volume"] / r["oi"] if r["oi"] > 0 else 0.0
-        d = 1 if (u >= 2.0 and vo >= 1.5) else 0
+        d = 1 if (u >= u_star and vo >= vol_oi_star) else 0
         out.append({"contract": r["contract"], "u_score": u, "vol_oi": vo, "flag": d})
     return out
 
 
 @dataclass
 class Config:
-    u_star: float = 2.0       # [example]
-    vol_oi_star: float = 1.5  # [example]
-    cost_gate_k: float = 0.5   # [default]
+    u_star: float = 2.0                  # [example]
+    vol_oi_star: float = 1.5            # [example]
+    baseline_days: int = 20             # [example]
+    cost_gate_k: float = 0.5            # [default]
+    staleness_ttl_ns: int = 3000000000  # 3 s [default]
+
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
-    spread_bps = 3.00   # options leg half-spread on unusual print [example]
-    fee_bps = 0.60      # options fees [example]
-    borrow_bps = 0.00   # reason: follow-the-print reference; borrow in consumer [default]
-    impact_bps = 2.00   # chasing slippage [example]
-    return spread_bps + fee_bps + borrow_bps + impact_bps
+    spread_bps = 3.00            # options leg half-spread on unusual print [example]
+    fee_bps = 0.60               # options fees [example]
+    borrow_bps_per_day = 0.00    # reason: long-follow reference; borrow in consumer [default]
+    impact_bps = 2.00            # chasing slippage [example]
+    return spread_bps + fee_bps + borrow_bps_per_day + impact_bps
+
+
+def regime_gates():
+    return "ALLOW"  # test seam: live harness evaluates the §S2 machine records
+
 
 def signal(state, bars, cfg):
     bars = list(bars)
     if not bars:
-        return SignalVector("TEST", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
+        return SignalVector("UNDERLYING", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
     b = bars[-1]
     if b["med20_vol"] <= 0 or b["volume"] < 0 or not math.isfinite(b["volume"]):
-        return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")
+        return SignalVector("UNDERLYING", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")
+    if b["asof_ts"] - b["event_ts"] > cfg.staleness_ttl_ns:
+        return SignalVector("UNDERLYING", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")  # F4
+    if regime_gates() != "ALLOW":
+        return SignalVector("UNDERLYING", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")
     u = b["volume"] / b["med20_vol"]
     vo = b["volume"] / b["oi"] if b["oi"] > 0 else 0.0
-    direction = 1 if (u >= cfg.u_star and vo >= cfg.vol_oi_star) else 0
+    direction = 1 if (u >= cfg.u_star and vo >= cfg.vol_oi_star) else 0  # put/call-agnostic proxy [example]
     confidence = min(1.0, u / 5.0) if direction else 0.0  # [example] scale
-    edge_bps = u * 30.0  # modeled per-trade edge [example]
+    edge_bps = u * 30.0  # modeled per-trade edge [example]; calibrate beta per chapter
     gate = expected_cost_bps(1.0, 0.001, "CBOE", "taker", "normal") <= cfg.cost_gate_k * edge_bps
     if not gate:
         direction, confidence = 0, 0.0
-    return SignalVector("TEST", direction, confidence, 0.5 * confidence,
+    return SignalVector("UNDERLYING", direction, confidence, 0.5 * confidence,
                         b["event_ts"], b["asof_ts"] - b["event_ts"], "OK")
 
 
@@ -107,9 +120,9 @@ def test_fixture_recomputes_to_expected():
                 assert abs(float(gv) - float(ev)) <= TOL, (k, gv, ev)
             except (ValueError, TypeError):
                 assert str(gv) == str(ev), (k, gv, ev)
-        got = recompute(parse_tape())
-        assert abs(got[0]["u_score"] - 2500.0/900.0) < 1e-9
-        assert [g["flag"] for g in got] == [1, 0, 1, 0, 1, 1]
+    # pin the documented hand-checks: contract-0 u = 2500/900, flags 1,0,1,0,1,1
+    assert abs(got[0]["u_score"] - 2500.0 / 900.0) < 1e-9
+    assert [g["flag"] for g in got] == [1, 0, 1, 0, 1, 1]
 
 
 def test_signal_emits_valid_signalvector():
@@ -149,3 +162,40 @@ def test_invalid_input_yields_unknown():
     bad = {"contract": 0, "event_ts": 1, "asof_ts": 2, "volume": 100.0, "oi": 50.0, "med20_vol": 0.0}
     s = signal({}, [bad], Config())
     assert s.module_state == "UNKNOWN" and s.direction == 0
+
+
+def test_stale_event_yields_unknown():
+    """F4: asof_ts - event_ts > staleness_ttl_ns -> UNKNOWN."""
+    cfg = Config()
+    stale = {"contract": 0, "event_ts": 1_000_000,
+             "asof_ts": 1_000_000 + cfg.staleness_ttl_ns + 1,
+             "volume": 2500.0, "oi": 800.0, "med20_vol": 900.0}
+    s = signal({}, [stale], cfg)
+    assert s.module_state == "UNKNOWN" and s.direction == 0
+    # just inside the TTL is fine
+    fresh = dict(stale, asof_ts=stale["event_ts"] + cfg.staleness_ttl_ns - 1)
+    s2 = signal({}, [fresh], cfg)
+    assert s2.module_state == "OK" and s2.direction == 1
+
+
+def test_cost_gate_blocks_through_stub():
+    """Full-path gate: k=0 blocks every flag through signal()."""
+    rows = parse_tape()
+    cfg = Config(cost_gate_k=0.0)
+    sigs = [signal({}, rows[: i + 1], cfg) for i in range(len(rows))]
+    assert all(s.direction == 0 and s.confidence == 0.0 for s in sigs)
+    cfg2 = Config(cost_gate_k=2.0)  # loose gate: strong prints still flag
+    s_strong = signal({}, rows[: 6], cfg2)  # contract-5, u ~ 4.17
+    assert s_strong.direction == 1
+
+
+def test_zero_oi_and_nonfinite_inputs():
+    """oi=0 never divides by zero (vol_oi=0, no flag); non-finite volume -> UNKNOWN."""
+    cfg = Config()
+    z = {"contract": 9, "event_ts": 5, "asof_ts": 6, "volume": 2500.0, "oi": 0.0, "med20_vol": 900.0}
+    s = signal({}, [z], cfg)
+    assert s.module_state == "OK" and s.direction == 0  # vol_oi = 0.0 < vol_oi_star
+    for bad_vol in (float("nan"), float("inf"), -float("inf")):
+        nb = {"contract": 9, "event_ts": 5, "asof_ts": 6, "volume": bad_vol, "oi": 800.0, "med20_vol": 900.0}
+        sb = signal({}, [nb], cfg)
+        assert sb.module_state == "UNKNOWN" and sb.direction == 0, bad_vol

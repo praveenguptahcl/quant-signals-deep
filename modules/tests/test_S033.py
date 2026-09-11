@@ -1,8 +1,9 @@
 """Acceptance tests for S033 — Open-auction imbalance continuation.
 
-Template v1.0.0. Sketch-level but concrete: loads the fixture tape, runs a
-reference implementation of the chapter's normative pseudocode, and asserts
-causality, the cost gate, and hand-checked fixture arithmetic.
+Template v1.0.0. Concrete reference implementation of the chapter's normative
+§S3 pseudocode: loads the fixture tape, pins rho/d_bps/gate/dir/conf/cap per
+message, and asserts causality, the executable cost-gate predicate, cooldown,
+and the module-state freeze table.
 
 Run: python3 -m pytest modules/tests/test_S033.py -q   (from repo root)
 """
@@ -70,7 +71,7 @@ def bad_event():
             "paired": 0, "imb": 100}  # zero paired shares
 
 
-FEATURE_COLS = ["rho", "d_bps", "gate", "dir"]
+FEATURE_COLS = ["rho", "d_bps", "gate", "dir", "conf", "cap"]
 
 
 def compute_features(rows):
@@ -81,8 +82,11 @@ def compute_features(rows):
         d_bps = (r["ind"] - r["ref"]) / r["ref"] * 1e4
         gate = 1 if (rho >= cfg.rho_min and abs(d_bps) >= cfg.d_min_bps) else 0
         s = 1 if r["imb"] > 0 else (-1 if r["imb"] < 0 else 0)
+        d = s * gate
+        conf = min(1.0, rho / 0.30) if d != 0 else 0.0  # full conviction at rho=0.30 [example]
+        cap = 0.5 * conf                               # [default]
         out.append({"id": r["id"], "rho": rho, "d_bps": d_bps,
-                    "gate": gate, "dir": s * gate})
+                    "gate": gate, "dir": d, "conf": conf, "cap": cap})
     return out
 
 
@@ -97,18 +101,31 @@ class Config:
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
     """Reference cost model: open-auction participation, liquid large-cap."""
-    spread_bps = 0.50   # half-spread [example]
-    fee_bps = 0.30      # taker incl. regulatory [example]
-    borrow_bps = 0.0    # long-biased reference; reason: no borrow [default]
-    impact_bps = 1.0    # auction-concession [example]
-    return spread_bps + fee_bps + borrow_bps + impact_bps
+    spread_bps = 0.50        # half-spread [example]
+    fee_bps = 0.30           # taker incl. regulatory [example]
+    borrow_bps_per_day = 0.0 # long-biased reference; reason: no borrow [default]
+    impact_bps = 1.0         # auction-concession [example]
+    if side == "maker":
+        fee_bps = -0.20      # rebate [example]
+    return spread_bps + fee_bps + borrow_bps_per_day + impact_bps
 
 
 def signal(state, events, cfg):
-    """signal(state, events, cfg) -> SignalVector (S033 reference stub)."""
+    """signal(state, events, cfg) -> SignalVector (S033 reference stub).
+
+    Mirrors the §S3 normative pseudocode: module-state freeze per §S0.5/§S0.6,
+    monotonic inputs, gate, cooldown (§S2 entry rule), normative cost-gate
+    predicate, conviction formula, and t->t+1 causality contract.
+    """
+    state = dict(state or {})
     evs = list(events)
+    # Module-state freeze table: OFF kills emissions; HALTED -> UNKNOWN.
+    if state.get("module_state") == "OFF":
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, 0, 0, "OFF")
+    if state.get("halted"):
+        return SignalVector("TEST:XNAS", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
     if not evs:
-        return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
+        return SignalVector("?", 0, 0.0, 0.0, 0, 0, "UNKNOWN")  # F1
     e = evs[-1]
     # F1/F2: invalid input -> UNKNOWN, never interpolate
     if e["paired"] <= 0 or e["ref"] <= 0 or e["ind"] <= 0:
@@ -119,12 +136,18 @@ def signal(state, events, cfg):
     gate = rho >= cfg.rho_min and abs(d_bps) >= cfg.d_min_bps
     s = 1 if e["imb"] > 0 else (-1 if e["imb"] < 0 else 0)
     direction = s if gate else 0
-    confidence = min(1.0, rho / 0.30) if direction else 0.0  # 30% = full conviction [example]
-    capital = 0.5 * confidence
-    # cost gate predicate (normative): expected_cost_bps(...) <= k * edge_bps
+    # §S2 entry rule: post-exit cooldown suppresses re-entry (C10).
+    now = e["event_ts"]
+    if now < state.get("cooldown_until", 0):
+        direction = 0
+    # Normative conviction + capital.
+    confidence = min(1.0, rho / 0.30) if direction else 0.0  # 0.30 = full conviction [example]
+    capital = 0.5 * confidence                               # [default]
+    # Normative cost-gate predicate: expected_cost_bps(...) <= k * edge_bps.
     edge_bps = abs(d_bps) * 0.2  # one-fifth of the displacement persists [example]
-    ok = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
-    if not ok:
+    cost_bps = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    assert cost_bps >= 0, "F2: cost out of mathematical bounds"
+    if direction != 0 and not (cost_bps <= cfg.cost_gate_k * edge_bps):
         direction, confidence, capital = 0, 0.0, 0.0
     return SignalVector("TEST:XNAS", direction, confidence, capital,
                         e["event_ts"], 0, "OK")
@@ -192,3 +215,43 @@ def test_invalid_input_yields_unknown():
     s = signal(dict(), [bad_event()], Config())
     assert s.module_state == "UNKNOWN"
     assert s.direction == 0 and s.capital == 0.0
+
+
+def test_empty_events_yields_unknown():
+    """F1: no events -> UNKNOWN, never a fabricated signal."""
+    s = signal(dict(), [], Config())
+    assert s.module_state == "UNKNOWN"
+    assert s.direction == 0 and s.confidence == 0.0
+
+
+def test_maker_side_rebate_branch():
+    """Maker rebate branch of the callable cost model: 0.50 - 0.20 + 0.0 + 1.0."""
+    maker = expected_cost_bps(1.0, 0.001, "XNAS", "maker", "normal")
+    assert abs(maker - 1.30) < 1e-9, maker
+    taker = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    assert abs(taker - 1.80) < 1e-9, taker
+    assert maker < taker
+
+
+def test_cooldown_suppresses_reentry():
+    """C10: now < cooldown_until suppresses re-entry even on an armed book."""
+    rows = tape()
+    cfg = Config()
+    armed = signal(dict(), rows, cfg)
+    assert armed.direction == 1
+    frozen = signal({"cooldown_until": rows[-1]["event_ts"] + 10**9}, rows, cfg)
+    assert frozen.direction == 0
+    assert frozen.confidence == 0.0 and frozen.capital == 0.0
+    assert frozen.module_state == "OK"  # suppression, not degradation
+
+
+def test_module_state_freeze():
+    """§S0.5/§S0.6: OFF kills emissions; halted -> UNKNOWN."""
+    rows = tape()
+    cfg = Config()
+    off = signal({"module_state": "OFF"}, rows, cfg)
+    assert off.module_state == "OFF"
+    assert off.direction == 0 and off.capital == 0.0
+    halted = signal({"halted": True}, rows, cfg)
+    assert halted.module_state == "UNKNOWN"
+    assert halted.direction == 0

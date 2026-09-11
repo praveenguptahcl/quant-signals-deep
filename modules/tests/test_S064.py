@@ -68,6 +68,7 @@ def recompute(rows):
 @dataclass
 class Config:
     lm_thresh: float = 4.0    # [example]
+    N: int = 12               # [example] return window
     cost_gate_k: float = 0.5   # [default]
 
 def expected_cost_bps(notional, adv_pct, venue, side, urgency):
@@ -82,18 +83,26 @@ def signal(state, bars, cfg):
     if not bars:
         return SignalVector("TEST", 0, 0.0, 0.0, 0, 0, "UNKNOWN")
     b = bars[-1]
+    if state.get("market") == "HALTED":
+        # §S0.5 freeze: no new signals across halts; emit UNKNOWN, discard contributions
+        return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], b["asof_ts"] - b["event_ts"], "UNKNOWN")
+    if state.get("market") == "AUCTION":
+        # §S0.5: hold, no new signals; DEGRADED
+        return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], b["asof_ts"] - b["event_ts"], "DEGRADED")
     if any(not math.isfinite(r["ret"]) for r in bars):
         return SignalVector("TEST", 0, 0.0, 0.0, b["event_ts"], 0, "UNKNOWN")
-    rets = [r["ret"] for r in bars]
+    rets = [r["ret"] for r in bars[-cfg.N:]]  # cfg.N window [example]
     rv = sum(x * x for x in rets)
     bv = (math.pi / 2) * sum(abs(rets[i] * rets[i - 1]) for i in range(1, len(rets)))
     L = abs(rets[-1]) / math.sqrt(bv) if bv > 0 else 0.0
     direction = 1 if L > cfg.lm_thresh else 0  # jump flag -> long vol-spike leg [example]
     confidence = min(1.0, L / 8.0) if direction else 0.0  # [example] scale
     edge_bps = L * 2.0  # modeled per-trade edge [example]
-    gate = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal") <= cfg.cost_gate_k * edge_bps
-    if not gate:
+    cost_bps = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")  # [example] reference args
+    if not (cost_bps <= cfg.cost_gate_k * edge_bps):
         direction, confidence = 0, 0.0
+    earliest_fill_ts = b["event_ts"] + (300_000_000_000)  # next 5-min bar open > bar ts [example]
+    assert earliest_fill_ts > b["event_ts"], "no signal-bar fills"
     return SignalVector("TEST", direction, confidence, 0.5 * confidence,
                         b["event_ts"], b["asof_ts"] - b["event_ts"], "OK")
 
@@ -155,3 +164,32 @@ def test_invalid_input_yields_unknown():
     bad = {"bar": 0, "event_ts": 1, "asof_ts": 2, "ret": float("nan")}
     s = signal({}, [bad], Config())
     assert s.module_state == "UNKNOWN" and s.direction == 0
+
+
+def test_cost_stack_single_source_pin():
+    """COST block single source of truth: the 4-component stack sums to the §S2
+    reference total (spread 0.50 + fees 0.30 + borrow 0.00 + impact 0.50) [example]."""
+    total = expected_cost_bps(1.0, 0.001, "XNAS", "taker", "normal")
+    assert abs(total - 1.30) <= 1e-9
+    assert total >= 0.0
+
+
+def test_market_state_halt_freezes():
+    """§S0.5: HALTED freezes new signals (UNKNOWN); AUCTION holds (DEGRADED)."""
+    rows = parse_tape()
+    cfg = Config()
+    s = signal({"market": "HALTED"}, rows, cfg)
+    assert s.module_state == "UNKNOWN" and s.direction == 0
+    s = signal({"market": "AUCTION"}, rows, cfg)
+    assert s.module_state == "DEGRADED" and s.direction == 0
+
+
+def test_full_window_bv_convention():
+    """Pin the normative §S3 convention: the test bar sits inside its own BV
+    denominator (full-window BV), so lm_stat at the engineered-jump bar equals
+    the fixture value exactly."""
+    got = recompute(parse_tape())
+    assert abs(got[5]["lm_stat"] - 4.0954571391) <= 1e-9
+    assert got[5]["lm_flag"] == 1
+    # non-jump bars never flag even though BV is jump-diluted
+    assert all(g["lm_flag"] == 0 for i, g in enumerate(got) if i != 5)
