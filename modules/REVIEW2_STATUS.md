@@ -12,7 +12,7 @@ Commits: every ~25 modules done, `git status` + fetch first, stage ONLY modules/
 | REVIEW2 wave 2 (signals, 2nd pass subset) | S001, S026–S049, S051–S066, S068, S072–S075 | `e70eae5` | 46 modules bumped 1.1.0/1.0.1; real bugs: S001 SEC-31 fee re-pin, S034 leak-veto inconsistency, S053 raw-vs-demeaned zero crossings, S059 edge_bps x10000, S060 rho_min units, S061 FX convention, S074 bogus Danilova/Julliard citation quarantined, stale-cost gates/TTLs corrected |
 | REVIEW2 final signal wave (3rd pass) | S067, S069–S071, S076–S100 (29 modules) | _below_ | All 29 bumped 1.0.0 → 1.1.0 with §0 changelogs; 421 tests green; real bugs: S076 dead cost-gate, S089 dropped γσ²(T−t)/2 term, S090 dead `mixed` branch, S096 pseudocode contradicted fixture, S097 dropped cost gate + wrong sent_min, S100 assert-vs-veto + C2 violation, S081 persistence/κ_exit, S088 embargo-floor violation, S083 impossible tick_done, S094 unbound drift edge, S084 mis-titled Campigli cite, S087 wrong-signed FFD, S082 shredded skip list + bps/pence units, S092 dead cooldown + 404 repec URL; duplicate S092/S093 worker collisions reconciled; GROK-NEEDED additions captured per module |
 | ROUND 2 (strategies) | T001–T100 | _(in progress below)_ | |
-| ROUND 2 (regimes) | R001–R050 | _(49/50 reported; completions logged below)_ | |
+| ROUND 2 (regimes) | R001–R050 | _(50/50 reported; all completions logged below)_ | |
 
 ## Progress (rounds coordinated by this agent)
 
@@ -187,7 +187,7 @@ All bumped 1.0.0 → 1.1.0 with §0 changelog entries. Real-bug fixes and GROK-N
 
 ## Wave 4 — regimes (launched 2026-09-11, in progress)
 - 50 workers dispatched (R001–R050), one per module. Bar: detection-calibration recipes, normative §R2 pseudocode, concrete data/vendor specs, concrete §R5 cost interface, §R7 failure modes, strengthened fixtures/tests. R050's permanent UNKNOWN-on-SIP honesty preserved as a feature.
-- GROK-NEEDED items from workers: 49/50 reported so far; 121 questions captured below (R002/R006/R009/R010/R018: none; rest listed).
+- GROK-NEEDED items from workers: 50/50 reported; 124 questions captured below (R002/R006/R009/R010/R018: none; rest listed).
 
 ## Wave 4 — regime completions
 - R003 (Volatility term-structure slope) DONE: 8 gaps fixed → v1.1.0, 12/12 tests pass. Notable: added normative §R2 calibration recipe + TRANSITION/DETECT pseudocode with hysteresis, verified Cboe CDN URLs + Johnson (2017) citation, §R5 component-level cost mapping, §R7 SIP-only → honest DEGRADED, edge fixtures (11 rows). GROK-NEEDED x2 (see below).
@@ -239,6 +239,7 @@ All bumped 1.0.0 → 1.1.0 with §0 changelog entries. Real-bug fixes and GROK-N
 - R033 (Crisis/contagion regime) DONE: 8 gaps → v1.1.0, 16/16 tests pass. Added §R3.5 detection-calibration recipe + normative §R3.1 pseudocode; entry/exit hysteresis (k_exit_crisis=2, k_exit_watch=1) + "2 consecutive days ≥ 2 → CRISIS" streak-promotion rule that §R2 promised but math never implemented; 3 tapes (transition, estimator, edge) incl. hand-verified spot check (bar-11 SPY z=−23.3101201654); cheapest verdict corrected to $0/mo Stooq for research. **Cross-module inconsistency flagged (not mine to fix): `modules/signals/S069.md:364-367` gates on `R033 state == ACTIVE`, but R033's state enum is NORMAL/WATCH/CRISIS — no ACTIVE state exists. Flagging for the S069 owner.** GROK-NEEDED x5 (see below).
 - R041 (Overnight-share regime) DONE: 10 gaps → v1.1.0, 18/18 tests pass. Added hyst=0.05 [default] + hysteresis transition table + §R6.1 calibration recipe (252/5/63-day walk-forward, OOS S≥0.8×train); Massive Stocks Basic $0/mo EOD 2y [documented] (fetched massive.com); French & Roll 1986 JFE 17(1) added [documented]; only impact scales (ON_DOMINANT 1.2× [example], open-auction executions). GROK-NEEDED x3 (see below).
 - R042 (Cross-sectional dispersion regime) DONE: 10 gaps → v1.1.0, 15/15 tests pass. Added entry/exit hysteresis (picker 0.015/0.012, index 0.007/0.010 [example]) + §R3 calibration recipe (63/21-day walk-forward, 21-day purged embargo [default]); Norgate Silver $270/12mo / Platinum $630/12mo + schema + adjustment types verified [documented]; evidence: Ankrim & Ding 2001 (AFTER-COST), von Reibnitz 2017 (dispersion-timed switching >2.7%/yr after fees), Cao/von Reibnitz/Warren 2020 (spreads kill switching) [documented]. GROK-NEEDED x2 (see below).
+- R046 (Liquidity commonality regime) DONE: 11 gaps → v1.1.0, 19/19 tests pass. **Real bug caught and fixed: §0 dataset was CME-futures GLBX.MDP3 for a US-equities module — corrected to DBEQ.BASIC ohlcv-1d**; added §R2.5 calibration recipe + §R2.7 hysteresis state machine + normative §R2.6 DETECT pseudocode (corp-action guard, HALTED freeze, pairwise-complete correlations); fixed own infinite-recursion cost draft; evidence: Amihud 2002, Chordia/Roll/Subrahmanyam 2000, Karolyi/Lee/van Dijk 2012, Kamara/Lou/Sadka 2008, Hameed/Kang/Viswanathan 2010 [documented]; Databento ohlcv-1d $80/GB, Tiingo $0, Massive Starter $29/mo [documented]. GROK-NEEDED x3 (see below).
 
 ## GROK-NEEDED (deduplicated, for parent — batch to Grok)
 1. [R003] What slope entry/exit (hysteresis) bands do systematic vol desks actually use on VIX/VIX3M (or VIX9D/VIX) for short-vol stand-down, and any documented source for backwardation persistence statistics (median duration, rate at which one-day inversions fail to persist)?
@@ -362,3 +363,6 @@ All bumped 1.0.0 → 1.1.0 with §0 changelog entries. Real-bug fixes and GROK-N
 119. [R041] Is there a citable study on the effect of hysteresis/dead-band width on regime-label whipsaw for variance-share regime detectors?
 120. [R042] Real-world dispersion band calibration — are picker_entry 0.015 / index_entry 0.007 daily-σ levels plausible for S&P 500 cross-sectional dispersion, and what OOS calibration evidence exists for dispersion regime thresholds?
 121. [R042] Any documented empirical link between cross-sectional dispersion regimes and effective trading costs (spread/impact) that would justify non-identity cost multipliers?
+122. [R046] Published empirical commonality correlation levels (calm vs stress) to ground the band defaults as [documented].
+123. [R046] Measured exit-leg cost multipliers in crowded-exit episodes.
+124. [R046] Databento ohlcv-1d split-adjustment confirmation (which field carries adjustment factors).
