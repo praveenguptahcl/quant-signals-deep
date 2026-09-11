@@ -1,0 +1,8 @@
+# TYPE: validation-run
+trade_id,side,qty,entry_px,exit_px,signal_ts,fill_ts,notional,adv_pct,venue,order_side,urgency,spread_bps,fee_bps,borrow_bps,impact_bps,exit_reason
+1,BUY,600,50.15,50.85,1788960600000000000,1789047000000000000,30090.0,0.02,XNAS,taker,normal,4.0,2.0,3.0,2.0,z reverts to 0
+2,SELL,600,50.75,50.3,1789047000000000000,1789133400000000000,30450.0,0.02,XNAS,taker,normal,4.0,2.0,3.0,2.0,z reverts to 0
+3,BUY,600,50.15,48.55,1789133400000000000,1789219800000000000,30090.0,0.02,XNAS,taker,normal,4.0,2.0,3.0,2.0,stop z=4
+4,SELL,600,50.8,50.15,1789219800000000000,1789306200000000000,30480.0,0.02,XNAS,taker,normal,4.0,2.0,3.0,2.0,z reverts to 0
+5,BUY,600,50.25,50.9,1789306200000000000,1789392600000000000,30150.0,0.02,XNAS,taker,normal,4.0,2.0,3.0,2.0,z reverts to 0
+6,SELL,600,50.7,50.35,1789392600000000000,1789479000000000000,30420.0,0.02,XNAS,taker,normal,4.0,2.0,3.0,2.0,z reverts to 0

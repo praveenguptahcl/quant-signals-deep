@@ -1,0 +1,8 @@
+# TYPE: validation-run
+trade_id,side,qty,entry_px,exit_px,signal_ts,fill_ts,notional,adv_pct,venue,order_side,urgency,spread_bps,fee_bps,borrow_bps,impact_bps,exit_reason
+1,SELL,750,51.1,50.3,1788960600000000000,1788960900000000000,38325.0,0.03,XNAS,taker,normal,10.0,2.0,0.0,0.0,gap filled 50%
+2,BUY,750,48.9,49.7,1788960900000000000,1788961200000000000,36675.0,0.03,XNAS,taker,normal,10.0,2.0,0.0,0.0,gap filled 50%
+3,SELL,750,51.1,51.5,1788961200000000000,1788961500000000000,38325.0,0.03,XNAS,taker,normal,10.0,2.0,0.0,0.0,stop -$0.40
+4,SELL,750,51.05,50.8,1788961500000000000,1788961800000000000,38287.5,0.03,XNAS,taker,normal,10.0,2.0,0.0,0.0,time stop 45 min
+5,BUY,750,48.95,48.95,1788961800000000000,1788962100000000000,36712.5,0.03,XNAS,taker,normal,10.0,2.0,0.0,0.0,session flatten 11:30
+6,SELL,750,51.2,50.4,1788962100000000000,1788962400000000000,38400.0,0.03,XNAS,taker,normal,10.0,2.0,0.0,0.0,gap filled 50%
