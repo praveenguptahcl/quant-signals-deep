@@ -1,19 +1,19 @@
-"""Acceptance tests for T050 - GEX Pin / Dealer-Positioning Fade.
+"""Acceptance tests for T040 - PCA Eigenportfolio Residual Reversal.
 
 Template v1.0.0. Concrete sketch: loads the fixture tape, runs the module's
 reference emit() (normative pseudocode via process_bar), and asserts the
 TYPE header, fixture-vs-expected agreement, causality (no-signal-bar fills),
 the cost-gate predicate, kill-switch trip/re-arm, and invalid-input handling.
 
-Run: python3 -m pytest modules/tests/test_T050.py -q   (from repo root)
+Run: python3 -m pytest modules/tests/test_T040.py -q   (from repo root)
 """
 import csv
 import math
 from pathlib import Path
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures"
-TAPE = FIX / "T050_tape.csv"
-EXPECTED = FIX / "T050_expected.csv"
+TAPE = FIX / "T040_tape.csv"
+EXPECTED = FIX / "T040_expected.csv"
 
 TOL = 1e-9  # tolerance on float comparisons
 
@@ -156,13 +156,13 @@ def process_bar(state, bar, cfg):
 
 
 CFG = Config(
-    sid="T050", primary_signal="S074",
-    z_entry=2.0, z_exit=0.5, cost_gate_k=0.5,
+    sid="T040", primary_signal="S080",
+    z_entry=1.25, z_exit=0.5, cost_gate_k=0.5,
     risk_R_usd=250, stop_bps=25, adv_cap_pct=1.0,
     spread_full_bps=3.0, taker_fee_bps=0.3,
     maker_rebate_bps=-0.2, side_exec="taker",
-    borrow_bps=30.0, impact_k=20.0,
-    daily_loss_stop_pct=2.0, venue="primary",
+    borrow_bps=50.0, impact_k=15.0,
+    daily_loss_stop_pct=1.5, venue="primary",
     default_side="LONG")
 
 

@@ -19,3 +19,5 @@ Spec: MODULE_FORMAT_PROPOSAL.md v1.0.0 · template: notes/module-template.md v1.
 | S077–S088 (signals) | writer 615e2fa8 | 12 | DONE 2026-09-10 · 12 md + 24 csv + 12 test · 72/72 tests pass · note: S083–S085 §S11 mermaid diagrams render single-char (fix queued); S089–S100 re-dispatched |
 
 | T076–T100 (strategies) | writer 869e8d5d | 25 | DONE 2026-09-10 · 25 md (+ fixtures/tests landed earlier) · 151/151 tests pass · no THIN · ~100 numeric-tag violations fixed in audit |
+
+| T026–T050 (strategies) | writer 0a513c40 | 25 | DONE 2026-09-11 · 25 md + 50 csv + 25 test · 150/150 tests pass · no THIN · fixed: kill-switch sign bug, entry-edge/gate consistency |

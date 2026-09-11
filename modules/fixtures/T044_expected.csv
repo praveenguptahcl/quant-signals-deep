@@ -1,0 +1,14 @@
+# TYPE: validation-run — expected intents for T044; cost_call_* from the COST-block callable
+bar,event_ts,intent_ts,action,qty,limit,cost_call_bps,cost_call_usd,edge_bps,gate_pass,module_state,note
+0,1789045200000000000,,HOLD,0,,0.0,0.0,2.0,True,OK,flat
+1,1789045500000000000,,HOLD,0,,0.0,0.0,2.0,True,OK,flat
+2,1789045800000000000,,HOLD,0,,0.0,0.0,2.0,True,OK,flat
+3,1789046100000000000,1789046100000000000,LONG,1001,,0.0,0.0,2.0,True,OK,entry
+4,1789046400000000000,,HOLD,0,,0.0,0.0,4.0,True,OK,hold
+5,1789046700000000000,,HOLD,0,,0.0,0.0,3.0,True,OK,hold
+6,1789047000000000000,1789047000000000000,BUY,1004,,0.0,0.0,3.0,True,OK,exit
+7,1789047300000000000,1789047300000000000,LONG,999,,0.0,0.0,0.05,True,OK,entry
+8,1789047600000000000,,HOLD,0,,0.0,0.0,4.0,True,UNKNOWN,invalid-input
+9,1789047900000000000,,HOLD,0,,0.0,0.0,2.0,True,OFF,kill-trip
+10,1789048200000000000,,HOLD,0,,0.0,0.0,2.0,True,OFF,kill-tripped
+11,1789048500000000000,,HOLD,0,,0.0,0.0,2.0,True,OFF,kill-tripped
