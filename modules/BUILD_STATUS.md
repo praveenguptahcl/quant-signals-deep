@@ -21,3 +21,5 @@ Spec: MODULE_FORMAT_PROPOSAL.md v1.0.0 · template: notes/module-template.md v1.
 | T076–T100 (strategies) | writer 869e8d5d | 25 | DONE 2026-09-10 · 25 md (+ fixtures/tests landed earlier) · 151/151 tests pass · no THIN · ~100 numeric-tag violations fixed in audit |
 
 | T026–T050 (strategies) | writer 0a513c40 | 25 | DONE 2026-09-11 · 25 md + 50 csv + 25 test · 150/150 tests pass · no THIN · fixed: kill-switch sign bug, entry-edge/gate consistency |
+
+| (partial, in 17a155a) T020–T025 fixtures/tests | — | 6 | landed via glob sweep; module .md files pending from T001–T025 writer |
