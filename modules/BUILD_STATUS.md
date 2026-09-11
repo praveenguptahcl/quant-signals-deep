@@ -27,3 +27,5 @@ Spec: MODULE_FORMAT_PROPOSAL.md v1.0.0 · template: notes/module-template.md v1.
 | S052–S066 (signals) | writer 5bcd8459 | 15 | DONE 2026-09-11 · 15 md + 30 csv + 15 test · 75/75 tests pass · no THIN · S067–S076 .md re-dispatched (fixtures/tests already green) |
 
 | T001–T025 (strategies) | writer b8b81644 | 25 | DONE 2026-09-11 · 25 md + 38 csv + 19 test · 175/175 tests pass · OK: 10 / THIN: 15 (unsupported P&L → unverified_leads; sourced mechanisms intact) · 7 source-honesty fixes (T007/T008/T010/T017/T019/T025) |
+
+| S067–S076 (signals) | writer 2a4efac1 | 10 | DONE 2026-09-11 · 10 md (+ fixtures/tests pre-existing) · 50/50 tests pass · no THIN · 6 md↔fixture inconsistencies resolved in audit |
