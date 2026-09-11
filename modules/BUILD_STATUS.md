@@ -31,3 +31,5 @@ Spec: MODULE_FORMAT_PROPOSAL.md v1.0.0 · template: notes/module-template.md v1.
 | S067–S076 (signals) | writer 2a4efac1 | 10 | DONE 2026-09-11 · 10 md (+ fixtures/tests pre-existing) · 50/50 tests pass · no THIN · 6 md↔fixture inconsistencies resolved in audit |
 
 | S027–S051 (signals) | writer 5f9fd6af | 25 | DONE 2026-09-11 · 25 md + 50 csv + 25 test · 125/125 tests pass · no THIN · 7 real bugs fixed (S032/S042/S038/S043/S046/S049/S050) |
+
+| S089–S100 (signals) | writer 3e593ac7 | 12 | DONE 2026-09-11 · 12 md + 36 csv + 12 test · 84/84 tests pass · no THIN · honesty fixes: S095 carry gate fails, S096 edge removed, S094 bps units · S083–S085 mermaid repaired |

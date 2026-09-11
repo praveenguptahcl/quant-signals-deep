@@ -1,0 +1,8 @@
+# TYPE: validation-run
+# Synthetic news-story events (chapter S4, seed 91091): ESS x relevance x novelty; story 1 = tradable, stories 2/3/5 = gated out, story 4 = invalid input
+ev,event_ts,ess,rel,nov,trail_mean,trail_sd
+1,1788946203000000000,0.85,90,80,0.05,0.30
+2,1788949803000000000,-0.40,95,85,-0.02,0.25
+3,1788953403000000000,0.90,40,90,0.05,0.30
+4,1788957003000000000,nan,90,80,0.05,0.30
+5,1788960603000000000,0.60,85,60,0.05,0.30

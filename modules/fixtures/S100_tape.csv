@@ -1,0 +1,14 @@
+# TYPE: validation-run
+# Synthetic 10-stock earnings panel (chapter S4, seed 100): actual/expected EPS, past-surprise sigma (8 quarters); AR (%) for the 4 extreme-quintile names entered per chapter entry rules; row 11 = invalid input
+ticker,eps_act,eps_exp,sigma,ar
+A,1.45,1.20,0.10,2.46
+B,0.82,0.90,0.08,
+C,2.10,2.05,0.15,
+D,0.55,0.70,0.12,
+E,3.20,2.80,0.25,
+F,1.05,1.05,0.09,
+G,0.30,0.45,0.10,-1.46
+H,1.80,1.60,0.12,1.38
+I,0.95,1.10,0.11,-1.88
+J,2.60,2.30,0.20,
+X,nan,1.00,0.10,

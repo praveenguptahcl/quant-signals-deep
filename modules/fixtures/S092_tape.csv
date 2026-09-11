@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Synthetic 6-event jump tape (chapter S4, seed 92): jump %, jump z, news match (<= jump time), next-60-min return %; $10,000 notional, 5 bps all-in cost per event
+ev,event_ts,jump_pct,jump_z,news_flag,next60_pct
+1,1788946440000000000,1.8,4.2,1,0.6
+2,1788948660000000000,-2.1,-4.8,0,0.9
+3,1788951300000000000,1.5,3.6,1,-0.2
+4,1788955320000000000,2.4,5.1,0,-1.1
+5,1788958800000000000,-1.6,-3.8,1,0.3
+6,1788961800000000000,1.9,4.4,0,-0.7

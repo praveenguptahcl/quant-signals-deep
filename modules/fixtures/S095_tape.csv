@@ -1,0 +1,10 @@
+# TYPE: validation-run
+# Synthetic 8h funding prints (chapter S4, seed 95): five calm prints then a crowding print; last row is an invalid input
+ev,event_ts,funding_pct,interval_h
+1,1788864000000000000,0.010,8
+2,1788892800000000000,0.012,8
+3,1788921600000000000,0.011,8
+4,1788950400000000000,0.013,8
+5,1788979200000000000,0.012,8
+6,1789008000000000000,0.050,8
+7,1789036800000000000,nan,8

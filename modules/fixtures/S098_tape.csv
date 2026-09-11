@@ -1,0 +1,9 @@
+# TYPE: validation-run
+# Synthetic 6-stock crowding panel (chapter S4, seed 98): short interest (M shares), float (M), ADV (M shares), borrow fee (%/ann), utilization (%), dark-pool buying proxy (%)
+ticker,si_m,float_m,adv_m,fee_ann,util,dix
+ZQTA,6,400,12.0,0.4,8.0,7.5
+KLVR,18,220,3.0,8.5,61.0,9.2
+NORD,9,180,6.0,1.2,22.0,8.1
+MEMEQ,42,150,4.5,42.0,97.0,16.0
+PWRS,30,120,15.0,28.0,92.0,13.5
+DLTA,3,90,1.5,0.8,15.0,7.0
